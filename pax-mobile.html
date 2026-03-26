@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm Your Baggage Delivery | DFRNT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand-dark: #0d0c2c;
+      --brand-cyan: #3bc7f4;
+      --brand-purple: #824ae0;
+      --surface-light: #f4f2f1;
+      --surface-cream: #f8f7f7;
+      --border: #cfced5;
+      --border-light: #e6e5ea;
+      --text-primary: #0d0c2c;
+      --text-secondary: #6e6d80;
+      --text-muted: #9e9da8;
+      --success: #13b964;
+      --success-bg: #d0f1e0;
+      --warning: #fe811a;
+      --warning-bg: #ffe6d1;
+      --error: #dc3246;
+      --error-bg: #f8d6da;
+      --shadow-sm: 0 1px 2px rgba(0,14,37,0.05);
+      --shadow-md: 0 2px 8px rgba(0,14,37,0.08);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family:'Inter',sans-serif; background:var(--brand-dark);
+      color:var(--text-primary); font-size:14px; line-height:1.5; min-height:100vh;
+    }
+
+    .mobile-container { max-width:428px; margin:0 auto; background:var(--surface-light); min-height:100vh; box-shadow:0 0 40px rgba(0,0,0,0.3); }
+
+    /* Header */
+    .header { background:var(--brand-dark); padding:24px 20px; text-align:center; color:white; }
+    .header h1 { font-size:24px; font-weight:700; margin-bottom:8px; }
+    .header .subtitle { font-size:14px; color:var(--text-muted); }
+    .ref-badge {
+      display:inline-block; margin-top:16px; padding:8px 16px;
+      background:rgba(59,199,244,0.15); border:1px solid rgba(59,199,244,0.3);
+      border-radius:9999px; font-weight:700; font-size:14px; color:var(--brand-cyan);
+    }
+
+    /* Content */
+    .content { padding:20px; }
+
+    /* Sections */
+    .section {
+      background:white; border-radius:12px; padding:20px; margin-bottom:16px;
+      box-shadow:var(--shadow-sm); border:2px solid transparent;
+      transition:all 200ms ease;
+    }
+    .section.active { border-color:var(--brand-cyan); }
+    .section-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .section-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
+    .edit-btn {
+      background:none; border:none; color:var(--brand-cyan); cursor:pointer; font-size:14px;
+      font-weight:700; font-family:inherit; display:flex; align-items:center; gap:4px;
+      padding:6px 12px; border-radius:9999px; transition:all 200ms ease;
+    }
+    .edit-btn:hover { background:rgba(59,199,244,0.1); }
+
+    /* Info rows */
+    .info-row { margin-bottom:12px; }
+    .info-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; font-weight:400; }
+    .info-value {
+      font-size:14px; color:var(--text-primary); padding:10px 14px;
+      background:var(--surface-cream); border-radius:8px; border:2px solid var(--border-light);
+    }
+    input.info-value {
+      width:100%; font-family:inherit; transition:all 200ms ease; background:white;
+    }
+    input.info-value:focus { outline:none; border-color:var(--brand-cyan); box-shadow:0 0 0 3px rgba(59,199,244,0.15); }
+
+    /* Address confirm */
+    .address-confirm {
+      background:rgba(59,199,244,0.08); border:2px solid var(--brand-cyan); border-radius:8px;
+      padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px;
+    }
+    .address-confirm input[type="checkbox"] { width:20px; height:20px; accent-color:var(--brand-cyan); cursor:pointer; }
+    .address-confirm label { cursor:pointer; font-size:14px; font-weight:700; }
+
+    /* Delivery slots */
+    .slot {
+      background:white; border:2px solid var(--border); border-radius:12px; padding:16px;
+      cursor:pointer; transition:all 200ms ease; position:relative; margin-bottom:12px;
+    }
+    .slot:hover { border-color:var(--text-muted); transform:translateY(-2px); box-shadow:var(--shadow-md); }
+    .slot.selected { border-color:var(--brand-cyan); background:rgba(59,199,244,0.04); }
+    .slot-header { display:flex; align-items:center; gap:12px; }
+    .slot-radio {
+      width:20px; height:20px; border:2px solid var(--border); border-radius:50%;
+      display:flex; align-items:center; justify-content:center; transition:all 200ms ease; flex-shrink:0;
+    }
+    .slot.selected .slot-radio { border-color:var(--brand-cyan); background:var(--brand-cyan); }
+    .slot.selected .slot-radio::after { content:''; width:6px; height:6px; background:white; border-radius:50%; }
+    .slot-date { font-weight:700; font-size:15px; }
+    .slot-time { color:var(--text-secondary); font-size:14px; }
+    .first-available {
+      position:absolute; top:10px; right:10px;
+      background:var(--success); color:white; font-size:11px; padding:4px 10px;
+      border-radius:9999px; font-weight:700;
+    }
+    .time-warning {
+      background:var(--warning-bg); border:1px solid var(--warning); color:var(--text-primary);
+      padding:12px; border-radius:8px; font-size:13px; margin-top:8px;
+      display:flex; align-items:center; gap:8px;
+    }
+
+    /* ATL toggle */
+    .atl-toggle {
+      display:flex; align-items:center; gap:12px; padding:12px 16px;
+      background:var(--surface-cream); border-radius:8px; cursor:pointer; margin-bottom:16px;
+    }
+    .toggle-switch {
+      position:relative; width:48px; height:24px; background:var(--border);
+      border-radius:12px; transition:all 200ms ease; cursor:pointer; flex-shrink:0;
+    }
+    .toggle-switch.active { background:linear-gradient(135deg,var(--brand-cyan),var(--brand-purple)); }
+    .toggle-switch::after {
+      content:''; position:absolute; width:20px; height:20px; background:white;
+      border-radius:50%; top:2px; left:2px; transition:all 200ms ease;
+      box-shadow:0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle-switch.active::after { left:26px; }
+    .atl-toggle label { cursor:pointer; font-size:14px; }
+
+    /* ATL options */
+    .atl-options { display:none; flex-direction:column; gap:12px; padding:16px; background:var(--surface-cream); border-radius:8px; }
+    .atl-options.active { display:flex; }
+    .atl-option { display:flex; align-items:center; gap:10px; cursor:pointer; }
+    .atl-option input[type="radio"] { width:18px; height:18px; accent-color:var(--brand-cyan); }
+    .atl-option label { cursor:pointer; font-size:14px; }
+    .atl-notes { margin-left:28px; margin-top:-4px; margin-bottom:8px; }
+    .atl-input {
+      width:100%; padding:10px 14px; border:2px solid var(--border); border-radius:8px;
+      font-size:14px; font-family:inherit; transition:all 200ms ease;
+    }
+    .atl-input:focus { outline:none; border-color:var(--brand-cyan); box-shadow:0 0 0 3px rgba(59,199,244,0.15); }
+    .atl-input.required { border-color:var(--error); }
+    .error-text { color:var(--error); font-size:12px; margin-top:4px; }
+
+    /* Confirm button */
+    .confirm-button {
+      background:var(--brand-cyan); color:var(--brand-dark); border:none;
+      padding:16px; border-radius:9999px; font-size:16px; font-weight:700;
+      cursor:pointer; width:100%; margin-top:20px; transition:all 200ms ease;
+      box-shadow:0 4px 12px rgba(59,199,244,0.3); font-family:inherit;
+    }
+    .confirm-button:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(59,199,244,0.4); }
+    .confirm-button:disabled { background:var(--border); cursor:not-allowed; box-shadow:none; transform:none; color:var(--text-muted); }
+
+    /* Footer */
+    .footer { padding:20px; text-align:center; color:var(--text-muted); font-size:12px; background:white; margin-top:20px; }
+
+    /* Animations */
+    @keyframes slideIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .section { animation:slideIn 0.4s ease-out; }
+  </style>
+</head>
+<body>
+<div class="mobile-container">
+  <div class="header">
+    <h1>🧳 DFRNT Delivery</h1>
+    <p class="subtitle">Confirm Your Baggage Delivery Details</p>
+    <div class="ref-badge">📋 Ref: AKLQF20176</div>
+  </div>
+
+  <div class="content">
+    <!-- Contact Details -->
+    <div class="section active">
+      <div class="section-header">
+        <div class="section-title"><span>👤</span> Your Details</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Full Name</div>
+        <div class="info-value">John Smith</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Phone Number</div>
+        <div class="info-value">+64 21 234 5678</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Email Address</div>
+        <div class="info-value">john.smith@email.com</div>
+      </div>
+    </div>
+
+    <!-- Delivery Address -->
+    <div class="section active">
+      <div class="section-header">
+        <div class="section-title"><span>📍</span> Delivery Address</div>
+        <button class="edit-btn" onclick="toggleAddressEdit()">
+          <span>✏️</span> <span id="editBtnText">Edit</span>
+        </button>
+      </div>
+      <div class="address-confirm">
+        <input type="checkbox" id="addressCorrect" checked onchange="handleAddressConfirm()">
+        <label for="addressCorrect">This address is correct</label>
+      </div>
+      <div id="addressFields">
+        <div class="info-row">
+          <div class="info-label">Street Address</div>
+          <div class="info-value" id="streetAddress">123 Queen Street</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">Suburb</div>
+          <div class="info-value" id="suburb">Auckland Central</div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">City & Postcode</div>
+          <div class="info-value" id="cityPostcode">Auckland 1010</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delivery Time -->
+    <div class="section active" id="deliverySection">
+      <div class="section-header">
+        <div class="section-title"><span>🚚</span> Select Delivery Time</div>
+      </div>
+      <div class="slot selected" onclick="selectSlot(this)">
+        <div class="first-available">FIRST AVAILABLE</div>
+        <div class="slot-header">
+          <div class="slot-radio"></div>
+          <div>
+            <div class="slot-date">Today, Tue 14 Oct</div>
+            <div class="slot-time">2:00 PM – 5:00 PM</div>
+          </div>
+        </div>
+      </div>
+      <div class="slot" onclick="selectSlot(this)">
+        <div class="slot-header">
+          <div class="slot-radio"></div>
+          <div>
+            <div class="slot-date">Tomorrow, Wed 15 Oct</div>
+            <div class="slot-time">9:00 AM – 12:00 PM</div>
+          </div>
+        </div>
+      </div>
+      <div class="slot" onclick="selectSlot(this)">
+        <div class="slot-header">
+          <div class="slot-radio"></div>
+          <div>
+            <div class="slot-date">Tomorrow, Wed 15 Oct</div>
+            <div class="slot-time">2:00 PM – 5:00 PM</div>
+          </div>
+        </div>
+      </div>
+      <div class="time-warning">⏰ Please confirm within 10 minutes to secure your selected time slot</div>
+    </div>
+
+    <!-- Authority to Leave -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-title"><span>📦</span> Authority to Leave</div>
+      </div>
+      <div class="atl-toggle" onclick="toggleATL()">
+        <div class="toggle-switch" id="atlToggle"></div>
+        <label>Leave baggage unattended if not home</label>
+      </div>
+      <div class="atl-options" id="atlOptions">
+        <div class="atl-option">
+          <input type="radio" name="atl" id="frontDoor" value="front-door" checked onchange="toggleATLNotes()">
+          <label for="frontDoor">Front door</label>
+        </div>
+        <div class="atl-option">
+          <input type="radio" name="atl" id="backDoor" value="back-door" onchange="toggleATLNotes()">
+          <label for="backDoor">Back door</label>
+        </div>
+        <div class="atl-option">
+          <input type="radio" name="atl" id="garage" value="garage" onchange="toggleATLNotes()">
+          <label for="garage">Garage</label>
+        </div>
+        <div class="atl-option">
+          <input type="radio" name="atl" id="reception" value="reception" onchange="toggleATLNotes()">
+          <label for="reception">Building reception</label>
+        </div>
+        <div class="atl-option">
+          <input type="radio" name="atl" id="neighbour" value="neighbour" onchange="toggleATLNotes()">
+          <label for="neighbour">With neighbour</label>
+        </div>
+        <div class="atl-notes" id="neighbourNotes" style="display:none;">
+          <input type="text" placeholder="Neighbour details (e.g. house number, name)" class="atl-input">
+        </div>
+        <div class="atl-option">
+          <input type="radio" name="atl" id="other" value="other" onchange="toggleATLNotes()">
+          <label for="other">Other location</label>
+        </div>
+        <div class="atl-notes" id="otherNotes" style="display:none;">
+          <input type="text" placeholder="Specify location (required)" class="atl-input required" id="otherLocationInput">
+          <span class="error-text" id="otherError" style="display:none;">This field is required</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="confirm-button" onclick="confirmDelivery()">Confirm Delivery Booking</button>
+  </div>
+
+  <div class="footer">
+    <p>Urgent Couriers — Powered by DFRNT</p>
+    <p style="margin-top:4px;">Need help? Call 0800 123 456</p>
+  </div>
+</div>
+
+<script>
+let addressEditing = false;
+
+function handleAddressConfirm() {
+  if (!document.getElementById('addressCorrect').checked) toggleAddressEdit();
+}
+
+function toggleAddressEdit() {
+  addressEditing = !addressEditing;
+  const editBtn = document.getElementById('editBtnText');
+  if (addressEditing) {
+    editBtn.textContent = 'Save';
+    ['streetAddress','suburb','cityPostcode'].forEach(id => {
+      const el = document.getElementById(id);
+      const val = el.textContent;
+      el.outerHTML = `<input class="info-value" id="${id}" value="${val}" />`;
+    });
+    document.getElementById('addressCorrect').checked = false;
+  } else {
+    editBtn.textContent = 'Edit';
+    ['streetAddress','suburb','cityPostcode'].forEach(id => {
+      const el = document.getElementById(id);
+      const val = el.value;
+      el.outerHTML = `<div class="info-value" id="${id}">${val}</div>`;
+    });
+    document.getElementById('addressCorrect').checked = true;
+  }
+}
+
+function selectSlot(el) {
+  document.querySelectorAll('.slot').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function toggleATL() {
+  document.getElementById('atlToggle').classList.toggle('active');
+  document.getElementById('atlOptions').classList.toggle('active');
+}
+
+function toggleATLNotes() {
+  const val = document.querySelector('input[name="atl"]:checked').value;
+  document.getElementById('neighbourNotes').style.display = val === 'neighbour' ? 'block' : 'none';
+  document.getElementById('otherNotes').style.display = val === 'other' ? 'block' : 'none';
+  document.getElementById('otherError').style.display = 'none';
+}
+
+function confirmDelivery() {
+  if (!document.getElementById('addressCorrect').checked) {
+    alert('Please confirm your address before proceeding');
+    return;
+  }
+  const isATL = document.getElementById('atlToggle').classList.contains('active');
+  if (isATL) {
+    const sel = document.querySelector('input[name="atl"]:checked');
+    if (sel && sel.value === 'other') {
+      const inp = document.getElementById('otherLocationInput');
+      if (!inp.value.trim()) {
+        document.getElementById('otherError').style.display = 'block';
+        inp.focus();
+        return;
+      }
+    }
+  }
+  const btn = document.querySelector('.confirm-button');
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+
+  setTimeout(() => {
+    const container = document.querySelector('.mobile-container');
+    container.innerHTML = `
+      <div class="header" style="background:var(--success);">
+        <h1>✅ Booking Confirmed!</h1>
+        <p class="subtitle" style="color:rgba(255,255,255,0.9);">Your baggage delivery has been scheduled</p>
+        <div class="ref-badge" style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:white;">📋 Ref: AKLQF20176</div>
+      </div>
+      <div class="content">
+        <div class="section active" style="text-align:center;padding:32px 24px;">
+          <div style="font-size:56px;margin-bottom:16px;">🎉</div>
+          <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Delivery Confirmed!</h2>
+          <p style="color:var(--text-secondary);margin-bottom:20px;">Your baggage will be delivered to:</p>
+          <div style="background:var(--surface-cream);padding:16px;border-radius:8px;margin-bottom:20px;text-align:left;">
+            <strong>123 Queen Street</strong><br>Auckland Central<br>Auckland 1010
+          </div>
+          <p style="color:var(--text-muted);margin-bottom:4px;">Delivery Window:</p>
+          <p style="font-weight:700;font-size:18px;">Today, Tue 14 Oct · 2:00 PM – 5:00 PM</p>
+        </div>
+        <div class="section active">
+          <div class="section-title" style="margin-bottom:16px;"><span>📦</span> Tracking Information</div>
+          <div style="background:rgba(59,199,244,0.06);padding:24px;border-radius:12px;border:2px solid var(--brand-cyan);text-align:center;">
+            <p style="color:var(--text-muted);margin-bottom:8px;">Your Tracking Number:</p>
+            <h3 style="font-size:24px;font-family:monospace;font-weight:700;margin-bottom:20px;">UC-2024-789456</h3>
+            <button class="confirm-button" style="margin:0;display:inline-block;width:auto;padding:14px 32px;">Track Your Delivery 🚚</button>
+            <p style="color:var(--text-muted);margin-top:16px;font-size:12px;">Track your delivery in real-time using the button above</p>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title" style="margin-bottom:16px;"><span>📧</span> What Happens Next?</div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            ${['Confirmation Email|You\'ll receive an email confirmation shortly','Courier Assignment|A courier will be assigned to your delivery','Delivery Day SMS|You\'ll get an SMS when the courier is on the way','Delivery Completion|Photo proof of delivery will be provided'].map((s,i) => {
+              const [t,d] = s.split('|');
+              return `<div style="display:flex;gap:12px;align-items:flex-start;">
+                <span style="background:var(--brand-cyan);color:var(--brand-dark);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${i+1}</span>
+                <div><strong>${t}</strong><br><span style="color:var(--text-secondary);font-size:13px;">${d}</span></div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:24px;">
+          <p style="color:var(--text-muted);">Need to make changes?</p>
+          <p style="font-weight:700;margin-top:4px;">Call us on 0800 123 456</p>
+        </div>
+      </div>
+      <div class="footer">
+        <p>Urgent Couriers — Powered by DFRNT</p>
+      </div>`;
+  }, 1500);
+}
+</script>
+</body>
+</html>
