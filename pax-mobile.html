@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirm Your Baggage Delivery | DFRNT</title>
+  <title>Confirm Your Baggage Delivery</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --brand-dark: #0d0c2c;
-      --brand-cyan: #3bc7f4;
-      --brand-purple: #824ae0;
+      --brand-dark: #001F3D;
+      --brand-accent: #00B0B9;
+      --brand-accent-rgb: 0,176,185;
       --surface-light: #f4f2f1;
       --surface-cream: #f8f7f7;
       --border: #cfced5;
@@ -34,14 +34,31 @@
 
     .mobile-container { max-width:428px; margin:0 auto; background:var(--surface-light); min-height:100vh; box-shadow:0 0 40px rgba(0,0,0,0.3); }
 
+    /* Airline Switcher */
+    .airline-switcher {
+      display:flex; gap:6px; padding:10px 12px; overflow-x:auto; background:rgba(0,0,0,0.25);
+      -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    }
+    .airline-switcher::-webkit-scrollbar { display:none; }
+    .airline-pill {
+      flex-shrink:0; padding:6px 14px; border-radius:9999px; font-size:12px; font-weight:700;
+      cursor:pointer; border:2px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.08);
+      color:rgba(255,255,255,0.7); transition:all 200ms ease; white-space:nowrap;
+      font-family:inherit;
+    }
+    .airline-pill:hover { background:rgba(255,255,255,0.15); }
+    .airline-pill.active {
+      background:white; color:var(--brand-dark); border-color:white;
+    }
+
     /* Header */
     .header { background:var(--brand-dark); padding:24px 20px; text-align:center; color:white; }
-    .header h1 { font-size:24px; font-weight:700; margin-bottom:8px; }
-    .header .subtitle { font-size:14px; color:var(--text-muted); }
+    .header h1 { font-size:22px; font-weight:700; margin-bottom:8px; }
+    .header .subtitle { font-size:14px; color:rgba(255,255,255,0.6); }
     .ref-badge {
       display:inline-block; margin-top:16px; padding:8px 16px;
-      background:rgba(59,199,244,0.15); border:1px solid rgba(59,199,244,0.3);
-      border-radius:9999px; font-weight:700; font-size:14px; color:var(--brand-cyan);
+      background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25);
+      border-radius:9999px; font-weight:700; font-size:14px; color:var(--brand-accent);
     }
 
     /* Content */
@@ -53,15 +70,15 @@
       box-shadow:var(--shadow-sm); border:2px solid transparent;
       transition:all 200ms ease;
     }
-    .section.active { border-color:var(--brand-cyan); }
+    .section.active { border-color:var(--brand-accent); }
     .section-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
     .section-title { font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; }
     .edit-btn {
-      background:none; border:none; color:var(--brand-cyan); cursor:pointer; font-size:14px;
+      background:none; border:none; color:var(--brand-accent); cursor:pointer; font-size:14px;
       font-weight:700; font-family:inherit; display:flex; align-items:center; gap:4px;
       padding:6px 12px; border-radius:9999px; transition:all 200ms ease;
     }
-    .edit-btn:hover { background:rgba(59,199,244,0.1); }
+    .edit-btn:hover { background:rgba(var(--brand-accent-rgb),0.1); }
 
     /* Info rows */
     .info-row { margin-bottom:12px; }
@@ -73,14 +90,14 @@
     input.info-value {
       width:100%; font-family:inherit; transition:all 200ms ease; background:white;
     }
-    input.info-value:focus { outline:none; border-color:var(--brand-cyan); box-shadow:0 0 0 3px rgba(59,199,244,0.15); }
+    input.info-value:focus { outline:none; border-color:var(--brand-accent); box-shadow:0 0 0 3px rgba(var(--brand-accent-rgb),0.15); }
 
     /* Address confirm */
     .address-confirm {
-      background:rgba(59,199,244,0.08); border:2px solid var(--brand-cyan); border-radius:8px;
+      background:rgba(var(--brand-accent-rgb),0.08); border:2px solid var(--brand-accent); border-radius:8px;
       padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px;
     }
-    .address-confirm input[type="checkbox"] { width:20px; height:20px; accent-color:var(--brand-cyan); cursor:pointer; }
+    .address-confirm input[type="checkbox"] { width:20px; height:20px; accent-color:var(--brand-accent); cursor:pointer; }
     .address-confirm label { cursor:pointer; font-size:14px; font-weight:700; }
 
     /* Delivery slots */
@@ -89,13 +106,13 @@
       cursor:pointer; transition:all 200ms ease; position:relative; margin-bottom:12px;
     }
     .slot:hover { border-color:var(--text-muted); transform:translateY(-2px); box-shadow:var(--shadow-md); }
-    .slot.selected { border-color:var(--brand-cyan); background:rgba(59,199,244,0.04); }
+    .slot.selected { border-color:var(--brand-accent); background:rgba(var(--brand-accent-rgb),0.04); }
     .slot-header { display:flex; align-items:center; gap:12px; }
     .slot-radio {
       width:20px; height:20px; border:2px solid var(--border); border-radius:50%;
       display:flex; align-items:center; justify-content:center; transition:all 200ms ease; flex-shrink:0;
     }
-    .slot.selected .slot-radio { border-color:var(--brand-cyan); background:var(--brand-cyan); }
+    .slot.selected .slot-radio { border-color:var(--brand-accent); background:var(--brand-accent); }
     .slot.selected .slot-radio::after { content:''; width:6px; height:6px; background:white; border-radius:50%; }
     .slot-date { font-weight:700; font-size:15px; }
     .slot-time { color:var(--text-secondary); font-size:14px; }
@@ -119,7 +136,7 @@
       position:relative; width:48px; height:24px; background:var(--border);
       border-radius:12px; transition:all 200ms ease; cursor:pointer; flex-shrink:0;
     }
-    .toggle-switch.active { background:linear-gradient(135deg,var(--brand-cyan),var(--brand-purple)); }
+    .toggle-switch.active { background:var(--brand-accent); }
     .toggle-switch::after {
       content:''; position:absolute; width:20px; height:20px; background:white;
       border-radius:50%; top:2px; left:2px; transition:all 200ms ease;
@@ -132,25 +149,25 @@
     .atl-options { display:none; flex-direction:column; gap:12px; padding:16px; background:var(--surface-cream); border-radius:8px; }
     .atl-options.active { display:flex; }
     .atl-option { display:flex; align-items:center; gap:10px; cursor:pointer; }
-    .atl-option input[type="radio"] { width:18px; height:18px; accent-color:var(--brand-cyan); }
+    .atl-option input[type="radio"] { width:18px; height:18px; accent-color:var(--brand-accent); }
     .atl-option label { cursor:pointer; font-size:14px; }
     .atl-notes { margin-left:28px; margin-top:-4px; margin-bottom:8px; }
     .atl-input {
       width:100%; padding:10px 14px; border:2px solid var(--border); border-radius:8px;
       font-size:14px; font-family:inherit; transition:all 200ms ease;
     }
-    .atl-input:focus { outline:none; border-color:var(--brand-cyan); box-shadow:0 0 0 3px rgba(59,199,244,0.15); }
+    .atl-input:focus { outline:none; border-color:var(--brand-accent); box-shadow:0 0 0 3px rgba(var(--brand-accent-rgb),0.15); }
     .atl-input.required { border-color:var(--error); }
     .error-text { color:var(--error); font-size:12px; margin-top:4px; }
 
     /* Confirm button */
     .confirm-button {
-      background:var(--brand-cyan); color:var(--brand-dark); border:none;
+      background:var(--brand-accent); color:white; border:none;
       padding:16px; border-radius:9999px; font-size:16px; font-weight:700;
       cursor:pointer; width:100%; margin-top:20px; transition:all 200ms ease;
-      box-shadow:0 4px 12px rgba(59,199,244,0.3); font-family:inherit;
+      box-shadow:0 4px 12px rgba(var(--brand-accent-rgb),0.3); font-family:inherit;
     }
-    .confirm-button:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(59,199,244,0.4); }
+    .confirm-button:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(var(--brand-accent-rgb),0.4); }
     .confirm-button:disabled { background:var(--border); cursor:not-allowed; box-shadow:none; transform:none; color:var(--text-muted); }
 
     /* Footer */
@@ -163,13 +180,15 @@
 </head>
 <body>
 <div class="mobile-container">
+  <div class="airline-switcher" id="airlineSwitcher"></div>
+
   <div class="header">
-    <h1>🧳 DFRNT Delivery</h1>
+    <h1 id="headerTitle">✈️ Air New Zealand Baggage Delivery</h1>
     <p class="subtitle">Confirm Your Baggage Delivery Details</p>
-    <div class="ref-badge">📋 Ref: AKLQF20176</div>
+    <div class="ref-badge" id="refBadge">📋 Ref: NZ20176</div>
   </div>
 
-  <div class="content">
+  <div class="content" id="mainContent">
     <!-- Contact Details -->
     <div class="section active">
       <div class="section-header">
@@ -177,15 +196,15 @@
       </div>
       <div class="info-row">
         <div class="info-label">Full Name</div>
-        <div class="info-value">John Smith</div>
+        <div class="info-value" id="paxName">Sarah Mitchell</div>
       </div>
       <div class="info-row">
         <div class="info-label">Phone Number</div>
-        <div class="info-value">+64 21 234 5678</div>
+        <div class="info-value" id="paxPhone">+64 21 876 5432</div>
       </div>
       <div class="info-row">
         <div class="info-label">Email Address</div>
-        <div class="info-value">john.smith@email.com</div>
+        <div class="info-value" id="paxEmail">sarah.mitchell@gmail.com</div>
       </div>
     </div>
 
@@ -204,15 +223,15 @@
       <div id="addressFields">
         <div class="info-row">
           <div class="info-label">Street Address</div>
-          <div class="info-value" id="streetAddress">123 Queen Street</div>
+          <div class="info-value" id="streetAddress">42 Ponsonby Road</div>
         </div>
         <div class="info-row">
           <div class="info-label">Suburb</div>
-          <div class="info-value" id="suburb">Auckland Central</div>
+          <div class="info-value" id="suburb">Ponsonby</div>
         </div>
         <div class="info-row">
           <div class="info-label">City & Postcode</div>
-          <div class="info-value" id="cityPostcode">Auckland 1010</div>
+          <div class="info-value" id="cityPostcode">Auckland 1011</div>
         </div>
       </div>
     </div>
@@ -222,34 +241,7 @@
       <div class="section-header">
         <div class="section-title"><span>🚚</span> Select Delivery Time</div>
       </div>
-      <div class="slot selected" onclick="selectSlot(this)">
-        <div class="first-available">FIRST AVAILABLE</div>
-        <div class="slot-header">
-          <div class="slot-radio"></div>
-          <div>
-            <div class="slot-date">Today, Tue 14 Oct</div>
-            <div class="slot-time">2:00 PM – 5:00 PM</div>
-          </div>
-        </div>
-      </div>
-      <div class="slot" onclick="selectSlot(this)">
-        <div class="slot-header">
-          <div class="slot-radio"></div>
-          <div>
-            <div class="slot-date">Tomorrow, Wed 15 Oct</div>
-            <div class="slot-time">9:00 AM – 12:00 PM</div>
-          </div>
-        </div>
-      </div>
-      <div class="slot" onclick="selectSlot(this)">
-        <div class="slot-header">
-          <div class="slot-radio"></div>
-          <div>
-            <div class="slot-date">Tomorrow, Wed 15 Oct</div>
-            <div class="slot-time">2:00 PM – 5:00 PM</div>
-          </div>
-        </div>
-      </div>
+      <div id="deliverySlots"></div>
       <div class="time-warning">⏰ Please confirm within 10 minutes to secure your selected time slot</div>
     </div>
 
@@ -300,15 +292,151 @@
     <button class="confirm-button" onclick="confirmDelivery()">Confirm Delivery Booking</button>
   </div>
 
-  <div class="footer">
-    <p>Urgent Couriers — Powered by DFRNT</p>
-    <p style="margin-top:4px;">Need help? Call 0800 123 456</p>
+  <div class="footer" id="footer">
+    <p id="footerPartner">Air New Zealand — Powered by DFRNT</p>
+    <p style="margin-top:4px;" id="footerPhone">Need help? Call 0800 267 5494</p>
   </div>
 </div>
 
 <script>
+// Airline data
+const airlines = {
+  NZ: {
+    code: 'NZ', name: 'Air New Zealand', label: 'Air NZ',
+    dark: '#001F3D', accent: '#00B0B9', accentRGB: '0,176,185', btnText: 'white',
+    paxName: 'Sarah Mitchell', paxPhone: '+64 21 876 5432', paxEmail: 'sarah.mitchell@gmail.com',
+    street: '42 Ponsonby Road', suburb: 'Ponsonby', city: 'Auckland 1011',
+    ref: 'NZ20176', partner: 'Air New Zealand', helpline: '0800 267 5494'
+  },
+  SQ: {
+    code: 'SQ', name: 'Singapore Airlines', label: 'Singapore',
+    dark: '#00205C', accent: '#C4962C', accentRGB: '196,150,44', btnText: 'white',
+    paxName: 'Wei Lin Tan', paxPhone: '+65 9123 4567', paxEmail: 'weilin.tan@gmail.com',
+    street: '8 Marina Boulevard', suburb: 'Marina Bay', city: 'Singapore 018981',
+    ref: 'SQ20176', partner: 'Singapore Airlines', helpline: '+65 6223 8888'
+  },
+  FJ: {
+    code: 'FJ', name: 'Fiji Airways', label: 'Fiji',
+    dark: '#006B77', accent: '#ffffff', accentRGB: '255,255,255', btnText: '#006B77',
+    paxName: 'Mere Naivalu', paxPhone: '+679 770 1234', paxEmail: 'mere.naivalu@gmail.com',
+    street: '15 Victoria Parade', suburb: 'Suva Central', city: 'Suva, Fiji',
+    ref: 'FJ20176', partner: 'Fiji Airways', helpline: '+679 672 0888'
+  },
+  QF: {
+    code: 'QF', name: 'Qantas', label: 'Qantas',
+    dark: '#E0001B', accent: '#ffffff', accentRGB: '255,255,255', btnText: '#E0001B',
+    paxName: 'James O\'Brien', paxPhone: '+61 412 345 678', paxEmail: 'james.obrien@outlook.com',
+    street: '88 George Street', suburb: 'The Rocks', city: 'Sydney NSW 2000',
+    ref: 'QF20176', partner: 'Qantas', helpline: '13 13 13'
+  },
+  MH: {
+    code: 'MH', name: 'Malaysia Airlines', label: 'Malaysia',
+    dark: '#002B5C', accent: '#C62127', accentRGB: '198,33,39', btnText: 'white',
+    paxName: 'Ahmad Razali', paxPhone: '+60 12-345 6789', paxEmail: 'ahmad.razali@gmail.com',
+    street: '23 Jalan Bukit Bintang', suburb: 'Bukit Bintang', city: 'Kuala Lumpur 55100',
+    ref: 'MH20176', partner: 'Malaysia Airlines', helpline: '+60 3-7843 3000'
+  },
+  JQ: {
+    code: 'JQ', name: 'Jetstar', label: 'Jetstar',
+    dark: '#FF6600', accent: '#ffffff', accentRGB: '255,255,255', btnText: '#FF6600',
+    paxName: 'Emma Watson', paxPhone: '+61 423 987 654', paxEmail: 'emma.watson82@gmail.com',
+    street: '12 Swanston Street', suburb: 'Melbourne CBD', city: 'Melbourne VIC 3000',
+    ref: 'JQ20176', partner: 'Jetstar', helpline: '131 538'
+  }
+};
+
+const airlineOrder = ['NZ','SQ','FJ','QF','MH','JQ'];
+let currentAirline = localStorage.getItem('selectedAirline') || 'NZ';
 let addressEditing = false;
 
+// Build switcher pills
+function buildSwitcher() {
+  const sw = document.getElementById('airlineSwitcher');
+  sw.innerHTML = airlineOrder.map(code => {
+    const a = airlines[code];
+    return `<button class="airline-pill${code === currentAirline ? ' active' : ''}" data-code="${code}" onclick="switchAirline('${code}')">${a.label}</button>`;
+  }).join('');
+}
+
+// Generate delivery slot dates
+function getSlotDates() {
+  const now = new Date();
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const today = new Date(now); 
+  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
+  const fmt = d => `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+  const isToday = d => d.toDateString() === now.toDateString();
+  return [
+    { label: `Today, ${fmt(today)}`, time: '2:00 PM – 5:00 PM', first: true },
+    { label: `Tomorrow, ${fmt(tomorrow)}`, time: '9:00 AM – 12:00 PM', first: false },
+    { label: `Tomorrow, ${fmt(tomorrow)}`, time: '2:00 PM – 5:00 PM', first: false }
+  ];
+}
+
+function renderSlots() {
+  const slots = getSlotDates();
+  document.getElementById('deliverySlots').innerHTML = slots.map((s, i) =>
+    `<div class="slot${i===0?' selected':''}" onclick="selectSlot(this)">
+      ${s.first ? '<div class="first-available">FIRST AVAILABLE</div>' : ''}
+      <div class="slot-header">
+        <div class="slot-radio"></div>
+        <div>
+          <div class="slot-date">${s.label}</div>
+          <div class="slot-time">${s.time}</div>
+        </div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+function switchAirline(code) {
+  currentAirline = code;
+  localStorage.setItem('selectedAirline', code);
+  applyAirline();
+  buildSwitcher();
+}
+
+function applyAirline() {
+  const a = airlines[currentAirline];
+  const r = document.documentElement.style;
+  r.setProperty('--brand-dark', a.dark);
+  r.setProperty('--brand-accent', a.accent);
+  r.setProperty('--brand-accent-rgb', a.accentRGB);
+
+  document.getElementById('headerTitle').textContent = `✈️ ${a.name} Baggage Delivery`;
+  document.getElementById('refBadge').textContent = `📋 Ref: ${a.ref}`;
+  document.getElementById('paxName').textContent = a.paxName;
+  document.getElementById('paxPhone').textContent = a.paxPhone;
+  document.getElementById('paxEmail').textContent = a.paxEmail;
+
+  // Address (only if not editing)
+  if (!addressEditing) {
+    const st = document.getElementById('streetAddress');
+    const su = document.getElementById('suburb');
+    const cp = document.getElementById('cityPostcode');
+    if (st.tagName === 'DIV') st.textContent = a.street;
+    if (su.tagName === 'DIV') su.textContent = a.suburb;
+    if (cp.tagName === 'DIV') cp.textContent = a.city;
+  }
+
+  document.getElementById('footerPartner').textContent = `${a.partner} — Powered by DFRNT`;
+  document.getElementById('footerPhone').textContent = `Need help? Call ${a.helpline}`;
+
+  // Button text color for white-accent airlines
+  document.querySelectorAll('.confirm-button').forEach(btn => {
+    btn.style.color = a.btnText;
+  });
+
+  document.title = `Confirm Your Baggage Delivery | ${a.name}`;
+}
+
+// Init
+buildSwitcher();
+renderSlots();
+applyAirline();
+
+// Existing functionality
 function handleAddressConfirm() {
   if (!document.getElementById('addressCorrect').checked) toggleAddressEdit();
 }
@@ -373,13 +501,25 @@ function confirmDelivery() {
   btn.disabled = true;
   btn.textContent = 'Processing...';
 
+  const a = airlines[currentAirline];
+  const selectedSlot = document.querySelector('.slot.selected .slot-date');
+  const selectedTime = document.querySelector('.slot.selected .slot-time');
+  const slotText = selectedSlot ? `${selectedSlot.textContent} · ${selectedTime.textContent}` : 'Today · 2:00 PM – 5:00 PM';
+
+  // Get current address
+  const getAddr = id => { const el = document.getElementById(id); return el ? (el.tagName === 'INPUT' ? el.value : el.textContent) : ''; };
+  const addrStreet = getAddr('streetAddress');
+  const addrSuburb = getAddr('suburb');
+  const addrCity = getAddr('cityPostcode');
+
   setTimeout(() => {
     const container = document.querySelector('.mobile-container');
     container.innerHTML = `
+      <div class="airline-switcher" id="airlineSwitcher"></div>
       <div class="header" style="background:var(--success);">
         <h1>✅ Booking Confirmed!</h1>
         <p class="subtitle" style="color:rgba(255,255,255,0.9);">Your baggage delivery has been scheduled</p>
-        <div class="ref-badge" style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:white;">📋 Ref: AKLQF20176</div>
+        <div class="ref-badge" style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:white;">📋 Ref: ${a.ref}</div>
       </div>
       <div class="content">
         <div class="section active" style="text-align:center;padding:32px 24px;">
@@ -387,17 +527,17 @@ function confirmDelivery() {
           <h2 style="font-size:24px;font-weight:700;margin-bottom:8px;">Delivery Confirmed!</h2>
           <p style="color:var(--text-secondary);margin-bottom:20px;">Your baggage will be delivered to:</p>
           <div style="background:var(--surface-cream);padding:16px;border-radius:8px;margin-bottom:20px;text-align:left;">
-            <strong>123 Queen Street</strong><br>Auckland Central<br>Auckland 1010
+            <strong>${addrStreet}</strong><br>${addrSuburb}<br>${addrCity}
           </div>
           <p style="color:var(--text-muted);margin-bottom:4px;">Delivery Window:</p>
-          <p style="font-weight:700;font-size:18px;">Today, Tue 14 Oct · 2:00 PM – 5:00 PM</p>
+          <p style="font-weight:700;font-size:18px;">${slotText}</p>
         </div>
         <div class="section active">
           <div class="section-title" style="margin-bottom:16px;"><span>📦</span> Tracking Information</div>
-          <div style="background:rgba(59,199,244,0.06);padding:24px;border-radius:12px;border:2px solid var(--brand-cyan);text-align:center;">
+          <div style="background:rgba(var(--brand-accent-rgb),0.06);padding:24px;border-radius:12px;border:2px solid var(--brand-accent);text-align:center;">
             <p style="color:var(--text-muted);margin-bottom:8px;">Your Tracking Number:</p>
-            <h3 style="font-size:24px;font-family:monospace;font-weight:700;margin-bottom:20px;">UC-2024-789456</h3>
-            <button class="confirm-button" style="margin:0;display:inline-block;width:auto;padding:14px 32px;">Track Your Delivery 🚚</button>
+            <h3 style="font-size:24px;font-family:monospace;font-weight:700;margin-bottom:20px;">${a.code}-2026-789456</h3>
+            <button class="confirm-button" style="margin:0;display:inline-block;width:auto;padding:14px 32px;color:${a.btnText};">Track Your Delivery 🚚</button>
             <p style="color:var(--text-muted);margin-top:16px;font-size:12px;">Track your delivery in real-time using the button above</p>
           </div>
         </div>
@@ -407,7 +547,7 @@ function confirmDelivery() {
             ${['Confirmation Email|You\'ll receive an email confirmation shortly','Courier Assignment|A courier will be assigned to your delivery','Delivery Day SMS|You\'ll get an SMS when the courier is on the way','Delivery Completion|Photo proof of delivery will be provided'].map((s,i) => {
               const [t,d] = s.split('|');
               return `<div style="display:flex;gap:12px;align-items:flex-start;">
-                <span style="background:var(--brand-cyan);color:var(--brand-dark);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${i+1}</span>
+                <span style="background:var(--brand-accent);color:${a.btnText};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${i+1}</span>
                 <div><strong>${t}</strong><br><span style="color:var(--text-secondary);font-size:13px;">${d}</span></div>
               </div>`;
             }).join('')}
@@ -415,12 +555,14 @@ function confirmDelivery() {
         </div>
         <div style="text-align:center;margin-top:24px;">
           <p style="color:var(--text-muted);">Need to make changes?</p>
-          <p style="font-weight:700;margin-top:4px;">Call us on 0800 123 456</p>
+          <p style="font-weight:700;margin-top:4px;">Call us on ${a.helpline}</p>
         </div>
       </div>
       <div class="footer">
-        <p>Urgent Couriers — Powered by DFRNT</p>
+        <p>${a.partner} — Powered by DFRNT</p>
       </div>`;
+    // Re-init switcher on confirmation page
+    buildSwitcher();
   }, 1500);
 }
 </script>
