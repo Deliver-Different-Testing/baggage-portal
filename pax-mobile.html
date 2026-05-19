@@ -363,9 +363,9 @@ function buildSwitcher() {
 }
 
 // Generate delivery slot dates. Two windows per day (morning 9–12, afternoon
-// 2–5). Today's morning slot is hidden once the cut-off (9 AM) has passed so
-// we don't offer a slot we can't physically meet; same for the afternoon slot
-// after 2 PM. "First Available" tag floats to the earliest still-bookable row.
+// 2–5) for Today AND Tomorrow. A Today slot only drops once its window has
+// fully passed (i.e. AM goes after 12 PM, PM goes after 5 PM) — so during
+// business hours you always see two Today options.
 function getSlotDates() {
   const now = new Date();
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -375,19 +375,19 @@ function getSlotDates() {
   const fmt = d => `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
 
   const slots = [];
-  // Today AM — needs to be booked before 9 AM
-  if (now.getHours() < 9) {
+  // Today AM (9–12) visible until the window itself closes.
+  if (now.getHours() < 12) {
     slots.push({ label: `Today, ${fmt(today)}`, time: '9:00 AM – 12:00 PM' });
   }
-  // Today PM — needs to be booked before 2 PM
-  if (now.getHours() < 14) {
+  // Today PM (2–5) visible until 5 PM.
+  if (now.getHours() < 17) {
     slots.push({ label: `Today, ${fmt(today)}`, time: '2:00 PM – 5:00 PM' });
   }
-  // Tomorrow AM + PM always available
+  // Tomorrow AM + PM always shown.
   slots.push({ label: `Tomorrow, ${fmt(tomorrow)}`, time: '9:00 AM – 12:00 PM' });
   slots.push({ label: `Tomorrow, ${fmt(tomorrow)}`, time: '2:00 PM – 5:00 PM' });
 
-  // First available = the earliest slot left (after the cut-off filtering above).
+  // First available = the earliest slot left.
   if (slots.length) slots[0].first = true;
   return slots;
 }
