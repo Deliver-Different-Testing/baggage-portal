@@ -185,7 +185,7 @@
   <div class="header">
     <h1 id="headerTitle">✈️ Air New Zealand Baggage Delivery</h1>
     <p class="subtitle">Confirm Your Baggage Delivery Details</p>
-    <div class="ref-badge" id="refBadge">📋 Ref: NZ20176</div>
+    <div class="ref-badge" id="refBadge">📋 Ref: AKL-NZ20176</div>
   </div>
 
   <div class="content" id="mainContent">
@@ -306,42 +306,46 @@ const airlines = {
     dark: '#001F3D', accent: '#00B0B9', accentRGB: '0,176,185', btnText: 'white',
     paxName: 'Sarah Mitchell', paxPhone: '+64 21 876 5432', paxEmail: 'sarah.mitchell@gmail.com',
     street: '42 Ponsonby Road', suburb: 'Ponsonby', city: 'Auckland 1011',
-    ref: 'NZ20176', partner: 'Air New Zealand', helpline: '0800 267 5494'
+    ref: 'AKL-NZ20176', partner: 'Air New Zealand', helpline: '0800 267 5494'
   },
+  // Delivery addresses are always in NZ — passengers fly INTO AKL and have
+  // their bags couriered to where they're staying (hotel, home, Airbnb).
+  // Phone numbers + names stay culturally consistent with the airline origin
+  // because that's the passenger's identity, but the drop-off is local.
   SQ: {
     code: 'SQ', name: 'Singapore Airlines', label: 'Singapore',
     dark: '#00205C', accent: '#C4962C', accentRGB: '196,150,44', btnText: 'white',
     paxName: 'Wei Lin Tan', paxPhone: '+65 9123 4567', paxEmail: 'weilin.tan@gmail.com',
-    street: '8 Marina Boulevard', suburb: 'Marina Bay', city: 'Singapore 018981',
-    ref: 'SQ20176', partner: 'Singapore Airlines', helpline: '+65 6223 8888'
+    street: '147 Quay Street', suburb: 'Auckland Central', city: 'Auckland 1010',
+    ref: 'AKL-SQ20176', partner: 'Singapore Airlines', helpline: '+65 6223 8888'
   },
   FJ: {
     code: 'FJ', name: 'Fiji Airways', label: 'Fiji',
     dark: '#006B77', accent: '#ffffff', accentRGB: '255,255,255', btnText: '#006B77',
     paxName: 'Mere Naivalu', paxPhone: '+679 770 1234', paxEmail: 'mere.naivalu@gmail.com',
-    street: '15 Victoria Parade', suburb: 'Suva Central', city: 'Suva, Fiji',
-    ref: 'FJ20176', partner: 'Fiji Airways', helpline: '+679 672 0888'
+    street: '28 Mount Eden Road', suburb: 'Mount Eden', city: 'Auckland 1024',
+    ref: 'AKL-FJ20176', partner: 'Fiji Airways', helpline: '+679 672 0888'
   },
   QF: {
     code: 'QF', name: 'Qantas', label: 'Qantas',
     dark: '#E0001B', accent: '#ffffff', accentRGB: '255,255,255', btnText: '#E0001B',
     paxName: 'James O\'Brien', paxPhone: '+61 412 345 678', paxEmail: 'james.obrien@outlook.com',
-    street: '88 George Street', suburb: 'The Rocks', city: 'Sydney NSW 2000',
-    ref: 'QF20176', partner: 'Qantas', helpline: '13 13 13'
+    street: '12 Customs Street West', suburb: 'Viaduct Harbour', city: 'Auckland 1010',
+    ref: 'AKL-QF20176', partner: 'Qantas', helpline: '13 13 13'
   },
   MH: {
     code: 'MH', name: 'Malaysia Airlines', label: 'Malaysia',
     dark: '#002B5C', accent: '#C62127', accentRGB: '198,33,39', btnText: 'white',
     paxName: 'Ahmad Razali', paxPhone: '+60 12-345 6789', paxEmail: 'ahmad.razali@gmail.com',
-    street: '23 Jalan Bukit Bintang', suburb: 'Bukit Bintang', city: 'Kuala Lumpur 55100',
-    ref: 'MH20176', partner: 'Malaysia Airlines', helpline: '+60 3-7843 3000'
+    street: '85 Broadway', suburb: 'Newmarket', city: 'Auckland 1023',
+    ref: 'AKL-MH20176', partner: 'Malaysia Airlines', helpline: '+60 3-7843 3000'
   },
   JQ: {
     code: 'JQ', name: 'Jetstar', label: 'Jetstar',
     dark: '#FF6600', accent: '#ffffff', accentRGB: '255,255,255', btnText: '#FF6600',
     paxName: 'Emma Watson', paxPhone: '+61 423 987 654', paxEmail: 'emma.watson82@gmail.com',
-    street: '12 Swanston Street', suburb: 'Melbourne CBD', city: 'Melbourne VIC 3000',
-    ref: 'JQ20176', partner: 'Jetstar', helpline: '131 538'
+    street: '34 Victoria Road', suburb: 'Devonport', city: 'Auckland 0624',
+    ref: 'AKL-JQ20176', partner: 'Jetstar', helpline: '131 538'
   }
 };
 
@@ -358,20 +362,34 @@ function buildSwitcher() {
   }).join('');
 }
 
-// Generate delivery slot dates
+// Generate delivery slot dates. Two windows per day (morning 9–12, afternoon
+// 2–5). Today's morning slot is hidden once the cut-off (9 AM) has passed so
+// we don't offer a slot we can't physically meet; same for the afternoon slot
+// after 2 PM. "First Available" tag floats to the earliest still-bookable row.
 function getSlotDates() {
   const now = new Date();
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const today = new Date(now); 
+  const today = new Date(now);
   const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
   const fmt = d => `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
-  const isToday = d => d.toDateString() === now.toDateString();
-  return [
-    { label: `Today, ${fmt(today)}`, time: '2:00 PM – 5:00 PM', first: true },
-    { label: `Tomorrow, ${fmt(tomorrow)}`, time: '9:00 AM – 12:00 PM', first: false },
-    { label: `Tomorrow, ${fmt(tomorrow)}`, time: '2:00 PM – 5:00 PM', first: false }
-  ];
+
+  const slots = [];
+  // Today AM — needs to be booked before 9 AM
+  if (now.getHours() < 9) {
+    slots.push({ label: `Today, ${fmt(today)}`, time: '9:00 AM – 12:00 PM' });
+  }
+  // Today PM — needs to be booked before 2 PM
+  if (now.getHours() < 14) {
+    slots.push({ label: `Today, ${fmt(today)}`, time: '2:00 PM – 5:00 PM' });
+  }
+  // Tomorrow AM + PM always available
+  slots.push({ label: `Tomorrow, ${fmt(tomorrow)}`, time: '9:00 AM – 12:00 PM' });
+  slots.push({ label: `Tomorrow, ${fmt(tomorrow)}`, time: '2:00 PM – 5:00 PM' });
+
+  // First available = the earliest slot left (after the cut-off filtering above).
+  if (slots.length) slots[0].first = true;
+  return slots;
 }
 
 function renderSlots() {
@@ -537,7 +555,7 @@ function confirmDelivery() {
           <div style="background:rgba(var(--brand-accent-rgb),0.06);padding:24px;border-radius:12px;border:2px solid var(--brand-accent);text-align:center;">
             <p style="color:var(--text-muted);margin-bottom:8px;">Your Tracking Number:</p>
             <h3 style="font-size:24px;font-family:monospace;font-weight:700;margin-bottom:20px;">${a.code}-2026-789456</h3>
-            <button class="confirm-button" style="margin:0;display:inline-block;width:auto;padding:14px 32px;color:${a.btnText};">Track Your Delivery 🚚</button>
+            <button class="confirm-button" style="margin:0;display:inline-block;width:auto;padding:14px 32px;color:${a.btnText};" onclick="window.location.href='tracking.html'">Track Your Delivery 🚚</button>
             <p style="color:var(--text-muted);margin-top:16px;font-size:12px;">Track your delivery in real-time using the button above</p>
           </div>
         </div>
