@@ -317,7 +317,8 @@ const airlines = {
     dark: '#00205C', accent: '#C4962C', accentRGB: '196,150,44', btnText: 'white',
     paxName: 'Wei Lin Tan', paxPhone: '+65 9123 4567', paxEmail: 'weilin.tan@gmail.com',
     street: '147 Quay Street', suburb: 'Auckland Central', city: 'Auckland 1010',
-    ref: 'AKL-SQ20176', partner: 'Singapore Airlines', helpline: '+65 6223 8888'
+    ref: 'AKL-SQ20176', partner: 'Singapore Airlines', helpline: '+65 6223 8888',
+    runTimes: ['09:00', '11:00', '14:00', '16:00', '18:30', '20:30']
   },
   FJ: {
     code: 'FJ', name: 'Fiji Airways', label: 'Fiji',
@@ -362,10 +363,9 @@ function buildSwitcher() {
   }).join('');
 }
 
-// Generate delivery slot dates. Two windows per day (morning 9–12, afternoon
-// 2–5) for Today AND Tomorrow. A Today slot only drops once its window has
-// fully passed (i.e. AM goes after 12 PM, PM goes after 5 PM) — so during
-// business hours you always see two Today options.
+// Generate delivery slot dates. Default = two windows per day (morning 9–12,
+// afternoon 2–5) for Today and Tomorrow. Singapore Airlines overrides this
+// with the six actual run times provided by operations.
 function getSlotDates() {
   const now = new Date();
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -374,20 +374,45 @@ function getSlotDates() {
   const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
   const fmt = d => `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
 
+  const airline = airlines[currentAirline];
+  if (airline.runTimes?.length) {
+    const runs = airline.runTimes.map((time, index) => {
+      const [hour, minute] = time.split(':').map(Number);
+      return { time, index, hour, minute };
+    });
+
+    const slots = [];
+    const pushRunsForDay = (date, prefix, onlyUpcoming) => {
+      runs.forEach(run => {
+        const runDate = new Date(date);
+        runDate.setHours(run.hour, run.minute, 0, 0);
+        if (onlyUpcoming && runDate <= now) return;
+        slots.push({
+          label: `${prefix}, ${fmt(date)}`,
+          time: `Run ${run.index + 1} · ${run.time}`,
+          sortAt: runDate.getTime()
+        });
+      });
+    };
+
+    pushRunsForDay(today, 'Today', true);
+    pushRunsForDay(tomorrow, 'Tomorrow', false);
+
+    slots.sort((a, b) => a.sortAt - b.sortAt);
+    if (slots.length) slots[0].first = true;
+    return slots.slice(0, 6);
+  }
+
   const slots = [];
-  // Today AM (9–12) visible until the window itself closes.
   if (now.getHours() < 12) {
     slots.push({ label: `Today, ${fmt(today)}`, time: '9:00 AM – 12:00 PM' });
   }
-  // Today PM (2–5) visible until 5 PM.
   if (now.getHours() < 17) {
     slots.push({ label: `Today, ${fmt(today)}`, time: '2:00 PM – 5:00 PM' });
   }
-  // Tomorrow AM + PM always shown.
   slots.push({ label: `Tomorrow, ${fmt(tomorrow)}`, time: '9:00 AM – 12:00 PM' });
   slots.push({ label: `Tomorrow, ${fmt(tomorrow)}`, time: '2:00 PM – 5:00 PM' });
 
-  // First available = the earliest slot left.
   if (slots.length) slots[0].first = true;
   return slots;
 }
@@ -447,6 +472,7 @@ function applyAirline() {
   });
 
   document.title = `Confirm Your Baggage Delivery | ${a.name}`;
+  renderSlots();
 }
 
 // Init
