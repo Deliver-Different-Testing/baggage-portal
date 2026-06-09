@@ -75,7 +75,7 @@ export function Tracking() {
                 <Typography variant="h3">Driver</Typography>
                 <Divider sx={{ my: 1.5 }} />
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                  <Avatar sx={{ bgcolor: 'secondary.main', color: 'primary.main' }}>
+                  <Avatar sx={{ bgcolor: 'primary.main', color: 'primary.contrastText' }}>
                     {tracking.data.courierFirstName.charAt(0)}
                   </Avatar>
                   <Box>
@@ -114,7 +114,7 @@ function StatusChip({ status }: { status: string }) {
   const colour =
     status === 'Delivered' ? 'success' :
     status === 'OutForDelivery' ? 'warning' :
-    'secondary'
+    'primary'
   return <Chip label={status} color={colour} sx={{ fontWeight: 700 }} />
 }
 
@@ -128,7 +128,7 @@ function TimelineList({ data }: { data: TrackingTimeline }) {
             {new Date(event.atUtc).toLocaleString()}
           </TimelineOppositeContent>
           <TimelineSeparator>
-            <TimelineDot color={idx === events.length - 1 ? 'secondary' : 'success'} />
+            <TimelineDot color={idx === events.length - 1 ? 'primary' : 'success'} />
             {idx < events.length - 1 && <TimelineConnector />}
           </TimelineSeparator>
           <TimelineContent>

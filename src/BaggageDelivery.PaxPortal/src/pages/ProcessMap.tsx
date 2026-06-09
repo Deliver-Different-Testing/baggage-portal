@@ -136,7 +136,7 @@ export function ProcessMap() {
                         <Typography variant="caption" color="text.secondary">{node.subtitle}</Typography>
                       </Box>
                       {idx < lane.nodes.length - 1 && (
-                        <Typography color="secondary" sx={{ display: { xs: 'none', md: 'block' } }}>→</Typography>
+                        <Typography color="primary" sx={{ display: { xs: 'none', md: 'block' } }}>→</Typography>
                       )}
                     </Box>
                   ))}

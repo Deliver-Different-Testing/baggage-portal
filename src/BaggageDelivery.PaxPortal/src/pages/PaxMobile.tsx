@@ -18,6 +18,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import {
   confirmBooking,
   getBooking,
@@ -94,16 +95,18 @@ function ConfirmForm({
     queryFn: () => getTimeslots(bookingId),
   })
 
-  useEffect(() => {
-    if (slots.data && slots.data.length && !selectedSlotId) {
-      const first = slots.data.find((s) => s.firstAvailable) ?? slots.data[0]
-      setSelectedSlotId(first.id)
-    }
-  }, [slots.data, selectedSlotId])
+  const defaultSlotId = useMemo(
+    () =>
+      slots.data && slots.data.length
+        ? (slots.data.find((s) => s.firstAvailable) ?? slots.data[0]).id
+        : null,
+    [slots.data],
+  )
+  const effectiveSlotId = selectedSlotId ?? defaultSlotId
 
   const selectedSlot: TimeSlot | undefined = useMemo(
-    () => slots.data?.find((s) => s.id === selectedSlotId),
-    [slots.data, selectedSlotId],
+    () => slots.data?.find((s) => s.id === effectiveSlotId),
+    [slots.data, effectiveSlotId],
   )
 
   const confirm = useMutation({
@@ -233,7 +236,7 @@ function ConfirmForm({
             {slots.isLoading && <Typography color="text.secondary">Loading slots…</Typography>}
             {slots.data && (
               <RadioGroup
-                value={selectedSlotId ?? ''}
+                value={effectiveSlotId ?? ''}
                 onChange={(e) => setSelectedSlotId(e.target.value)}
               >
                 {slots.data.map((slot) => (
@@ -241,18 +244,18 @@ function ConfirmForm({
                     key={slot.id}
                     value={slot.id}
                     control={<Radio />}
-                    sx={{
+                    sx={(theme) => ({
                       m: 0,
                       mb: 1,
                       p: 1,
                       border: 1,
                       borderColor: 'divider',
                       borderRadius: 1.5,
-                      ...(slot.id === selectedSlotId && {
-                        borderColor: 'secondary.main',
-                        bgcolor: 'secondary.light',
+                      ...(slot.id === effectiveSlotId && {
+                        borderColor: theme.palette.primary.main,
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
                       }),
-                    }}
+                    })}
                     label={
                       <Stack>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>{slot.label}</Typography>
@@ -333,7 +336,7 @@ function ConfirmForm({
 
         <Button
           variant="contained"
-          color="secondary"
+          color="primary"
           size="large"
           fullWidth
           disabled={!online || confirm.isPending}
