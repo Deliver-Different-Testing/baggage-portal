@@ -6,7 +6,7 @@ namespace BaggageDelivery.Api.Auth;
 
 public static class AuthenticationServiceCollectionExtensions
 {
-    public static IServiceCollection AddAppAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static void AddAppAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var jwtSecret = Environment.GetEnvironmentVariable("JWTSecretKey")
                         ?? configuration["Auth:JwtSecretKey"]
@@ -45,7 +45,5 @@ public static class AuthenticationServiceCollectionExtensions
             options.Cookie.Domain = cookieDomain;
             options.HeaderName = "X-XSRF-TOKEN";
         });
-
-        return services;
     }
 }
