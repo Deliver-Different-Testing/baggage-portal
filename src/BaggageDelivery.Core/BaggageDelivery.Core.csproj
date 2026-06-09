@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <LangVersion>14</LangVersion>
-    <Nullable>disable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>

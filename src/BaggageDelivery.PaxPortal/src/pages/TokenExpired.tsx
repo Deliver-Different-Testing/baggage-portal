@@ -13,10 +13,10 @@ export function TokenExpired() {
         >
           !
         </Box>
-        <Typography variant="h2">Link expired</Typography>
+        <Typography variant="h2">Booking not found</Typography>
         <Typography color="text.secondary">
-          This confirmation link is no longer valid. If you still need to confirm
-          your baggage delivery, please contact our team — we will send you a new link.
+          We could not find a baggage delivery booking for this link. If you still need
+          to confirm your delivery, please contact our team — we will send you a new link.
         </Typography>
       </Stack>
     </Container>

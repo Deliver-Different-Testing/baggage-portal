@@ -5,7 +5,7 @@ namespace BaggageDelivery.Core.Notifications;
 
 internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRenderer
 {
-    public Task<RenderedNotification> RenderMagicLinkAsync(MagicLinkRenderContext context, CancellationToken ct)
+    public Task<RenderedNotification> RenderBookingLinkAsync(BookingNotificationContext context, CancellationToken ct)
     {
         return context.Channel switch
         {
@@ -16,15 +16,15 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
         };
     }
 
-    private static RenderedNotification RenderSms(MagicLinkRenderContext c)
+    private static RenderedNotification RenderSms(BookingNotificationContext c)
     {
         var body =
             $"Hi {c.PassengerName.Split(' ')[0]}, your {c.AirlineLabel} baggage is ready for delivery. " +
-            $"Confirm your address and time slot: {c.MagicLinkUrl}";
+            $"Confirm your address and time slot: {c.BookingUrl}";
         return new RenderedNotification(Subject: "", Body: body);
     }
 
-    private RenderedNotification RenderEmail(MagicLinkRenderContext c)
+    private RenderedNotification RenderEmail(BookingNotificationContext c)
     {
         var mjmlTemplate = $$"""
             <mjml>
@@ -50,12 +50,9 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                       unattended.
                     </mj-text>
                     <mj-button background-color="#00B0B9" color="#001F3D" font-weight="700"
-                               border-radius="999px" padding="24px 0" href="{{c.MagicLinkUrl}}">
+                               border-radius="999px" padding="24px 0" href="{{c.BookingUrl}}">
                       Confirm delivery details
                     </mj-button>
-                    <mj-text color="#6e6d80" font-size="12px">
-                      This link is for you only and expires in 7 days.
-                    </mj-text>
                   </mj-column>
                 </mj-section>
               </mj-body>

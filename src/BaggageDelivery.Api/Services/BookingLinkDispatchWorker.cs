@@ -2,23 +2,23 @@ using BaggageDelivery.Core.Services;
 
 namespace BaggageDelivery.Api.Services;
 
-public sealed class MagicLinkDispatchWorker(
+public sealed class BookingLinkDispatchWorker(
     IServiceScopeFactory scopeFactory,
-    ILogger<MagicLinkDispatchWorker> logger) : BackgroundService
+    ILogger<BookingLinkDispatchWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private const int BatchSize = 25;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("MagicLinkDispatchWorker started");
+        logger.LogInformation("BookingLinkDispatchWorker started");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 using var scope = scopeFactory.CreateScope();
-                var service = scope.ServiceProvider.GetRequiredService<IMagicLinkDispatchService>();
+                var service = scope.ServiceProvider.GetRequiredService<IBookingLinkDispatchService>();
                 await service.DrainOnceAsync(BatchSize, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -27,7 +27,7 @@ public sealed class MagicLinkDispatchWorker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "MagicLinkDispatchWorker iteration failed");
+                logger.LogError(ex, "BookingLinkDispatchWorker iteration failed");
             }
 
             try
@@ -37,6 +37,6 @@ public sealed class MagicLinkDispatchWorker(
             catch (TaskCanceledException) { break; }
         }
 
-        logger.LogInformation("MagicLinkDispatchWorker stopping");
+        logger.LogInformation("BookingLinkDispatchWorker stopping");
     }
 }

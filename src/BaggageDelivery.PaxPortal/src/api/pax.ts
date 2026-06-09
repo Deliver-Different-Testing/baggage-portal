@@ -6,31 +6,23 @@ import type {
   TrackingTimeline,
 } from './client'
 
-export async function createSession(token: string): Promise<BookingSummary> {
-  const { data } = await apiClient.post<{ booking: BookingSummary; cookieExpiresAtUtc: string }>(
-    '/pax/session',
-    { token },
-  )
-  return data.booking
-}
-
-export async function getBooking(): Promise<BookingSummary> {
-  const { data } = await apiClient.get<BookingSummary>('/pax/booking')
+export async function getBooking(id: string): Promise<BookingSummary> {
+  const { data } = await apiClient.get<BookingSummary>(`/pax/${id}/booking`)
   return data
 }
 
-export async function getTimeslots(date?: string): Promise<TimeSlot[]> {
-  const { data } = await apiClient.get<TimeSlot[]>('/pax/booking/timeslots', {
+export async function getTimeslots(id: string, date?: string): Promise<TimeSlot[]> {
+  const { data } = await apiClient.get<TimeSlot[]>(`/pax/${id}/booking/timeslots`, {
     params: date ? { date } : undefined,
   })
   return data
 }
 
-export async function confirmBooking(body: ConfirmBookingRequest): Promise<void> {
-  await apiClient.post('/pax/booking/confirm', body)
+export async function confirmBooking(id: string, body: ConfirmBookingRequest): Promise<void> {
+  await apiClient.post(`/pax/${id}/booking/confirm`, body)
 }
 
-export async function getTracking(): Promise<TrackingTimeline> {
-  const { data } = await apiClient.get<TrackingTimeline>('/pax/tracking')
+export async function getTracking(id: string): Promise<TrackingTimeline> {
+  const { data } = await apiClient.get<TrackingTimeline>(`/pax/${id}/tracking`)
   return data
 }

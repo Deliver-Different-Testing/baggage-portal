@@ -13,24 +13,12 @@ public static class AuthenticationServiceCollectionExtensions
                         ?? throw new InvalidOperationException("JWTSecretKey env var or Auth:JwtSecretKey config is required");
         var issuer = Environment.GetEnvironmentVariable("Issuer") ?? configuration["Auth:Issuer"] ?? "DespatchSC";
         var audience = Environment.GetEnvironmentVariable("Audience") ?? configuration["Auth:Audience"] ?? "DespatchSC";
+        var cookieDomain = Environment.GetEnvironmentVariable("Domain");
 
-        services.AddAuthentication(o =>
-            {
-                o.DefaultScheme = "AutoSelect";
-                o.DefaultChallengeScheme = "AutoSelect";
-            })
-            .AddPolicyScheme("AutoSelect", "Magic-link or Bearer", o =>
-            {
-                o.ForwardDefaultSelector = ctx =>
-                {
-                    // Bearer (SC-JWT) for admin and internal routes; MagicLink for /api/v1/pax/*.
-                    if (ctx.Request.Path.StartsWithSegments("/api/v1/pax"))
-                    {
-                        return MagicLinkSchemeOptions.SchemeName;
-                    }
-                    return JwtBearerDefaults.AuthenticationScheme;
-                };
-            })
+        // Bearer (SC-JWT) is the only registered scheme. Customer-facing pax
+        // routes are [AllowAnonymous] and authenticate by holding the encrypted
+        // BagDelBooking ID in the URL path — same model as inboundagent.
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, o =>
             {
                 o.RequireHttpsMetadata = false;
@@ -45,22 +33,17 @@ public static class AuthenticationServiceCollectionExtensions
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(2)
                 };
-            })
-            .AddScheme<MagicLinkSchemeOptions, MagicLinkAuthenticationHandler>(
-                MagicLinkSchemeOptions.SchemeName,
-                _ => { });
+            });
 
-        services.AddAuthorization(o =>
+        services.AddAuthorizationBuilder();
+
+        // Mirrors inboundagent: XSRF cookie shared across the deliverdifferent
+        // app family. SPA reads XSRF-TOKEN and sends it as X-XSRF-TOKEN.
+        services.AddAntiforgery(options =>
         {
-            o.AddPolicy(MagicLinkPolicies.PaxConfirm, p =>
-                p.AddAuthenticationSchemes(MagicLinkSchemeOptions.SchemeName)
-                    .RequireAuthenticatedUser()
-                    .RequireClaim(MagicLinkClaims.Scope, "Confirm"));
-
-            o.AddPolicy(MagicLinkPolicies.PaxTrack, p =>
-                p.AddAuthenticationSchemes(MagicLinkSchemeOptions.SchemeName)
-                    .RequireAuthenticatedUser()
-                    .RequireClaim(MagicLinkClaims.Scope, "Track"));
+            options.Cookie.Name = "XSRF-TOKEN";
+            options.Cookie.Domain = cookieDomain;
+            options.HeaderName = "X-XSRF-TOKEN";
         });
 
         return services;

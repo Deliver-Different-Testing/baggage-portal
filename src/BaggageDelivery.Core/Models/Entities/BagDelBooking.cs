@@ -3,20 +3,22 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BaggageDelivery.Core.Models.Entities;
 
-[Table("BagDelBookingConfirmation")]
-public class BagDelBookingConfirmation
+[Table("BagDelBooking")]
+public class BagDelBooking
 {
     [Key]
     public int Id { get; set; }
 
     public required int JobId { get; set; }
 
-    public required int TokenId { get; set; }
+    public required int TenantId { get; set; }
 
-    public required DateTime ConfirmedAtUtc { get; set; }
+    public required DateTime CreatedAtUtc { get; set; }
+
+    public DateTime? ConfirmedAtUtc { get; set; }
 
     [MaxLength(200)]
-    public required string AddressLine1 { get; set; }
+    public string? AddressLine1 { get; set; }
 
     [MaxLength(200)]
     public string? AddressLine2 { get; set; }
@@ -25,13 +27,13 @@ public class BagDelBookingConfirmation
     public string? Suburb { get; set; }
 
     [MaxLength(100)]
-    public required string City { get; set; }
+    public string? City { get; set; }
 
     [MaxLength(20)]
     public string? PostCode { get; set; }
 
     [MaxLength(2)]
-    public required string Country { get; set; }
+    public string? Country { get; set; }
 
     [Column(TypeName = "decimal(9, 6)")]
     public decimal? Latitude { get; set; }
@@ -39,12 +41,12 @@ public class BagDelBookingConfirmation
     [Column(TypeName = "decimal(9, 6)")]
     public decimal? Longitude { get; set; }
 
-    public required DateTime TimeSlotStartUtc { get; set; }
+    public DateTime? TimeSlotStartUtc { get; set; }
 
-    public required DateTime TimeSlotEndUtc { get; set; }
+    public DateTime? TimeSlotEndUtc { get; set; }
 
     [MaxLength(30)]
-    public required string AtlOption { get; set; }
+    public string? AtlOption { get; set; }
 
     [MaxLength(500)]
     public string? AccessNotes { get; set; }

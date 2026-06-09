@@ -1,6 +1,6 @@
 namespace BaggageDelivery.Core.Services;
 
-public interface IMagicLinkDispatchService
+public interface IBookingLinkDispatchService
 {
     Task<int> EnqueueAsync(EnqueueNotificationRequest request, CancellationToken ct);
 
@@ -8,10 +8,10 @@ public interface IMagicLinkDispatchService
 }
 
 public sealed record EnqueueNotificationRequest(
-    int TokenId,
+    int BookingId,
     string Channel,
     string Recipient,
     string PassengerName,
     string AirlineLabel,
     string Reference,
-    string MagicLinkUrl);
+    string BookingUrl);

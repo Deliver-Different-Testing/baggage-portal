@@ -1,11 +1,11 @@
 using System.Net;
 using Amazon.SecretsManager;
 using BaggageDelivery.Core.Http;
-using BaggageDelivery.Core.MagicLink;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Secrets;
+using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,12 +24,11 @@ public static class DependencyInjection
         public void AddApplication()
         {
             services.AddSingleton(TimeProvider.System);
-            services.AddSingleton<IMagicLinkTokenGenerator, MagicLinkTokenGenerator>();
-            services.AddScoped<IMagicLinkService, MagicLinkService>();
+            services.AddSingleton<IEncryptionService, EncryptionService>();
             services.AddScoped<IPaxBookingService, PaxBookingService>();
             services.AddScoped<IPaxTrackingService, PaxTrackingService>();
             services.AddScoped<IDespatchJobReleaseService, DespatchJobReleaseService>();
-            services.AddScoped<IMagicLinkDispatchService, MagicLinkDispatchService>();
+            services.AddScoped<IBookingLinkDispatchService, BookingLinkDispatchService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, NotificationService>();
@@ -43,7 +42,8 @@ public static class DependencyInjection
             services.AddDatabase(configuration);
             services.AddAwsServices(isDevelopment);
             services.AddNotifications(configuration);
-            services.AddMagicLink(configuration);
+            services.AddEncryption(configuration);
+            services.AddBookingLinks(configuration);
             services.AddDespatchClient(configuration);
         }
 
@@ -93,10 +93,21 @@ public static class DependencyInjection
             });
         }
 
-        private void AddMagicLink(IConfiguration configuration)
+        private void AddEncryption(IConfiguration configuration)
         {
-            services.Configure<MagicLinkOptions>(configuration.GetSection(MagicLinkOptions.SectionName));
-            services.PostConfigure<MagicLinkOptions>(opts =>
+            services.Configure<EncryptionOptions>(configuration.GetSection(EncryptionOptions.SectionName));
+            services.PostConfigure<EncryptionOptions>(opts =>
+            {
+                opts.Key = Environment.GetEnvironmentVariable("BaggageDeliveryEncryptionKey") ?? opts.Key;
+                opts.IV = Environment.GetEnvironmentVariable("BaggageDeliveryEncryptionIV") ?? opts.IV;
+            });
+            services.AddSingleton<IValidateOptions<EncryptionOptions>, EncryptionOptionsValidator>();
+        }
+
+        private void AddBookingLinks(IConfiguration configuration)
+        {
+            services.Configure<BookingLinkOptions>(configuration.GetSection(BookingLinkOptions.SectionName));
+            services.PostConfigure<BookingLinkOptions>(opts =>
             {
                 var publicUrl = Environment.GetEnvironmentVariable("BaggageDeliveryPublicBaseUrl");
                 if (!string.IsNullOrEmpty(publicUrl))
@@ -104,7 +115,6 @@ public static class DependencyInjection
                     opts.PublicBaseUrl = publicUrl;
                 }
             });
-            services.AddSingleton<IValidateOptions<MagicLinkOptions>, MagicLinkOptionsValidator>();
         }
 
         private void AddDespatchClient(IConfiguration configuration)

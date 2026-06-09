@@ -38,14 +38,30 @@ internal sealed class DespatchJobReleaseService(
 
     private async Task ProcessOneAsync(BagDelConfirmationOutbox row, CancellationToken ct)
     {
-        var confirmation = await db.BookingConfirmations
+        var booking = await db.Bookings
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == row.ConfirmationId, ct);
+            .FirstOrDefaultAsync(b => b.Id == row.BookingId, ct);
 
-        if (confirmation is null)
+        if (booking is null)
         {
             row.Status = OutboxStatus.Failed;
-            row.LastError = $"ConfirmationId {row.ConfirmationId} not found";
+            row.LastError = $"BookingId {row.BookingId} not found";
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
+        // Outbox rows are only created after ConfirmAsync, which requires every
+        // customer-submitted field. A null here means data corruption — surface it.
+        if (booking.ConfirmedAtUtc is null
+            || booking.AddressLine1 is null
+            || booking.City is null
+            || booking.Country is null
+            || booking.TimeSlotStartUtc is null
+            || booking.TimeSlotEndUtc is null
+            || booking.AtlOption is null)
+        {
+            row.Status = OutboxStatus.Failed;
+            row.LastError = $"Booking {row.BookingId} is missing confirmation fields";
             await db.SaveChangesAsync(ct);
             return;
         }
@@ -58,20 +74,20 @@ internal sealed class DespatchJobReleaseService(
             {
                 Address = new AddressUpdateDto
                 {
-                    Line1 = confirmation.AddressLine1,
-                    Line2 = confirmation.AddressLine2,
-                    Suburb = confirmation.Suburb,
-                    City = confirmation.City,
-                    PostCode = confirmation.PostCode,
-                    Country = confirmation.Country,
-                    Latitude = confirmation.Latitude,
-                    Longitude = confirmation.Longitude
+                    Line1 = booking.AddressLine1,
+                    Line2 = booking.AddressLine2,
+                    Suburb = booking.Suburb,
+                    City = booking.City,
+                    PostCode = booking.PostCode,
+                    Country = booking.Country,
+                    Latitude = booking.Latitude,
+                    Longitude = booking.Longitude
                 },
-                TimeSlotStartUtc = confirmation.TimeSlotStartUtc,
-                TimeSlotEndUtc = confirmation.TimeSlotEndUtc,
-                AtlOption = confirmation.AtlOption,
-                AccessNotes = confirmation.AccessNotes,
-                PhoneOverride = confirmation.PhoneOverride
+                TimeSlotStartUtc = booking.TimeSlotStartUtc.Value,
+                TimeSlotEndUtc = booking.TimeSlotEndUtc.Value,
+                AtlOption = booking.AtlOption,
+                AccessNotes = booking.AccessNotes,
+                PhoneOverride = booking.PhoneOverride
             };
 
             var updateOk = await despatch.UpdateJobDeliveryAsync(
@@ -97,11 +113,11 @@ internal sealed class DespatchJobReleaseService(
             row.Status = OutboxStatus.Done;
             row.LastError = null;
 
-            await db.BookingConfirmations
-                .Where(c => c.Id == row.ConfirmationId)
+            await db.Bookings
+                .Where(b => b.Id == row.BookingId)
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.DespatchSyncedAtUtc, time.GetUtcNow().UtcDateTime)
-                    .SetProperty(c => c.DespatchSyncError, (string?)null), ct);
+                    .SetProperty(b => b.DespatchSyncedAtUtc, time.GetUtcNow().UtcDateTime)
+                    .SetProperty(b => b.DespatchSyncError, (string?)null), ct);
 
             await db.SaveChangesAsync(ct);
 
@@ -129,10 +145,10 @@ internal sealed class DespatchJobReleaseService(
                     row.JobId, row.AttemptCount, backoffSeconds);
             }
 
-            await db.BookingConfirmations
-                .Where(c => c.Id == row.ConfirmationId)
+            await db.Bookings
+                .Where(b => b.Id == row.BookingId)
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.DespatchSyncError, ex.Message), ct);
+                    .SetProperty(b => b.DespatchSyncError, ex.Message), ct);
 
             await db.SaveChangesAsync(ct);
         }

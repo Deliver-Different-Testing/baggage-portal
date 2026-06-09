@@ -1,6 +1,5 @@
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
-using BaggageDelivery.Core.MagicLink;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Models.Entities;
 using BaggageDelivery.Core.MultiTenant;
@@ -13,30 +12,33 @@ internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
     IDespatchApiClient despatch,
     ITenantResolver tenants,
-    IMagicLinkService magicLink,
     TimeProvider time,
     ILogger<PaxBookingService> logger) : IPaxBookingService
 {
-    // v1: pulls the booking summary from a stub the integration manager passes
-    // alongside the magic-link mint. In a follow-up PR Despatch will expose
-    // GET api/Jobs/{jobId}/summary so we can read directly.
-    public async Task<BookingSummary?> GetSummaryAsync(int jobId, int tenantId, CancellationToken ct)
+    public async Task<BookingSummary?> GetSummaryAsync(int bookingId, CancellationToken ct)
     {
-        var ctx = await tenants.ResolveAsync(tenantId, ct);
-        var tracking = await despatch.GetJobTrackingAsync(
-            tenantId, ctx.Connection, ctx.TimeZone, clientId: null, contactId: 0, jobId, ct);
+        var booking = await db.Bookings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
 
-        if (tracking is null)
+        if (booking is null)
         {
-            logger.LogWarning("GetSummary: Despatch returned no tracking for job {JobId}", jobId);
             return null;
         }
 
-        // We deliberately do not include the existing confirmation here even if one exists -
-        // the BookingSummary represents the BDO baseline. The PWA reads the active confirmation
-        // (if any) separately to pre-fill the form.
+        var ctx = await tenants.ResolveAsync(booking.TenantId, ct);
+        var tracking = await despatch.GetJobTrackingAsync(
+            booking.TenantId, ctx.Connection, ctx.TimeZone, clientId: null, contactId: 0, booking.JobId, ct);
+
+        if (tracking is null)
+        {
+            logger.LogWarning("GetSummary: Despatch returned no tracking for job {JobId}", booking.JobId);
+            return null;
+        }
+
         return new BookingSummary(
-            JobId: jobId,
+            BookingId: booking.Id,
+            JobId: booking.JobId,
             Reference: tracking.JobId.ToString(),
             AirlineLabel: tracking.CourierFirstName ?? "Your Airline",
             PassengerName: "",
@@ -44,69 +46,66 @@ internal sealed class PaxBookingService(
             PassengerEmail: null,
             DeliveryAddress: new AddressUpdateDto
             {
-                Line1 = "",
-                City = "",
-                Country = "NZ"
+                Line1 = booking.AddressLine1 ?? "",
+                Line2 = booking.AddressLine2,
+                Suburb = booking.Suburb,
+                City = booking.City ?? "",
+                PostCode = booking.PostCode,
+                Country = booking.Country ?? "NZ",
+                Latitude = booking.Latitude,
+                Longitude = booking.Longitude
             },
             EarliestSlotUtc: tracking.EtaWindowStartUtc ?? time.GetUtcNow().UtcDateTime,
             LatestSlotUtc: tracking.EtaWindowEndUtc ?? time.GetUtcNow().UtcDateTime.AddDays(2));
     }
 
-    public async Task<int> ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
+    public async Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var existing = await db.BookingConfirmations
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.JobId == input.JobId, ct);
-
-        if (existing is not null)
+        var booking = await db.Bookings.AsTracking().FirstOrDefaultAsync(b => b.Id == input.BookingId, ct);
+        if (booking is null)
         {
-            throw new ConfirmationAlreadyExistsException(input.JobId);
+            throw new BookingNotFoundException(input.BookingId);
+        }
+
+        if (booking.ConfirmedAtUtc is not null)
+        {
+            throw new ConfirmationAlreadyExistsException(input.BookingId);
         }
 
         var now = time.GetUtcNow().UtcDateTime;
 
-        var confirmation = new BagDelBookingConfirmation
-        {
-            JobId = input.JobId,
-            TokenId = input.TokenId,
-            ConfirmedAtUtc = now,
-            AddressLine1 = input.Address.Line1,
-            AddressLine2 = input.Address.Line2,
-            Suburb = input.Address.Suburb,
-            City = input.Address.City,
-            PostCode = input.Address.PostCode,
-            Country = input.Address.Country,
-            Latitude = input.Address.Latitude,
-            Longitude = input.Address.Longitude,
-            TimeSlotStartUtc = input.TimeSlotStartUtc,
-            TimeSlotEndUtc = input.TimeSlotEndUtc,
-            AtlOption = input.AtlOption,
-            AccessNotes = input.AccessNotes,
-            PhoneOverride = input.PhoneOverride
-        };
-        db.BookingConfirmations.Add(confirmation);
-        await db.SaveChangesAsync(ct);
+        booking.ConfirmedAtUtc = now;
+        booking.AddressLine1 = input.Address.Line1;
+        booking.AddressLine2 = input.Address.Line2;
+        booking.Suburb = input.Address.Suburb;
+        booking.City = input.Address.City;
+        booking.PostCode = input.Address.PostCode;
+        booking.Country = input.Address.Country;
+        booking.Latitude = input.Address.Latitude;
+        booking.Longitude = input.Address.Longitude;
+        booking.TimeSlotStartUtc = input.TimeSlotStartUtc;
+        booking.TimeSlotEndUtc = input.TimeSlotEndUtc;
+        booking.AtlOption = input.AtlOption;
+        booking.AccessNotes = input.AccessNotes;
+        booking.PhoneOverride = input.PhoneOverride;
 
         var outbox = new BagDelConfirmationOutbox
         {
-            ConfirmationId = confirmation.Id,
-            JobId = input.JobId,
-            TenantId = input.TenantId,
+            BookingId = booking.Id,
+            JobId = booking.JobId,
+            TenantId = booking.TenantId,
             Status = OutboxStatus.Pending,
             NextAttemptUtc = now,
             CreatedAtUtc = now
         };
         db.ConfirmationOutbox.Add(outbox);
+
         await db.SaveChangesAsync(ct);
 
-        await magicLink.MarkUsedAsync(input.TokenId, ct);
-
         logger.LogInformation(
-            "Pax confirmation persisted for JobId={JobId} ConfirmationId={ConfirmationId} OutboxId={OutboxId}",
-            input.JobId, confirmation.Id, outbox.Id);
-
-        return confirmation.Id;
+            "Pax confirmation persisted for BookingId={BookingId} JobId={JobId} OutboxId={OutboxId}",
+            booking.Id, booking.JobId, outbox.Id);
     }
 }

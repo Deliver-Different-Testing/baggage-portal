@@ -7,12 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace BaggageDelivery.Core.Services;
 
-internal sealed class MagicLinkDispatchService(
+internal sealed class BookingLinkDispatchService(
     BaggageDeliveryContext db,
     INotificationRenderer renderer,
     INotificationService notifications,
     TimeProvider time,
-    ILogger<MagicLinkDispatchService> logger) : IMagicLinkDispatchService
+    ILogger<BookingLinkDispatchService> logger) : IBookingLinkDispatchService
 {
     private const int MaxAttempts = 5;
 
@@ -21,7 +21,7 @@ internal sealed class MagicLinkDispatchService(
         var now = time.GetUtcNow().UtcDateTime;
         var entity = new BagDelNotificationLog
         {
-            TokenId = request.TokenId,
+            BookingId = request.BookingId,
             Channel = request.Channel,
             Recipient = request.Recipient,
             Status = NotificationStatus.Pending,
@@ -33,7 +33,7 @@ internal sealed class MagicLinkDispatchService(
             // would use a dedicated payload column. v1 keeps the schema minimal.
             LastError = JsonSerializer.Serialize(new RenderPayload(
                 request.PassengerName, request.AirlineLabel,
-                request.Reference, request.MagicLinkUrl))
+                request.Reference, request.BookingUrl))
         };
         db.NotificationLogs.Add(entity);
         await db.SaveChangesAsync(ct);
@@ -81,9 +81,9 @@ internal sealed class MagicLinkDispatchService(
             return;
         }
 
-        var rendered = await renderer.RenderMagicLinkAsync(
-            new MagicLinkRenderContext(row.Channel, payload.PassengerName,
-                payload.AirlineLabel, payload.Reference, payload.MagicLinkUrl),
+        var rendered = await renderer.RenderBookingLinkAsync(
+            new BookingNotificationContext(row.Channel, payload.PassengerName,
+                payload.AirlineLabel, payload.Reference, payload.BookingUrl),
             ct);
 
         var result = await notifications.SendAsync(
@@ -98,8 +98,8 @@ internal sealed class MagicLinkDispatchService(
             row.ProviderMsgId = result.ProviderMessageId;
             row.LastError = null;
             logger.LogInformation(
-                "Notification sent: TokenId={TokenId} Channel={Channel} ProviderMsgId={ProviderMsgId}",
-                row.TokenId, row.Channel, row.ProviderMsgId);
+                "Notification sent: BookingId={BookingId} Channel={Channel} ProviderMsgId={ProviderMsgId}",
+                row.BookingId, row.Channel, row.ProviderMsgId);
         }
         else
         {
@@ -108,8 +108,8 @@ internal sealed class MagicLinkDispatchService(
             {
                 row.Status = NotificationStatus.Failed;
                 logger.LogError(
-                    "Notification FAILED after {Attempts}: TokenId={TokenId} Channel={Channel} Error={Error}",
-                    row.AttemptCount, row.TokenId, row.Channel, result.Error);
+                    "Notification FAILED after {Attempts}: BookingId={BookingId} Channel={Channel} Error={Error}",
+                    row.AttemptCount, row.BookingId, row.Channel, result.Error);
             }
             else
             {
@@ -121,5 +121,5 @@ internal sealed class MagicLinkDispatchService(
         await db.SaveChangesAsync(ct);
     }
 
-    private sealed record RenderPayload(string PassengerName, string AirlineLabel, string Reference, string MagicLinkUrl);
+    private sealed record RenderPayload(string PassengerName, string AirlineLabel, string Reference, string BookingUrl);
 }

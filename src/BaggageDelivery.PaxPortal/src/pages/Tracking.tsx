@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -22,32 +22,35 @@ import {
   TimelineOppositeContent,
   TimelineSeparator,
 } from '@mui/lab'
-import { createSession, getTracking } from '../api/pax'
+import { getTracking } from '../api/pax'
 import type { TrackingTimeline } from '../api/client'
 
 export function Tracking() {
-  const { token } = useParams<{ token: string }>()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [sessionReady, setSessionReady] = useState(false)
-
-  useEffect(() => {
-    if (!token) return
-    createSession(token)
-      .then(() => setSessionReady(true))
-      .catch((err: { normalisedKind?: string }) => {
-        if (err?.normalisedKind === 'expired') navigate('/expired', { replace: true })
-      })
-  }, [token, navigate])
 
   const tracking = useQuery({
-    queryKey: ['pax', 'tracking', token],
-    queryFn: getTracking,
-    enabled: sessionReady,
+    queryKey: ['pax', 'tracking', id],
+    queryFn: () => getTracking(id ?? ''),
+    enabled: !!id,
     refetchInterval: 30_000,
+    retry: false,
   })
 
-  if (!token) return null
-  if (!sessionReady) return <Container sx={{ pt: 8 }}><Typography color="text.secondary">Loading…</Typography></Container>
+  useEffect(() => {
+    if (tracking.error && (tracking.error as { normalisedKind?: string })?.normalisedKind === 'not_found') {
+      navigate('/expired', { replace: true })
+    }
+  }, [tracking.error, navigate])
+
+  if (!id) return null
+  if (tracking.isLoading) {
+    return (
+      <Container sx={{ pt: 8 }}>
+        <Typography color="text.secondary">Loading…</Typography>
+      </Container>
+    )
+  }
 
   return (
     <Container maxWidth="lg" sx={{ pt: 4, pb: 8 }}>

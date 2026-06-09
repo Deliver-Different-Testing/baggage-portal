@@ -4,7 +4,6 @@ using BaggageDelivery.Core.Models.Entities;
 using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Services;
 using BaggageDelivery.UnitTests.Helpers;
-using BaggageDelivery.UnitTests.MagicLink;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
@@ -74,22 +73,27 @@ public class DespatchJobReleaseServiceTests
         Assert.NotNull(row.LastError);
     }
 
-    private static void SeedPendingOutbox(BaggageDelivery.Core.Models.BaggageDeliveryContext db, FakeTimeProvider time)
+    private static void SeedPendingOutbox(Core.Models.BaggageDeliveryContext db, FakeTimeProvider time)
     {
-        var confirmation = new BagDelBookingConfirmation
+        var booking = new BagDelBooking
         {
-            JobId = 42, TokenId = 1, ConfirmedAtUtc = time.GetUtcNow().UtcDateTime,
-            AddressLine1 = "1 Queen St", City = "Auckland", Country = "NZ",
+            JobId = 42,
+            TenantId = 1,
+            CreatedAtUtc = time.GetUtcNow().UtcDateTime,
+            ConfirmedAtUtc = time.GetUtcNow().UtcDateTime,
+            AddressLine1 = "1 Queen St",
+            City = "Auckland",
+            Country = "NZ",
             TimeSlotStartUtc = time.GetUtcNow().UtcDateTime.AddHours(2),
             TimeSlotEndUtc = time.GetUtcNow().UtcDateTime.AddHours(5),
             AtlOption = AtlOption.FrontDoor
         };
-        db.BookingConfirmations.Add(confirmation);
+        db.Bookings.Add(booking);
         db.SaveChanges();
 
         db.ConfirmationOutbox.Add(new BagDelConfirmationOutbox
         {
-            ConfirmationId = confirmation.Id,
+            BookingId = booking.Id,
             JobId = 42,
             TenantId = 1,
             Status = OutboxStatus.Pending,

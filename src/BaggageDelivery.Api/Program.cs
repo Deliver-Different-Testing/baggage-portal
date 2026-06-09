@@ -33,7 +33,7 @@ builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.Is
 builder.Services.AddAppAuthentication(builder.Configuration);
 
 builder.Services.AddHostedService<DespatchJobReleaseWorker>();
-builder.Services.AddHostedService<MagicLinkDispatchWorker>();
+builder.Services.AddHostedService<BookingLinkDispatchWorker>();
 
 builder.Services.AddControllers(options => { options.MaxModelBindingCollectionSize = 100; });
 builder.WebHost.ConfigureKestrel(options =>
@@ -50,13 +50,6 @@ builder.Services.AddRateLimiter(options =>
         limiterOptions.Window = TimeSpan.FromMinutes(1);
         limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         limiterOptions.QueueLimit = 10;
-    });
-    options.AddFixedWindowLimiter("pax-session", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = 30;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        limiterOptions.QueueLimit = 5;
     });
     options.AddFixedWindowLimiter("admin-mint", limiterOptions =>
     {
@@ -132,7 +125,7 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins([.. allowedOrigins])
             .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-            .WithHeaders("Content-Type", "X-Requested-With", "Accept", "Authorization")
+            .WithHeaders("Content-Type", "X-Requested-With", "Accept", "Authorization", "X-XSRF-TOKEN")
             .AllowCredentials();
     });
 });

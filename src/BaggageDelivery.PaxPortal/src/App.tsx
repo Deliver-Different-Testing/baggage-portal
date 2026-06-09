@@ -7,8 +7,8 @@ import { TokenExpired } from './pages/TokenExpired'
 export function App() {
   return (
     <Routes>
-      <Route path="/c/:token" element={<PaxMobile />} />
-      <Route path="/t/:token" element={<Tracking />} />
+      <Route path="/c/:id" element={<PaxMobile />} />
+      <Route path="/t/:id" element={<Tracking />} />
       <Route path="/internal/process-map" element={<ProcessMap />} />
       <Route path="/expired" element={<TokenExpired />} />
       <Route path="*" element={<Navigate to="/expired" replace />} />

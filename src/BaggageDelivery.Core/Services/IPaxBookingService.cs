@@ -4,15 +4,16 @@ namespace BaggageDelivery.Core.Services;
 
 public interface IPaxBookingService
 {
-    // Returns the booking summary for a verified job (read-only).
-    Task<BookingSummary?> GetSummaryAsync(int jobId, int tenantId, CancellationToken ct);
+    Task<BookingSummary?> GetSummaryAsync(int bookingId, CancellationToken ct);
 
-    // Persists the passenger's confirmation and queues an outbox row.
-    // Throws ConfirmationAlreadyExistsException if the token has already been used.
-    Task<int> ConfirmAsync(ConfirmBookingInput input, CancellationToken ct);
+    // Updates the BagDelBooking row in-place with the passenger's submitted address /
+    // time slot / ATL choice and stamps ConfirmedAtUtc. Throws ConfirmationAlreadyExistsException
+    // if the row already has ConfirmedAtUtc set.
+    Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct);
 }
 
 public sealed record BookingSummary(
+    int BookingId,
     int JobId,
     string Reference,
     string AirlineLabel,
@@ -24,9 +25,7 @@ public sealed record BookingSummary(
     DateTime LatestSlotUtc);
 
 public sealed record ConfirmBookingInput(
-    int JobId,
-    int TenantId,
-    int TokenId,
+    int BookingId,
     AddressUpdateDto Address,
     DateTime TimeSlotStartUtc,
     DateTime TimeSlotEndUtc,
@@ -34,5 +33,8 @@ public sealed record ConfirmBookingInput(
     string? AccessNotes,
     string? PhoneOverride);
 
-public sealed class ConfirmationAlreadyExistsException(int jobId)
-    : Exception($"Job {jobId} already has a confirmation");
+public sealed class ConfirmationAlreadyExistsException(int bookingId)
+    : Exception($"Booking {bookingId} already has a confirmation");
+
+public sealed class BookingNotFoundException(int bookingId)
+    : Exception($"Booking {bookingId} not found");

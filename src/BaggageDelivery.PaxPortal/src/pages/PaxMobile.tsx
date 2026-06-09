@@ -20,7 +20,7 @@ import {
 } from '@mui/material'
 import {
   confirmBooking,
-  createSession,
+  getBooking,
   getTimeslots,
 } from '../api/pax'
 import type { AddressDto, BookingSummary, TimeSlot } from '../api/client'
@@ -39,28 +39,28 @@ const ATL_LABELS: Record<AtlOption, string> = {
 }
 
 export function PaxMobile() {
-  const { token } = useParams<{ token: string }>()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const online = useOnlineStatus()
 
-  const session = useQuery({
-    queryKey: ['pax', 'session', token],
-    queryFn: () => createSession(token ?? ''),
-    enabled: !!token,
+  const booking = useQuery({
+    queryKey: ['pax', 'booking', id],
+    queryFn: () => getBooking(id ?? ''),
+    enabled: !!id,
     retry: false,
   })
 
   useEffect(() => {
-    if (session.error && (session.error as { normalisedKind?: string })?.normalisedKind === 'expired') {
+    if (booking.error && (booking.error as { normalisedKind?: string })?.normalisedKind === 'not_found') {
       navigate('/expired', { replace: true })
     }
-  }, [session.error, navigate])
+  }, [booking.error, navigate])
 
-  if (!token) return null
+  if (!id) return null
 
-  return session.data ? (
-    <ConfirmForm summary={session.data} online={online} />
-  ) : session.isLoading ? (
+  return booking.data ? (
+    <ConfirmForm bookingId={id} summary={booking.data} online={online} />
+  ) : booking.isLoading ? (
     <Container sx={{ pt: 8, textAlign: 'center' }}>
       <Typography color="text.secondary">Loading your booking…</Typography>
     </Container>
@@ -71,7 +71,15 @@ export function PaxMobile() {
   )
 }
 
-function ConfirmForm({ summary, online }: { summary: BookingSummary; online: boolean }) {
+function ConfirmForm({
+  bookingId,
+  summary,
+  online,
+}: {
+  bookingId: string
+  summary: BookingSummary
+  online: boolean
+}) {
   const [address, setAddress] = useState<AddressDto>(summary.deliveryAddress)
   const [editingAddress, setEditingAddress] = useState(false)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
@@ -82,11 +90,10 @@ function ConfirmForm({ summary, online }: { summary: BookingSummary; online: boo
   const [confirmed, setConfirmed] = useState(false)
 
   const slots = useQuery({
-    queryKey: ['pax', 'timeslots'],
-    queryFn: () => getTimeslots(),
+    queryKey: ['pax', 'timeslots', bookingId],
+    queryFn: () => getTimeslots(bookingId),
   })
 
-  // Auto-select first available slot once they load.
   useEffect(() => {
     if (slots.data && slots.data.length && !selectedSlotId) {
       const first = slots.data.find((s) => s.firstAvailable) ?? slots.data[0]
@@ -100,7 +107,7 @@ function ConfirmForm({ summary, online }: { summary: BookingSummary; online: boo
   )
 
   const confirm = useMutation({
-    mutationFn: confirmBooking,
+    mutationFn: (body: Parameters<typeof confirmBooking>[1]) => confirmBooking(bookingId, body),
     onSuccess: () => setConfirmed(true),
     onError: (err) => {
       const responseStatus = (err as { response?: { status?: number } })?.response?.status

@@ -7,22 +7,16 @@ namespace BaggageDelivery.Core.Models;
 // service writes to. Other Despatch tables are reached via Despatch WebAPICore.
 public class BaggageDeliveryContext(DbContextOptions<BaggageDeliveryContext> options) : DbContext(options)
 {
-    public DbSet<BagDelMagicLinkToken> MagicLinkTokens => Set<BagDelMagicLinkToken>();
-    public DbSet<BagDelBookingConfirmation> BookingConfirmations => Set<BagDelBookingConfirmation>();
+    public DbSet<BagDelBooking> Bookings => Set<BagDelBooking>();
     public DbSet<BagDelNotificationLog> NotificationLogs => Set<BagDelNotificationLog>();
     public DbSet<BagDelConfirmationOutbox> ConfirmationOutbox => Set<BagDelConfirmationOutbox>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BagDelMagicLinkToken>(e =>
+        modelBuilder.Entity<BagDelBooking>(e =>
         {
-            e.HasIndex(t => t.TokenHash).HasDatabaseName("IX_BagDelMagicLinkToken_TokenHash");
-            e.HasIndex(t => t.JobId).HasDatabaseName("IX_BagDelMagicLinkToken_JobId");
-        });
-
-        modelBuilder.Entity<BagDelBookingConfirmation>(e =>
-        {
-            e.HasIndex(c => c.JobId).HasDatabaseName("IX_BagDelBookingConfirmation_JobId");
+            e.HasIndex(b => b.JobId).HasDatabaseName("IX_BagDelBooking_JobId");
+            e.HasIndex(b => b.TenantId).HasDatabaseName("IX_BagDelBooking_TenantId");
         });
 
         modelBuilder.Entity<BagDelNotificationLog>(e =>

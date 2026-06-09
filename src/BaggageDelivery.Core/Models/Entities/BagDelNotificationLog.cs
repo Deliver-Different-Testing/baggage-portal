@@ -9,7 +9,7 @@ public class BagDelNotificationLog
     [Key]
     public int Id { get; set; }
 
-    public required int TokenId { get; set; }
+    public required int BookingId { get; set; }
 
     [MaxLength(10)]
     public required string Channel { get; set; }

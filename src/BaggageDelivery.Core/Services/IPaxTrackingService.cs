@@ -4,5 +4,5 @@ namespace BaggageDelivery.Core.Services;
 
 public interface IPaxTrackingService
 {
-    Task<TrackingDto?> GetTimelineAsync(int jobId, int tenantId, CancellationToken ct);
+    Task<TrackingDto?> GetTimelineAsync(int bookingId, CancellationToken ct);
 }

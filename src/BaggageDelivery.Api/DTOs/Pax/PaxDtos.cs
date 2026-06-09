@@ -2,11 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BaggageDelivery.Api.DTOs.Pax;
 
-public sealed record SessionRequest([Required] string Token);
-
-public sealed record SessionResponse(BookingSummaryDto Booking, DateTime CookieExpiresAtUtc);
-
 public sealed record BookingSummaryDto(
+    int BookingId,
     int JobId,
     string Reference,
     string AirlineLabel,
