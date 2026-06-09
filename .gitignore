@@ -1,0 +1,87 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Rider
+.idea/
+
+# Archives
+*.zip
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+TestResult.xml
+
+# User-specific files
+*.rsuser
+*.userprefs
+**/Properties/launchSettings.json
+**/Properties/launchSettings.backup.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# Secrets
+appsettings.*.json
+**/secrets.local.json
+
+# Node modules
+node_modules/
+dist/
+.npm/
+
+# Claude Code related files
+.claude/
+tmpclaude-*
+**/tmpclaude-*
+*.md
+!README.md
+!**/README.md
+
+# Code coverage
+coverage/
+
+# Windows reserved
+nul
+
+# Template archive (vendor template, not part of source)
+/template-baggage-portal-master/

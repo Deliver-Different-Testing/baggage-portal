@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vs/
+*.user
+
+# Build outputs
+**/bin/
+**/obj/
+
+# Test projects
+tests/
+
+# Node modules (PaxPortal)
+**/node_modules/
+**/dist/
+
+# Documentation
+*.md
+*.pdf
+docs/
+
+# Template (not part of build context)
+template-baggage-portal-master/
+
+# Claude
+.claude/
+tmpclaude-*
+
+# Environment files
+.env
+.env.*
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json
