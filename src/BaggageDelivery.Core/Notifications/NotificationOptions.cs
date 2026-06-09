@@ -9,11 +9,14 @@ public sealed class TwilioOptions
     public string FromNumber { get; set; } = "";
 }
 
-public sealed class SendGridOptions
+public sealed class SesOptions
 {
-    public const string SectionName = "SendGrid";
+    public const string SectionName = "Ses";
 
-    public string ApiKey { get; set; } = "";
     public string FromAddress { get; set; } = "noreply@deliverdifferent.com";
     public string FromName { get; set; } = "Urgent Baggage Delivery";
+
+    // Optional SES configuration set for event publishing (bounces/complaints
+    // to SNS). Leave empty until we wire the feedback loop.
+    public string? ConfigurationSetName { get; set; }
 }

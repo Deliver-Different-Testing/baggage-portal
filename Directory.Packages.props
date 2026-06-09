@@ -10,6 +10,7 @@
     <PackageVersion Include="Amazon.AspNetCore.DataProtection.SSM" Version="4.0.3" />
     <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.4.5" />
     <PackageVersion Include="AWSSDK.SecretsManager" Version="4.0.5.2" />
+    <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.0.5" />
   </ItemGroup>
   <ItemGroup Label="Microsoft / EF Core / ASP.NET">
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
@@ -33,7 +34,6 @@
   <ItemGroup Label="App Dependencies">
     <PackageVersion Include="Mjml.Net" Version="4.11.0" />
     <PackageVersion Include="Polly" Version="8.6.6" />
-    <PackageVersion Include="SendGrid" Version="9.29.3" />
     <PackageVersion Include="Serilog" Version="$(SerilogVersion)" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.0" />

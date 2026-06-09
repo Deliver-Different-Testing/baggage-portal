@@ -1,5 +1,6 @@
 using System.Net;
 using Amazon.SecretsManager;
+using Amazon.SimpleEmailV2;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
@@ -35,7 +36,7 @@ public static class DependencyInjection
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<ISmsSender, TwilioSmsSender>();
-            services.AddScoped<IEmailSender, SendGridEmailSender>();
+            services.AddScoped<IEmailSender, SesEmailSender>();
             services.AddScoped<ConfigTenantResolver>();
             services.AddScoped<ITenantResolver>(sp => new CachingTenantResolver(
                 sp.GetRequiredService<ConfigTenantResolver>(),
@@ -69,6 +70,11 @@ public static class DependencyInjection
 
         private void AddAwsServices(bool isDevelopment)
         {
+            // SES uses the default AWS credentials chain (env vars → shared
+            // creds file → IAM role) — same path the rest of the AWS stack
+            // uses, so dev SSO + prod task role both work without a switch.
+            services.AddAWSService<IAmazonSimpleEmailServiceV2>();
+
             if (isDevelopment)
             {
                 services.AddSingleton<ISecretsService, InMemorySecretsService>();
@@ -90,11 +96,7 @@ public static class DependencyInjection
                 opts.FromNumber = Environment.GetEnvironmentVariable("TwilioFromNumber") ?? opts.FromNumber;
             });
 
-            services.Configure<SendGridOptions>(configuration.GetSection(SendGridOptions.SectionName));
-            services.PostConfigure<SendGridOptions>(opts =>
-            {
-                opts.ApiKey = Environment.GetEnvironmentVariable("SendGridApiKey") ?? opts.ApiKey;
-            });
+            services.Configure<SesOptions>(configuration.GetSection(SesOptions.SectionName));
         }
 
         private void AddEncryption(IConfiguration configuration)
