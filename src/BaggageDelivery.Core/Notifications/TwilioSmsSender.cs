@@ -32,7 +32,10 @@ internal sealed class TwilioSmsSender(IOptions<TwilioOptions> options) : ISmsSen
 
     private void EnsureInitialised()
     {
-        if (_initialised) return;
+        if (_initialised)
+        {
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(_opts.AccountSid) || string.IsNullOrWhiteSpace(_opts.AuthToken))
         {

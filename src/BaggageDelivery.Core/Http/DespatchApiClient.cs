@@ -23,7 +23,10 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         using var response = await SendAsync(HttpMethod.Post, "api/Baggage/release",
             tenantId, connection, timeZone, clientId, contactId, request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Baggage/release failed for {JobId}: {StatusCode} {Body}",
@@ -37,7 +40,10 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         using var response = await SendAsync(HttpMethod.Post, "api/Baggage/cancel",
             tenantId, connection, timeZone, clientId, contactId, request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Baggage/cancel failed for {JobId}: {StatusCode} {Body}",
@@ -51,7 +57,10 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         using var response = await SendAsync(HttpMethod.Post, "api/Baggage/send-on-hold",
             tenantId, connection, timeZone, clientId, contactId, request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Baggage/send-on-hold failed for {JobId}: {StatusCode} {Body}",
@@ -65,7 +74,10 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         using var response = await SendAsync(HttpMethod.Patch, $"api/Jobs/{jobId}/delivery",
             tenantId, connection, timeZone, clientId, contactId, request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Jobs/{JobId}/delivery PATCH failed: {StatusCode} {Body}",
@@ -79,7 +91,10 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         using var response = await SendAsync<object?>(HttpMethod.Get, $"api/Jobs/{jobId}/tracking",
             tenantId, connection, timeZone, clientId, contactId, body: null, ct);
 
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
 

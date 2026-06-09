@@ -18,7 +18,10 @@ public sealed class PaxBookingController(
     public async Task<ActionResult<BookingSummaryDto>> GetBooking(string id, CancellationToken ct)
     {
         var bookingId = encryption.DecryptId(id);
-        if (bookingId is null) return NotFound();
+        if (bookingId is null)
+        {
+            return NotFound();
+        }
 
         var summary = await paxBooking.GetSummaryAsync(bookingId.Value, ct);
         return summary is null ? NotFound() : Ok(MapSummary(summary));
@@ -27,7 +30,10 @@ public sealed class PaxBookingController(
     [HttpGet("timeslots")]
     public ActionResult<TimeSlotDto[]> GetTimeslots(string id, [FromQuery] DateTime? date)
     {
-        if (encryption.DecryptId(id) is null) return NotFound();
+        if (encryption.DecryptId(id) is null)
+        {
+            return NotFound();
+        }
 
         // v1: server generates slot windows in UTC. Real implementation should pull
         // available runs from Despatch once GET api/Jobs/{id}/slots ships.
@@ -50,7 +56,10 @@ public sealed class PaxBookingController(
         CancellationToken ct)
     {
         var bookingId = encryption.DecryptId(id);
-        if (bookingId is null) return NotFound();
+        if (bookingId is null)
+        {
+            return NotFound();
+        }
 
         try
         {

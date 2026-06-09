@@ -22,7 +22,10 @@ public sealed class PaxTrackingController(
     public async Task<IActionResult> GetTimeline(string id, CancellationToken ct)
     {
         var bookingId = encryption.DecryptId(id);
-        if (bookingId is null) return NotFound();
+        if (bookingId is null)
+        {
+            return NotFound();
+        }
 
         var dto = await tracking.GetTimelineAsync(bookingId.Value, ct);
         return dto is null ? NotFound() : Ok(dto);

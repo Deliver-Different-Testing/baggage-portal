@@ -32,33 +32,34 @@ internal sealed class PaxBookingService(
         var tracking = await despatch.GetJobTrackingAsync(
             booking.TenantId, ctx.Connection, ctx.TimeZone, clientId: null, contactId: 0, booking.JobId, ct);
 
-        if (tracking is null)
+        if (tracking is not null)
         {
-            Log.Warning("GetSummary: Despatch returned no tracking for job {JobId}", booking.JobId);
-            return null;
+            return new BookingSummary(
+                BookingId: booking.Id,
+                JobId: booking.JobId,
+                Reference: tracking.JobId.ToString(),
+                AirlineLabel: tracking.CourierFirstName ?? "Your Airline",
+                PassengerName: string.Empty,
+                PassengerPhone: null,
+                PassengerEmail: null,
+                DeliveryAddress: new AddressUpdateDto
+                {
+                    Line1 = booking.AddressLine1 ?? string.Empty,
+                    Line2 = booking.AddressLine2,
+                    Suburb = booking.Suburb,
+                    City = booking.City ?? string.Empty,
+                    PostCode = booking.PostCode,
+                    Country = booking.Country ?? "NZ",
+                    Latitude = booking.Latitude,
+                    Longitude = booking.Longitude
+                },
+                EarliestSlotUtc: tracking.EtaWindowStartUtc ?? time.GetUtcNow().UtcDateTime,
+                LatestSlotUtc: tracking.EtaWindowEndUtc ?? time.GetUtcNow().UtcDateTime.AddDays(2));
         }
 
-        return new BookingSummary(
-            BookingId: booking.Id,
-            JobId: booking.JobId,
-            Reference: tracking.JobId.ToString(),
-            AirlineLabel: tracking.CourierFirstName ?? "Your Airline",
-            PassengerName: string.Empty,
-            PassengerPhone: null,
-            PassengerEmail: null,
-            DeliveryAddress: new AddressUpdateDto
-            {
-                Line1 = booking.AddressLine1 ?? string.Empty,
-                Line2 = booking.AddressLine2,
-                Suburb = booking.Suburb,
-                City = booking.City ?? string.Empty,
-                PostCode = booking.PostCode,
-                Country = booking.Country ?? "NZ",
-                Latitude = booking.Latitude,
-                Longitude = booking.Longitude
-            },
-            EarliestSlotUtc: tracking.EtaWindowStartUtc ?? time.GetUtcNow().UtcDateTime,
-            LatestSlotUtc: tracking.EtaWindowEndUtc ?? time.GetUtcNow().UtcDateTime.AddDays(2));
+        Log.Warning("GetSummary: Despatch returned no tracking for job {JobId}", booking.JobId);
+        return null;
+
     }
 
     private sealed record BookingSummaryProjection(
