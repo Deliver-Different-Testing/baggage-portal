@@ -9,6 +9,7 @@ using BaggageDelivery.Core.Secrets;
 using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -35,7 +36,10 @@ public static class DependencyInjection
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<ISmsSender, TwilioSmsSender>();
             services.AddScoped<IEmailSender, SendGridEmailSender>();
-            services.AddScoped<ITenantResolver, ConfigTenantResolver>();
+            services.AddScoped<ConfigTenantResolver>();
+            services.AddScoped<ITenantResolver>(sp => new CachingTenantResolver(
+                sp.GetRequiredService<ConfigTenantResolver>(),
+                sp.GetRequiredService<IMemoryCache>()));
         }
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)
