@@ -117,7 +117,17 @@ internal sealed class BookingLinkDispatchService(
             }
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Another drainer beat us to this row — RowVersion mismatch.
+            // Skip; future drain picks it up if still Pending.
+            Log.Information(
+                "Concurrent drain on NotificationLogId={Id}, skipping", row.Id);
+        }
     }
 
     private sealed record RenderPayload(string PassengerName, string AirlineLabel, string Reference, string BookingUrl);

@@ -22,5 +22,14 @@ public partial class BaggageDeliveryContext
         modelBuilder.Entity<BagDelNotificationLog>()
             .HasIndex(n => n.NextAttemptUtc, "IX_BagDelNotificationLog_Pending")
             .HasFilter("[Status] = 'Pending'");
+
+        // Optimistic concurrency on both outbox tables — see Concurrency.cs.
+        modelBuilder.Entity<BagDelConfirmationOutbox>()
+            .Property(o => o.RowVersion)
+            .IsRowVersion();
+
+        modelBuilder.Entity<BagDelNotificationLog>()
+            .Property(n => n.RowVersion)
+            .IsRowVersion();
     }
 }

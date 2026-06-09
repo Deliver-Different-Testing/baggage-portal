@@ -121,6 +121,14 @@ internal sealed class DespatchJobReleaseService(
             Log.Information(
                 "Outbox processed: JobId={JobId} OutboxId={OutboxId}", row.JobId, row.Id);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Another drainer beat us to this row — RowVersion mismatch on
+            // SaveChanges. Skip; the row's new state determines whether a
+            // future drain picks it up. Treated as info, not an error.
+            Log.Information(
+                "Concurrent drain on OutboxId={OutboxId}, skipping this iteration", row.Id);
+        }
         catch (Exception ex)
         {
             row.AttemptCount++;
