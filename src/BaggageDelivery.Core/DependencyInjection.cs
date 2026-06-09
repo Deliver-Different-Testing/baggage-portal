@@ -57,7 +57,7 @@ public static class DependencyInjection
                 ?? throw new InvalidOperationException(
                     "Despatch DB connection string not configured (SQLCredentials env var or ConnectionStrings:Despatch).");
 
-            services.AddDbContext<BaggageDeliveryContext>(opts =>
+            services.AddDbContextPool<BaggageDeliveryContext>(opts =>
             {
                 opts.UseSqlServer(connectionString)
                     .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
