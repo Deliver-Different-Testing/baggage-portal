@@ -1,3 +1,4 @@
+using BaggageDelivery.Core.Interfaces;
 using Microsoft.Extensions.Configuration;
 
 namespace BaggageDelivery.Core.MultiTenant;

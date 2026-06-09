@@ -1,5 +1,6 @@
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
+using BaggageDelivery.Core.Interfaces;
 
 namespace BaggageDelivery.Core.Secrets;
 

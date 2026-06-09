@@ -1,6 +1,7 @@
 using System.Net;
 using Amazon.SecretsManager;
 using BaggageDelivery.Core.Http;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Notifications;

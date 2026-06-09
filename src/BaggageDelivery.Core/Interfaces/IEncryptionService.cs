@@ -1,4 +1,4 @@
-namespace BaggageDelivery.Core.Security;
+namespace BaggageDelivery.Core.Interfaces;
 
 public interface IEncryptionService
 {

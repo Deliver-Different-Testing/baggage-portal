@@ -1,10 +1,8 @@
-using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Services;
 using BaggageDelivery.UnitTests.Helpers;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
@@ -29,8 +27,7 @@ public class PaxBookingServiceTests
         db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(CancellationToken.None);
 
-        var svc = new PaxBookingService(db, despatch, tenants, time,
-            NullLogger<PaxBookingService>.Instance);
+        var svc = new PaxBookingService(db, despatch, tenants, time);
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             BookingId: booking.Id,
@@ -66,8 +63,7 @@ public class PaxBookingServiceTests
         db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(CancellationToken.None);
 
-        var svc = new PaxBookingService(db, despatch, tenants, time,
-            NullLogger<PaxBookingService>.Instance);
+        var svc = new PaxBookingService(db, despatch, tenants, time);
 
         var input = new ConfirmBookingInput(booking.Id,
             new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
@@ -88,8 +84,7 @@ public class PaxBookingServiceTests
         var tenants = Substitute.For<ITenantResolver>();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
 
-        var svc = new PaxBookingService(db, despatch, tenants, time,
-            NullLogger<PaxBookingService>.Instance);
+        var svc = new PaxBookingService(db, despatch, tenants, time);
 
         var input = new ConfirmBookingInput(BookingId: 9999,
             new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },

@@ -1,9 +1,8 @@
-using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace BaggageDelivery.Core.Services;
 
@@ -14,8 +13,7 @@ internal sealed class DespatchJobReleaseService(
     BaggageDeliveryContext db,
     IDespatchApiClient despatch,
     ITenantResolver tenants,
-    TimeProvider time,
-    ILogger<DespatchJobReleaseService> logger) : IDespatchJobReleaseService
+    TimeProvider time) : IDespatchJobReleaseService
 {
     private const int MaxAttempts = 8;
 
@@ -120,7 +118,7 @@ internal sealed class DespatchJobReleaseService(
 
             await db.SaveChangesAsync(ct);
 
-            logger.LogInformation(
+            Log.Information(
                 "Outbox processed: JobId={JobId} OutboxId={OutboxId}", row.JobId, row.Id);
         }
         catch (Exception ex)
@@ -131,7 +129,7 @@ internal sealed class DespatchJobReleaseService(
             if (row.AttemptCount >= MaxAttempts)
             {
                 row.Status = OutboxStatus.Failed;
-                logger.LogError(ex,
+                Log.Error(ex,
                     "Outbox FAILED after {Attempts} attempts: JobId={JobId} OutboxId={OutboxId}",
                     row.AttemptCount, row.JobId, row.Id);
             }
@@ -139,7 +137,7 @@ internal sealed class DespatchJobReleaseService(
             {
                 var backoffSeconds = Math.Min(900, (int)Math.Pow(2, row.AttemptCount) * 5);
                 row.NextAttemptUtc = time.GetUtcNow().UtcDateTime.AddSeconds(backoffSeconds);
-                logger.LogWarning(ex,
+                Log.Warning(ex,
                     "Outbox retrying: JobId={JobId} Attempt={Attempt} NextIn={BackoffSec}s",
                     row.JobId, row.AttemptCount, backoffSeconds);
             }

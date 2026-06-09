@@ -1,6 +1,6 @@
 using BaggageDelivery.Api.DTOs.Pax;
 using BaggageDelivery.Core.Http.Models;
-using BaggageDelivery.Core.Security;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,13 +8,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace BaggageDelivery.Api.Controllers.Pax;
 
 [ApiController]
-[Route("api/v1/pax/{id}")]
+[Route("api/v1/pax/{id}/booking")]
 [AllowAnonymous]
 public sealed class PaxBookingController(
     IEncryptionService encryption,
     IPaxBookingService paxBooking) : ControllerBase
 {
-    [HttpGet("booking")]
+    [HttpGet("")]
     public async Task<ActionResult<BookingSummaryDto>> GetBooking(string id, CancellationToken ct)
     {
         var bookingId = encryption.DecryptId(id);
@@ -24,7 +24,7 @@ public sealed class PaxBookingController(
         return summary is null ? NotFound() : Ok(MapSummary(summary));
     }
 
-    [HttpGet("booking/timeslots")]
+    [HttpGet("timeslots")]
     public ActionResult<TimeSlotDto[]> GetTimeslots(string id, [FromQuery] DateTime? date)
     {
         if (encryption.DecryptId(id) is null) return NotFound();
@@ -42,7 +42,7 @@ public sealed class PaxBookingController(
         return Ok(slots);
     }
 
-    [HttpPost("booking/confirm")]
+    [HttpPost("confirm")]
     [ValidateAntiForgeryToken]
     public async Task<ActionResult<ConfirmBookingResponse>> Confirm(
         string id,

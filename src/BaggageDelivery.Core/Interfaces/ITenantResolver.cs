@@ -1,4 +1,6 @@
-namespace BaggageDelivery.Core.MultiTenant;
+using BaggageDelivery.Core.MultiTenant;
+
+namespace BaggageDelivery.Core.Interfaces;
 
 public interface ITenantResolver
 {
@@ -7,5 +9,3 @@ public interface ITenantResolver
     // should reach into the tenant directory the way IntegrationManager does.
     Task<TenantContext> ResolveAsync(int tenantId, CancellationToken ct);
 }
-
-public sealed record TenantContext(int TenantId, string Connection, string TimeZone);

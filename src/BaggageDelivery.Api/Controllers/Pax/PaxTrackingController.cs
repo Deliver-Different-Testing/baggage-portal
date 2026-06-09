@@ -1,8 +1,8 @@
 using System.Text.Json;
-using BaggageDelivery.Core.Security;
-using BaggageDelivery.Core.Services;
+using BaggageDelivery.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 
 namespace BaggageDelivery.Api.Controllers.Pax;
 
@@ -11,8 +11,7 @@ namespace BaggageDelivery.Api.Controllers.Pax;
 [AllowAnonymous]
 public sealed class PaxTrackingController(
     IEncryptionService encryption,
-    IPaxTrackingService tracking,
-    ILogger<PaxTrackingController> logger) : ControllerBase
+    IPaxTrackingService tracking) : ControllerBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -39,8 +38,8 @@ public sealed class PaxTrackingController(
             return;
         }
 
-        Response.Headers["Content-Type"] = "text/event-stream";
-        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
         string? lastSerialised = null;
@@ -74,7 +73,7 @@ public sealed class PaxTrackingController(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Tracking stream failed for BookingId={BookingId}", bookingId);
+            Log.Warning(ex, "Tracking stream failed for BookingId={BookingId}", bookingId);
         }
     }
 }

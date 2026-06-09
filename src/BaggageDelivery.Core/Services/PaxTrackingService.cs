@@ -1,7 +1,6 @@
-using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using Microsoft.EntityFrameworkCore;
 
 namespace BaggageDelivery.Core.Services;

@@ -1,10 +1,9 @@
-using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Services;
 using BaggageDelivery.UnitTests.Helpers;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
@@ -30,8 +29,7 @@ public class DespatchJobReleaseServiceTests
 
         SeedPendingOutbox(db, time);
 
-        var svc = new DespatchJobReleaseService(db, despatch, tenants, time,
-            NullLogger<DespatchJobReleaseService>.Instance);
+        var svc = new DespatchJobReleaseService(db, despatch, tenants, time);
 
         await svc.DrainOnceAsync(10, CancellationToken.None);
 
@@ -61,8 +59,7 @@ public class DespatchJobReleaseServiceTests
 
         SeedPendingOutbox(db, time);
 
-        var svc = new DespatchJobReleaseService(db, despatch, tenants, time,
-            NullLogger<DespatchJobReleaseService>.Instance);
+        var svc = new DespatchJobReleaseService(db, despatch, tenants, time);
 
         await svc.DrainOnceAsync(10, CancellationToken.None);
 

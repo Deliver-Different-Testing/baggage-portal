@@ -1,9 +1,8 @@
-using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace BaggageDelivery.Core.Services;
 
@@ -11,8 +10,7 @@ internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
     IDespatchApiClient despatch,
     ITenantResolver tenants,
-    TimeProvider time,
-    ILogger<PaxBookingService> logger) : IPaxBookingService
+    TimeProvider time) : IPaxBookingService
 {
     public async Task<BookingSummary?> GetSummaryAsync(int bookingId, CancellationToken ct)
     {
@@ -31,7 +29,7 @@ internal sealed class PaxBookingService(
 
         if (tracking is null)
         {
-            logger.LogWarning("GetSummary: Despatch returned no tracking for job {JobId}", booking.JobId);
+            Log.Warning("GetSummary: Despatch returned no tracking for job {JobId}", booking.JobId);
             return null;
         }
 
@@ -40,15 +38,15 @@ internal sealed class PaxBookingService(
             JobId: booking.JobId,
             Reference: tracking.JobId.ToString(),
             AirlineLabel: tracking.CourierFirstName ?? "Your Airline",
-            PassengerName: "",
+            PassengerName: string.Empty,
             PassengerPhone: null,
             PassengerEmail: null,
             DeliveryAddress: new AddressUpdateDto
             {
-                Line1 = booking.AddressLine1 ?? "",
+                Line1 = booking.AddressLine1 ?? string.Empty,
                 Line2 = booking.AddressLine2,
                 Suburb = booking.Suburb,
-                City = booking.City ?? "",
+                City = booking.City ?? string.Empty,
                 PostCode = booking.PostCode,
                 Country = booking.Country ?? "NZ",
                 Latitude = booking.Latitude,
@@ -99,11 +97,11 @@ internal sealed class PaxBookingService(
             NextAttemptUtc = now,
             CreatedAtUtc = now
         };
-        db.BagDelConfirmationOutboxes.Add(outbox);
-
+        
+        await db.BagDelConfirmationOutboxes.AddAsync(outbox, ct);
         await db.SaveChangesAsync(ct);
 
-        logger.LogInformation(
+        Log.Information(
             "Pax confirmation persisted for BookingId={BookingId} JobId={JobId} OutboxId={OutboxId}",
             booking.Id, booking.JobId, outbox.Id);
     }

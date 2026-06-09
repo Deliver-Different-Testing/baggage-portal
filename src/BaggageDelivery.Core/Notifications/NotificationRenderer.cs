@@ -1,4 +1,5 @@
 using Mjml.Net;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 
 namespace BaggageDelivery.Core.Notifications;

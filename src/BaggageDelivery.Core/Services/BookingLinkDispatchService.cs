@@ -1,8 +1,9 @@
 using System.Text.Json;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace BaggageDelivery.Core.Services;
 
@@ -10,8 +11,7 @@ internal sealed class BookingLinkDispatchService(
     BaggageDeliveryContext db,
     INotificationRenderer renderer,
     INotificationService notifications,
-    TimeProvider time,
-    ILogger<BookingLinkDispatchService> logger) : IBookingLinkDispatchService
+    TimeProvider time) : IBookingLinkDispatchService
 {
     private const int MaxAttempts = 5;
 
@@ -96,7 +96,7 @@ internal sealed class BookingLinkDispatchService(
             row.Status = NotificationStatus.Sent;
             row.ProviderMsgId = result.ProviderMessageId;
             row.LastError = null;
-            logger.LogInformation(
+            Log.Information(
                 "Notification sent: BookingId={BookingId} Channel={Channel} ProviderMsgId={ProviderMsgId}",
                 row.BookingId, row.Channel, row.ProviderMsgId);
         }
@@ -106,7 +106,7 @@ internal sealed class BookingLinkDispatchService(
             if (row.AttemptCount >= MaxAttempts)
             {
                 row.Status = NotificationStatus.Failed;
-                logger.LogError(
+                Log.Error(
                     "Notification FAILED after {Attempts}: BookingId={BookingId} Channel={Channel} Error={Error}",
                     row.AttemptCount, row.BookingId, row.Channel, result.Error);
             }

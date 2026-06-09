@@ -1,6 +1,6 @@
 using BaggageDelivery.Core.Http.Models;
 
-namespace BaggageDelivery.Core.Services;
+namespace BaggageDelivery.Core.Interfaces;
 
 public interface IPaxTrackingService
 {

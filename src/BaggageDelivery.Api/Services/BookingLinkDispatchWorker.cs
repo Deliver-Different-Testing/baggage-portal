@@ -1,17 +1,16 @@
-using BaggageDelivery.Core.Services;
+using BaggageDelivery.Core.Interfaces;
+using Serilog;
 
 namespace BaggageDelivery.Api.Services;
 
-public sealed class BookingLinkDispatchWorker(
-    IServiceScopeFactory scopeFactory,
-    ILogger<BookingLinkDispatchWorker> logger) : BackgroundService
+public sealed class BookingLinkDispatchWorker(IServiceScopeFactory scopeFactory) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
     private const int BatchSize = 25;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("BookingLinkDispatchWorker started");
+        Log.Information("BookingLinkDispatchWorker started");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -27,7 +26,7 @@ public sealed class BookingLinkDispatchWorker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "BookingLinkDispatchWorker iteration failed");
+                Log.Error(ex, "BookingLinkDispatchWorker iteration failed");
             }
 
             try
@@ -37,6 +36,6 @@ public sealed class BookingLinkDispatchWorker(
             catch (TaskCanceledException) { break; }
         }
 
-        logger.LogInformation("BookingLinkDispatchWorker stopping");
+        Log.Information("BookingLinkDispatchWorker stopping");
     }
 }

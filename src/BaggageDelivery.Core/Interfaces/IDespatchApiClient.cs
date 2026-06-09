@@ -1,6 +1,6 @@
 using BaggageDelivery.Core.Http.Models;
 
-namespace BaggageDelivery.Core.Http;
+namespace BaggageDelivery.Core.Interfaces;
 
 public interface IDespatchApiClient
 {

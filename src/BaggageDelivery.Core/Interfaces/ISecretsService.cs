@@ -1,4 +1,4 @@
-namespace BaggageDelivery.Core.Secrets;
+namespace BaggageDelivery.Core.Interfaces;
 
 public interface ISecretsService
 {

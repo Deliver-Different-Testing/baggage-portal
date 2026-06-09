@@ -1,4 +1,4 @@
-namespace BaggageDelivery.Core.Services;
+namespace BaggageDelivery.Core.Interfaces;
 
 public interface IDespatchJobReleaseService
 {

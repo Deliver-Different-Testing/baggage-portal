@@ -1,17 +1,16 @@
-using BaggageDelivery.Core.Services;
+using BaggageDelivery.Core.Interfaces;
+using Serilog;
 
 namespace BaggageDelivery.Api.Services;
 
-public sealed class DespatchJobReleaseWorker(
-    IServiceScopeFactory scopeFactory,
-    ILogger<DespatchJobReleaseWorker> logger) : BackgroundService
+public sealed class DespatchJobReleaseWorker(IServiceScopeFactory scopeFactory) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
     private const int BatchSize = 20;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("DespatchJobReleaseWorker started");
+        Log.Information("DespatchJobReleaseWorker started");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -27,7 +26,7 @@ public sealed class DespatchJobReleaseWorker(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "DespatchJobReleaseWorker iteration failed");
+                Log.Error(ex, "DespatchJobReleaseWorker iteration failed");
             }
 
             try
@@ -37,6 +36,6 @@ public sealed class DespatchJobReleaseWorker(
             catch (TaskCanceledException) { break; }
         }
 
-        logger.LogInformation("DespatchJobReleaseWorker stopping");
+        Log.Information("DespatchJobReleaseWorker stopping");
     }
 }

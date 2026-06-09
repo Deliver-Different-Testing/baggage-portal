@@ -1,4 +1,5 @@
 using BaggageDelivery.Api.DTOs.Admin;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using Serilog;
 
 namespace BaggageDelivery.Api.Controllers.Admin;
 
@@ -18,8 +20,7 @@ public sealed class BookingLinksController(
     IEncryptionService encryption,
     IBookingLinkDispatchService dispatch,
     IOptions<BookingLinkOptions> linkOptions,
-    TimeProvider time,
-    ILogger<BookingLinksController> logger) : ControllerBase
+    TimeProvider time) : ControllerBase
 {
     [HttpPost("")]
     [EnableRateLimiting("admin-mint")]
@@ -63,7 +64,7 @@ public sealed class BookingLinksController(
                 booking.Id, NotificationChannel.Email, body.Email!, passengerName, airline, reference, confirmUrl), ct);
         }
 
-        logger.LogInformation(
+        Log.Information(
             "Minted booking link: BookingId={BookingId} JobId={JobId} TenantId={TenantId} Channel={Channel}",
             booking.Id, body.JobId, body.TenantId, body.Channel);
 

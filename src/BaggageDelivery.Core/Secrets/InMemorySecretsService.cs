@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using BaggageDelivery.Core.Interfaces;
 
 namespace BaggageDelivery.Core.Secrets;
 
@@ -10,7 +11,7 @@ internal sealed class InMemorySecretsService : ISecretsService
 
     public Task<string?> GetAsync(string name, CancellationToken ct)
     {
-        return Task.FromResult(_store.TryGetValue(name, out var v) ? v : null);
+        return Task.FromResult(_store.GetValueOrDefault(name));
     }
 
     public Task PutAsync(string name, string value, CancellationToken ct)
