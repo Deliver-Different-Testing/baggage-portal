@@ -56,10 +56,9 @@ public static class DependencyInjection
         {
             services.AddMemoryCache();
 
-            var connectionString = configuration["SQLCredentials"]
-                ?? configuration.GetConnectionString("Despatch")
+            var connectionString = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException(
-                    "Despatch DB connection string not configured (SQLCredentials env var or ConnectionStrings:Despatch).");
+                    "Despatch DB connection string not configured (ConnectionStrings:DefaultConnection / ConnectionStrings__DefaultConnection env var).");
 
             services.AddDbContextPool<BaggageDeliveryContext>(opts =>
             {
