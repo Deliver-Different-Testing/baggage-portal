@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -34,19 +35,39 @@ public sealed class BookingLinksController(
             return Problem("BookingLinks:PublicBaseUrl is not configured");
         }
 
-        var now = time.GetUtcNow().UtcDateTime;
-        var booking = new BagDelBooking
-        {
-            JobId = body.JobId,
-            TenantId = body.TenantId,
-            CreatedAtUtc = now
-        };
-        db.BagDelBookings.Add(booking);
-        await db.SaveChangesAsync(ct);
+        // The URL encrypts (TenantId, JobId), matching inboundagent's model: the
+        // URL identifies the courier job, the BagDelBooking shadow row is owned by
+        // us. Idempotent: re-minting the same (TenantId, JobId) reuses the existing
+        // booking — same shadow row, same URL.
+        var booking = await db.BagDelBookings
+            .AsTracking()
+            .FirstOrDefaultAsync(b => b.TenantId == body.TenantId && b.JobId == body.JobId, ct);
 
-        var encryptedId = encryption.EncryptId(booking.Id);
-        var confirmUrl = $"{publicBase}/c/{encryptedId}";
-        var trackUrl = $"{publicBase}/t/{encryptedId}";
+        if (booking is null)
+        {
+            booking = new BagDelBooking
+            {
+                JobId = body.JobId,
+                TenantId = body.TenantId,
+                CreatedAtUtc = time.GetUtcNow().UtcDateTime
+            };
+            db.BagDelBookings.Add(booking);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                db.Entry(booking).State = EntityState.Detached;
+                booking = await db.BagDelBookings
+                    .AsTracking()
+                    .FirstAsync(b => b.TenantId == body.TenantId && b.JobId == body.JobId, ct);
+            }
+        }
+
+        var token = encryption.EncryptToken(body.TenantId, body.JobId);
+        var confirmUrl = $"{publicBase}/c/{token}";
+        var trackUrl = $"{publicBase}/t/{token}";
 
         var passengerName = body.PassengerName ?? "there";
         var airline = body.AirlineLabel ?? "Urgent";
@@ -68,6 +89,6 @@ public sealed class BookingLinksController(
             "Minted booking link: BookingId={BookingId} JobId={JobId} TenantId={TenantId} Channel={Channel}",
             booking.Id, body.JobId, body.TenantId, body.Channel);
 
-        return Ok(new MintBookingLinkResponse(booking.Id, encryptedId, confirmUrl, trackUrl));
+        return Ok(new MintBookingLinkResponse(booking.Id, token, confirmUrl, trackUrl));
     }
 }

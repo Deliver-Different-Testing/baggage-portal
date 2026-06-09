@@ -30,7 +30,8 @@ public class PaxBookingServiceTests
         var svc = new PaxBookingService(db, despatch, tenants, time);
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
-            BookingId: booking.Id,
+            TenantId: booking.TenantId,
+            JobId: booking.JobId,
             Address: new AddressUpdateDto { Line1 = "1 Queen St", City = "Auckland", Country = "NZ" },
             TimeSlotStartUtc: time.GetUtcNow().UtcDateTime.AddHours(2),
             TimeSlotEndUtc: time.GetUtcNow().UtcDateTime.AddHours(5),
@@ -65,7 +66,9 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, despatch, tenants, time);
 
-        var input = new ConfirmBookingInput(booking.Id,
+        var input = new ConfirmBookingInput(
+            TenantId: booking.TenantId,
+            JobId: booking.JobId,
             new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
             time.GetUtcNow().UtcDateTime, time.GetUtcNow().UtcDateTime.AddHours(1),
             AtlOption.None, null, null);
@@ -77,7 +80,7 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
-    public async Task Confirm_throws_when_booking_missing()
+    public async Task Confirm_creates_booking_lazily_when_missing()
     {
         var db = InMemoryDb.NewContext();
         var despatch = Substitute.For<IDespatchApiClient>();
@@ -86,12 +89,18 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, despatch, tenants, time);
 
-        var input = new ConfirmBookingInput(BookingId: 9999,
+        var input = new ConfirmBookingInput(
+            TenantId: 1,
+            JobId: 9999,
             new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
             time.GetUtcNow().UtcDateTime, time.GetUtcNow().UtcDateTime.AddHours(1),
             AtlOption.None, null, null);
 
-        await Assert.ThrowsAsync<BookingNotFoundException>(
-            () => svc.ConfirmAsync(input, CancellationToken.None));
+        await svc.ConfirmAsync(input, CancellationToken.None);
+
+        var created = db.BagDelBookings.AsQueryable().Single();
+        Assert.Equal(1, created.TenantId);
+        Assert.Equal(9999, created.JobId);
+        Assert.NotNull(created.ConfirmedAtUtc);
     }
 }

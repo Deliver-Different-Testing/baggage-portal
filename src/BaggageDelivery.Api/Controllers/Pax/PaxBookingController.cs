@@ -17,20 +17,20 @@ public sealed class PaxBookingController(
     [HttpGet("")]
     public async Task<ActionResult<BookingSummaryDto>> GetBooking(string id, CancellationToken ct)
     {
-        var bookingId = encryption.DecryptId(id);
-        if (bookingId is null)
+        var token = encryption.DecryptToken(id);
+        if (token is null)
         {
             return NotFound();
         }
 
-        var summary = await paxBooking.GetSummaryAsync(bookingId.Value, ct);
+        var summary = await paxBooking.GetSummaryAsync(token.Value.TenantId, token.Value.JobId, ct);
         return summary is null ? NotFound() : Ok(MapSummary(summary));
     }
 
     [HttpGet("timeslots")]
     public ActionResult<TimeSlotDto[]> GetTimeslots(string id, [FromQuery] DateTime? date)
     {
-        if (encryption.DecryptId(id) is null)
+        if (encryption.DecryptToken(id) is null)
         {
             return NotFound();
         }
@@ -55,8 +55,8 @@ public sealed class PaxBookingController(
         [FromBody] ConfirmBookingRequest body,
         CancellationToken ct)
     {
-        var bookingId = encryption.DecryptId(id);
-        if (bookingId is null)
+        var token = encryption.DecryptToken(id);
+        if (token is null)
         {
             return NotFound();
         }
@@ -64,7 +64,8 @@ public sealed class PaxBookingController(
         try
         {
             await paxBooking.ConfirmAsync(new ConfirmBookingInput(
-                BookingId: bookingId.Value,
+                TenantId: token.Value.TenantId,
+                JobId: token.Value.JobId,
                 Address: new AddressUpdateDto
                 {
                     Line1 = body.Address.Line1,
@@ -83,10 +84,6 @@ public sealed class PaxBookingController(
                 PhoneOverride: body.PhoneOverride), ct);
 
             return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
-        }
-        catch (BookingNotFoundException)
-        {
-            return NotFound();
         }
         catch (ConfirmationAlreadyExistsException)
         {

@@ -21,21 +21,21 @@ public sealed class PaxTrackingController(
     [HttpGet("")]
     public async Task<IActionResult> GetTimeline(string id, CancellationToken ct)
     {
-        var bookingId = encryption.DecryptId(id);
-        if (bookingId is null)
+        var token = encryption.DecryptToken(id);
+        if (token is null)
         {
             return NotFound();
         }
 
-        var dto = await tracking.GetTimelineAsync(bookingId.Value, ct);
+        var dto = await tracking.GetTimelineAsync(token.Value.TenantId, token.Value.JobId, ct);
         return dto is null ? NotFound() : Ok(dto);
     }
 
     [HttpGet("stream")]
     public async Task Stream(string id, CancellationToken ct)
     {
-        var bookingId = encryption.DecryptId(id);
-        if (bookingId is null)
+        var token = encryption.DecryptToken(id);
+        if (token is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -52,7 +52,7 @@ public sealed class PaxTrackingController(
             // 5-minute idle limit; client reconnects via EventSource.
             for (var i = 0; i < 30 && !ct.IsCancellationRequested; i++)
             {
-                var dto = await tracking.GetTimelineAsync(bookingId.Value, ct);
+                var dto = await tracking.GetTimelineAsync(token.Value.TenantId, token.Value.JobId, ct);
                 if (dto is not null)
                 {
                     var serialised = JsonSerializer.Serialize(dto, JsonOptions);
@@ -76,7 +76,8 @@ public sealed class PaxTrackingController(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Log.Warning(ex, "Tracking stream failed for BookingId={BookingId}", bookingId);
+            Log.Warning(ex, "Tracking stream failed for token TenantId={TenantId} JobId={JobId}",
+                token.Value.TenantId, token.Value.JobId);
         }
     }
 }
