@@ -1,6 +1,6 @@
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
-using BaggageDelivery.Core.Models.Entities;
+using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Services;
 using BaggageDelivery.UnitTests.Helpers;
@@ -26,7 +26,7 @@ public class PaxBookingServiceTests
             TenantId = 1,
             CreatedAtUtc = time.GetUtcNow().UtcDateTime
         };
-        db.Bookings.Add(booking);
+        db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(CancellationToken.None);
 
         var svc = new PaxBookingService(db, despatch, tenants, time,
@@ -40,13 +40,13 @@ public class PaxBookingServiceTests
             AtlOption: AtlOption.FrontDoor,
             AccessNotes: null, PhoneOverride: null), CancellationToken.None);
 
-        var updated = db.Bookings.AsQueryable().First(b => b.Id == booking.Id);
+        var updated = db.BagDelBookings.AsQueryable().First(b => b.Id == booking.Id);
         Assert.NotNull(updated.ConfirmedAtUtc);
         Assert.Equal("1 Queen St", updated.AddressLine1);
         Assert.Equal(AtlOption.FrontDoor, updated.AtlOption);
-        Assert.Single(db.ConfirmationOutbox);
-        Assert.Equal(OutboxStatus.Pending, db.ConfirmationOutbox.First().Status);
-        Assert.Equal(booking.Id, db.ConfirmationOutbox.First().BookingId);
+        Assert.Single(db.BagDelConfirmationOutboxes);
+        Assert.Equal(OutboxStatus.Pending, db.BagDelConfirmationOutboxes.First().Status);
+        Assert.Equal(booking.Id, db.BagDelConfirmationOutboxes.First().BookingId);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class PaxBookingServiceTests
             TenantId = 1,
             CreatedAtUtc = time.GetUtcNow().UtcDateTime
         };
-        db.Bookings.Add(booking);
+        db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(CancellationToken.None);
 
         var svc = new PaxBookingService(db, despatch, tenants, time,

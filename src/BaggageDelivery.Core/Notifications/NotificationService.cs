@@ -1,4 +1,4 @@
-using BaggageDelivery.Core.Models.Entities;
+using BaggageDelivery.Core.Models;
 
 namespace BaggageDelivery.Core.Notifications;
 

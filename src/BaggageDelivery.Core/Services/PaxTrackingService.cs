@@ -13,7 +13,7 @@ internal sealed class PaxTrackingService(
 {
     public async Task<TrackingDto?> GetTimelineAsync(int bookingId, CancellationToken ct)
     {
-        var booking = await db.Bookings
+        var booking = await db.BagDelBookings
             .AsNoTracking()
             .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
 

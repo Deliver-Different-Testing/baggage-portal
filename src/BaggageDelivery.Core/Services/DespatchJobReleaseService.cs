@@ -1,7 +1,6 @@
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.Models.Entities;
 using BaggageDelivery.Core.MultiTenant;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -23,7 +22,7 @@ internal sealed class DespatchJobReleaseService(
     public async Task DrainOnceAsync(int batchSize, CancellationToken ct)
     {
         var now = time.GetUtcNow().UtcDateTime;
-        var rows = await db.ConfirmationOutbox
+        var rows = await db.BagDelConfirmationOutboxes
             .AsTracking()
             .Where(o => o.Status == OutboxStatus.Pending && o.NextAttemptUtc <= now)
             .OrderBy(o => o.NextAttemptUtc)
@@ -38,7 +37,7 @@ internal sealed class DespatchJobReleaseService(
 
     private async Task ProcessOneAsync(BagDelConfirmationOutbox row, CancellationToken ct)
     {
-        var booking = await db.Bookings
+        var booking = await db.BagDelBookings
             .AsNoTracking()
             .FirstOrDefaultAsync(b => b.Id == row.BookingId, ct);
 
@@ -113,7 +112,7 @@ internal sealed class DespatchJobReleaseService(
             row.Status = OutboxStatus.Done;
             row.LastError = null;
 
-            await db.Bookings
+            await db.BagDelBookings
                 .Where(b => b.Id == row.BookingId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(b => b.DespatchSyncedAtUtc, time.GetUtcNow().UtcDateTime)
@@ -145,7 +144,7 @@ internal sealed class DespatchJobReleaseService(
                     row.JobId, row.AttemptCount, backoffSeconds);
             }
 
-            await db.Bookings
+            await db.BagDelBookings
                 .Where(b => b.Id == row.BookingId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(b => b.DespatchSyncError, ex.Message), ct);

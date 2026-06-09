@@ -1,6 +1,5 @@
 using System.Text.Json;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.Models.Entities;
 using BaggageDelivery.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -35,7 +34,7 @@ internal sealed class BookingLinkDispatchService(
                 request.PassengerName, request.AirlineLabel,
                 request.Reference, request.BookingUrl))
         };
-        db.NotificationLogs.Add(entity);
+        db.BagDelNotificationLogs.Add(entity);
         await db.SaveChangesAsync(ct);
         return entity.Id;
     }
@@ -43,7 +42,7 @@ internal sealed class BookingLinkDispatchService(
     public async Task DrainOnceAsync(int batchSize, CancellationToken ct)
     {
         var now = time.GetUtcNow().UtcDateTime;
-        var rows = await db.NotificationLogs
+        var rows = await db.BagDelNotificationLogs
             .AsTracking()
             .Where(n => n.Status == NotificationStatus.Pending && n.NextAttemptUtc <= now)
             .OrderBy(n => n.NextAttemptUtc)

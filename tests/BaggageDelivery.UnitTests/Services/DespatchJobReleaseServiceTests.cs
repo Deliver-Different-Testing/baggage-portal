@@ -1,6 +1,6 @@
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
-using BaggageDelivery.Core.Models.Entities;
+using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Services;
 using BaggageDelivery.UnitTests.Helpers;
@@ -35,7 +35,7 @@ public class DespatchJobReleaseServiceTests
 
         await svc.DrainOnceAsync(10, CancellationToken.None);
 
-        var row = db.ConfirmationOutbox.First();
+        var row = db.BagDelConfirmationOutboxes.First();
         Assert.Equal(OutboxStatus.Done, row.Status);
         Received.InOrder(() =>
         {
@@ -66,14 +66,14 @@ public class DespatchJobReleaseServiceTests
 
         await svc.DrainOnceAsync(10, CancellationToken.None);
 
-        var row = db.ConfirmationOutbox.First();
+        var row = db.BagDelConfirmationOutboxes.First();
         Assert.Equal(OutboxStatus.Pending, row.Status);
         Assert.Equal(1, row.AttemptCount);
         Assert.True(row.NextAttemptUtc > time.GetUtcNow().UtcDateTime);
         Assert.NotNull(row.LastError);
     }
 
-    private static void SeedPendingOutbox(Core.Models.BaggageDeliveryContext db, FakeTimeProvider time)
+    private static void SeedPendingOutbox(BaggageDeliveryContext db, FakeTimeProvider time)
     {
         var booking = new BagDelBooking
         {
@@ -88,10 +88,10 @@ public class DespatchJobReleaseServiceTests
             TimeSlotEndUtc = time.GetUtcNow().UtcDateTime.AddHours(5),
             AtlOption = AtlOption.FrontDoor
         };
-        db.Bookings.Add(booking);
+        db.BagDelBookings.Add(booking);
         db.SaveChanges();
 
-        db.ConfirmationOutbox.Add(new BagDelConfirmationOutbox
+        db.BagDelConfirmationOutboxes.Add(new BagDelConfirmationOutbox
         {
             BookingId = booking.Id,
             JobId = 42,

@@ -1,7 +1,6 @@
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.Models.Entities;
 using BaggageDelivery.Core.MultiTenant;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -17,7 +16,7 @@ internal sealed class PaxBookingService(
 {
     public async Task<BookingSummary?> GetSummaryAsync(int bookingId, CancellationToken ct)
     {
-        var booking = await db.Bookings
+        var booking = await db.BagDelBookings
             .AsNoTracking()
             .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
 
@@ -63,7 +62,7 @@ internal sealed class PaxBookingService(
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var booking = await db.Bookings.AsTracking().FirstOrDefaultAsync(b => b.Id == input.BookingId, ct);
+        var booking = await db.BagDelBookings.AsTracking().FirstOrDefaultAsync(b => b.Id == input.BookingId, ct);
         if (booking is null)
         {
             throw new BookingNotFoundException(input.BookingId);
@@ -100,7 +99,7 @@ internal sealed class PaxBookingService(
             NextAttemptUtc = now,
             CreatedAtUtc = now
         };
-        db.ConfirmationOutbox.Add(outbox);
+        db.BagDelConfirmationOutboxes.Add(outbox);
 
         await db.SaveChangesAsync(ct);
 

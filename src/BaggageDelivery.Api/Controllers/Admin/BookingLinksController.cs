@@ -1,6 +1,5 @@
 using BaggageDelivery.Api.DTOs.Admin;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.Models.Entities;
 using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -28,7 +27,7 @@ public sealed class BookingLinksController(
         [FromBody] MintBookingLinkRequest body,
         CancellationToken ct)
     {
-        var publicBase = linkOptions.Value.PublicBaseUrl?.TrimEnd('/');
+        var publicBase = linkOptions.Value.PublicBaseUrl.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(publicBase))
         {
             return Problem("BookingLinks:PublicBaseUrl is not configured");
@@ -41,7 +40,7 @@ public sealed class BookingLinksController(
             TenantId = body.TenantId,
             CreatedAtUtc = now
         };
-        db.Bookings.Add(booking);
+        db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(ct);
 
         var encryptedId = encryption.EncryptId(booking.Id);
