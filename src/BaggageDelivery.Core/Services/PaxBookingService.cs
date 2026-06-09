@@ -16,7 +16,12 @@ internal sealed class PaxBookingService(
     {
         var booking = await db.BagDelBookings
             .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
+            .Where(b => b.Id == bookingId)
+            .Select(b => new BookingSummaryProjection(
+                b.Id, b.JobId, b.TenantId,
+                b.AddressLine1, b.AddressLine2, b.Suburb, b.City, b.PostCode, b.Country,
+                b.Latitude, b.Longitude))
+            .FirstOrDefaultAsync(ct);
 
         if (booking is null)
         {
@@ -55,6 +60,11 @@ internal sealed class PaxBookingService(
             EarliestSlotUtc: tracking.EtaWindowStartUtc ?? time.GetUtcNow().UtcDateTime,
             LatestSlotUtc: tracking.EtaWindowEndUtc ?? time.GetUtcNow().UtcDateTime.AddDays(2));
     }
+
+    private sealed record BookingSummaryProjection(
+        int Id, int JobId, int TenantId,
+        string? AddressLine1, string? AddressLine2, string? Suburb, string? City, string? PostCode, string? Country,
+        decimal? Latitude, decimal? Longitude);
 
     public async Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
     {

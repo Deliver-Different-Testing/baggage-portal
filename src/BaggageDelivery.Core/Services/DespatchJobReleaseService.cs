@@ -37,7 +37,14 @@ internal sealed class DespatchJobReleaseService(
     {
         var booking = await db.BagDelBookings
             .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Id == row.BookingId, ct);
+            .Where(b => b.Id == row.BookingId)
+            .Select(b => new BookingForRelease(
+                b.ConfirmedAtUtc,
+                b.AddressLine1, b.AddressLine2, b.Suburb, b.City, b.PostCode, b.Country,
+                b.Latitude, b.Longitude,
+                b.TimeSlotStartUtc, b.TimeSlotEndUtc,
+                b.AtlOption, b.AccessNotes, b.PhoneOverride))
+            .FirstOrDefaultAsync(ct);
 
         if (booking is null)
         {
@@ -158,4 +165,11 @@ internal sealed class DespatchJobReleaseService(
             await db.SaveChangesAsync(ct);
         }
     }
+
+    private sealed record BookingForRelease(
+        DateTime? ConfirmedAtUtc,
+        string? AddressLine1, string? AddressLine2, string? Suburb, string? City, string? PostCode, string? Country,
+        decimal? Latitude, decimal? Longitude,
+        DateTime? TimeSlotStartUtc, DateTime? TimeSlotEndUtc,
+        string? AtlOption, string? AccessNotes, string? PhoneOverride);
 }

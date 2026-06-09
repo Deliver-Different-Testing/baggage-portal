@@ -12,17 +12,19 @@ internal sealed class PaxTrackingService(
 {
     public async Task<TrackingDto?> GetTimelineAsync(int bookingId, CancellationToken ct)
     {
-        var booking = await db.BagDelBookings
+        var routing = await db.BagDelBookings
             .AsNoTracking()
-            .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
+            .Where(b => b.Id == bookingId)
+            .Select(b => new { b.TenantId, b.JobId })
+            .FirstOrDefaultAsync(ct);
 
-        if (booking is null)
+        if (routing is null)
         {
             return null;
         }
 
-        var ctx = await tenants.ResolveAsync(booking.TenantId, ct);
+        var ctx = await tenants.ResolveAsync(routing.TenantId, ct);
         return await despatch.GetJobTrackingAsync(
-            booking.TenantId, ctx.Connection, ctx.TimeZone, clientId: null, contactId: 0, booking.JobId, ct);
+            routing.TenantId, ctx.Connection, ctx.TimeZone, clientId: null, contactId: 0, routing.JobId, ct);
     }
 }
