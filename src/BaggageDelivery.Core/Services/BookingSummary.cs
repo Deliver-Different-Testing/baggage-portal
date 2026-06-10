@@ -3,7 +3,6 @@ using BaggageDelivery.Core.Http.Models;
 namespace BaggageDelivery.Core.Services;
 
 public sealed record BookingSummary(
-    int BookingId,
     int JobId,
     string Reference,
     string AirlineLabel,

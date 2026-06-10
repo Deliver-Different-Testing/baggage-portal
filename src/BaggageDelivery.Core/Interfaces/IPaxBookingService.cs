@@ -4,14 +4,14 @@ namespace BaggageDelivery.Core.Interfaces;
 
 public interface IPaxBookingService
 {
-    // Loads (or lazily creates) the BagDelBooking shadow row for (tenantId, jobId)
-    // and returns a passenger-facing summary. Returns null only when (tenantId,
-    // jobId) does not resolve to a known tenant.
-    Task<BookingSummary?> GetSummaryAsync(int tenantId, int jobId, CancellationToken ct);
+    // Loads the passenger-facing summary from trackingpage. Null when the
+    // job isn't found (stale link).
+    Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct);
 
-    // Updates (or lazily creates) the BagDelBooking row for (TenantId, JobId) on
-    // input and writes the passenger's submitted address / time slot / ATL choice,
-    // stamping ConfirmedAtUtc. Throws ConfirmationAlreadyExistsException if the row
-    // already has ConfirmedAtUtc set.
+    // Forwards the passenger's submitted delivery details to the api repo:
+    // patches tucJob delivery columns, then flips the job through the
+    // release flow. Throws on api failure — caller surfaces the error to
+    // the passenger so they can retry. Idempotency lives on the api side
+    // (release is a no-op once the job is past On Hold).
     Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct);
 }

@@ -5,14 +5,13 @@ namespace BaggageDelivery.Api.Dev;
 
 public static class DevStartup
 {
-    // Dev-only startup hook: mints the encrypted pax tokens for a known
+    // Dev-only startup hook: mints the encrypted pax token for a known
     // tucJob and logs the magic-link URLs so a developer can copy-paste
     // them into a browser to exercise /c (confirmation) and /t (tracking)
     // without going through IM's BDO ingest flow.
     //
-    // Configurable via the "DevTesting" section or DevTesting__TenantId /
-    // DevTesting__JobId env vars. Defaults match the agreed test job
-    // (TenantId=1, JobId=67).
+    // Configurable via DevTesting:JobId or DevTesting__JobId env var.
+    // Default matches the agreed test job (67).
     extension(WebApplication app)
     {
         public void LogTestMagicLinks()
@@ -22,9 +21,7 @@ public static class DevStartup
                 return;
             }
 
-            var config = app.Configuration.GetSection("DevTesting");
-            var tenantId = config.GetValue("TenantId", 1);
-            var jobId = config.GetValue("JobId", 67);
+            var jobId = app.Configuration.GetSection("DevTesting").GetValue("JobId", 67);
 
             var paxBase = Environment.GetEnvironmentVariable("AppUrl")?.TrimEnd('/')
                 ?? "http://baggagedelivery.local.deliverdifferent.com:5173";
@@ -40,7 +37,7 @@ public static class DevStartup
             string token;
             try
             {
-                token = encryptor.EncryptToken(tenantId, jobId);
+                token = encryptor.EncryptId(jobId);
             }
             catch (Exception ex)
             {
@@ -49,8 +46,7 @@ public static class DevStartup
                 return;
             }
 
-            Log.Information("DevStartup: magic links for TenantId={TenantId} JobId={JobId}",
-                tenantId, jobId);
+            Log.Information("DevStartup: magic links for JobId={JobId}", jobId);
             Log.Information("  Pax confirmation: {ConfirmUrl}", $"{paxBase}/c/{token}");
             Log.Information("  Pax tracking:     {TrackUrl}", $"{paxBase}/t/{token}");
         }

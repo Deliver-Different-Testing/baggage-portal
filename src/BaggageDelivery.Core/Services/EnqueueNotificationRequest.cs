@@ -1,7 +1,7 @@
 namespace BaggageDelivery.Core.Services;
 
 public sealed record EnqueueNotificationRequest(
-    int BookingId,
+    int JobId,
     string Channel,
     string Recipient,
     string PassengerName,

@@ -19,15 +19,19 @@
    "T4TemplatePath": null,
    "Tables": [
       {
-         "Name": "[dbo].[BagDelBooking]",
-         "ObjectType": 0
-      },
-      {
-         "Name": "[dbo].[BagDelConfirmationOutbox]",
-         "ObjectType": 0
-      },
-      {
          "Name": "[dbo].[BagDelNotificationLog]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[JobDeliveryJourney]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblUndeliverableLocation]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJob]",
          "ObjectType": 0
       }
    ],

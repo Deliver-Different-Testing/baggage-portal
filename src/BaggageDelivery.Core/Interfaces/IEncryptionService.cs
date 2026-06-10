@@ -2,16 +2,11 @@ namespace BaggageDelivery.Core.Interfaces;
 
 public interface IEncryptionService
 {
+    // URL token used in passenger-facing links — encrypts the courier
+    // JobId. Tenant identity comes from the deployment (matches inboundagent
+    // and trackingpage); the BagDelBooking shadow row is upserted lazily on
+    // first hit.
     string EncryptId(int id);
 
     int? DecryptId(string? encryptedId);
-
-    // Token used in passenger-facing URLs. Encrypts a composite (tenantId, jobId)
-    // so the magic-link is keyed on the courier job — the same model inboundagent
-    // uses — and the BagDelBooking shadow row can be upserted lazily on first hit.
-    string EncryptToken(int tenantId, int jobId);
-
-    BookingToken? DecryptToken(string? encryptedToken);
 }
-
-public readonly record struct BookingToken(int TenantId, int JobId);

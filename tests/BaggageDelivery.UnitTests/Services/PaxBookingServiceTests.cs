@@ -11,96 +11,116 @@ namespace BaggageDelivery.UnitTests.Services;
 public class PaxBookingServiceTests
 {
     [Fact]
-    public async Task Confirm_updates_booking_row_in_place_and_queues_outbox()
+    public async Task GetSummary_returns_null_when_trackingpage_has_no_data()
     {
-        var db = InMemoryDb.NewContext();
         var trackingPage = Substitute.For<ITrackingPageClient>();
-        var tenants = Substitute.For<ITenantResolver>();
+        var despatch = Substitute.For<IDespatchApiClient>();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
 
-        var booking = new BagDelBooking
+        trackingPage.GetJobAsync(0, CancellationToken.None).ReturnsForAnyArgs((TrackingDto?)null);
+
+        var svc = new PaxBookingService(trackingPage, despatch, time);
+        var result = await svc.GetSummaryAsync(42, CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetSummary_maps_tracking_to_booking_summary()
+    {
+        var trackingPage = Substitute.For<ITrackingPageClient>();
+        var despatch = Substitute.For<IDespatchApiClient>();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
+
+        trackingPage.GetJobAsync(0, CancellationToken.None).ReturnsForAnyArgs(new TrackingDto
         {
             JobId = 42,
-            TenantId = 1,
-            CreatedAtUtc = time.GetUtcNow().UtcDateTime
-        };
-        db.BagDelBookings.Add(booking);
-        await db.SaveChangesAsync(CancellationToken.None);
+            CurrentStatus = "1",
+            Events = [],
+            EtaWindowStartUtc = new DateTime(2026, 6, 10, 14, 0, 0, DateTimeKind.Utc),
+            EtaWindowEndUtc = new DateTime(2026, 6, 10, 17, 0, 0, DateTimeKind.Utc),
+            CourierFirstName = "Air NZ"
+        });
 
-        var svc = new PaxBookingService(db, trackingPage, tenants, time);
+        var svc = new PaxBookingService(trackingPage, despatch, time);
+        var result = await svc.GetSummaryAsync(42, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(42, result.JobId);
+        Assert.Equal("Air NZ", result.AirlineLabel);
+        Assert.Equal(new DateTime(2026, 6, 10, 14, 0, 0, DateTimeKind.Utc), result.EarliestSlotUtc);
+        Assert.Equal(new DateTime(2026, 6, 10, 17, 0, 0, DateTimeKind.Utc), result.LatestSlotUtc);
+    }
+
+    [Fact]
+    public async Task Confirm_calls_api_update_then_release()
+    {
+        var trackingPage = Substitute.For<ITrackingPageClient>();
+        var despatch = Substitute.For<IDespatchApiClient>();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
+
+        despatch.UpdateJobDeliveryAsync(0, null!, CancellationToken.None).ReturnsForAnyArgs(true);
+        despatch.ReleaseBaggageJobAsync(null!, CancellationToken.None).ReturnsForAnyArgs(true);
+
+        var svc = new PaxBookingService(trackingPage, despatch, time);
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
-            TenantId: booking.TenantId,
-            JobId: booking.JobId,
+            JobId: 42,
             Address: new AddressUpdateDto { Line1 = "1 Queen St", City = "Auckland", Country = "NZ" },
             TimeSlotStartUtc: time.GetUtcNow().UtcDateTime.AddHours(2),
             TimeSlotEndUtc: time.GetUtcNow().UtcDateTime.AddHours(5),
             AtlOption: AtlOption.FrontDoor,
             AccessNotes: null, PhoneOverride: null), CancellationToken.None);
 
-        var updated = db.BagDelBookings.AsQueryable().First(b => b.Id == booking.Id);
-        Assert.NotNull(updated.ConfirmedAtUtc);
-        Assert.Equal("1 Queen St", updated.AddressLine1);
-        Assert.Equal(AtlOption.FrontDoor, updated.AtlOption);
-        Assert.Single(db.BagDelConfirmationOutboxes);
-        Assert.Equal(OutboxStatus.Pending, db.BagDelConfirmationOutboxes.First().Status);
-        Assert.Equal(booking.Id, db.BagDelConfirmationOutboxes.First().BookingId);
-    }
-
-    [Fact]
-    public async Task Confirming_same_booking_twice_throws()
-    {
-        var db = InMemoryDb.NewContext();
-        var trackingPage = Substitute.For<ITrackingPageClient>();
-        var tenants = Substitute.For<ITenantResolver>();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
-
-        var booking = new BagDelBooking
+        Received.InOrder(() =>
         {
-            JobId = 1,
-            TenantId = 1,
-            CreatedAtUtc = time.GetUtcNow().UtcDateTime
-        };
-        db.BagDelBookings.Add(booking);
-        await db.SaveChangesAsync(CancellationToken.None);
-
-        var svc = new PaxBookingService(db, trackingPage, tenants, time);
-
-        var input = new ConfirmBookingInput(
-            TenantId: booking.TenantId,
-            JobId: booking.JobId,
-            new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
-            time.GetUtcNow().UtcDateTime, time.GetUtcNow().UtcDateTime.AddHours(1),
-            AtlOption.None, null, null);
-
-        await svc.ConfirmAsync(input, CancellationToken.None);
-
-        await Assert.ThrowsAsync<ConfirmationAlreadyExistsException>(
-            () => svc.ConfirmAsync(input, CancellationToken.None));
+            despatch.UpdateJobDeliveryAsync(42, Arg.Any<DeliveryUpdateRequest>(), Arg.Any<CancellationToken>());
+            despatch.ReleaseBaggageJobAsync(Arg.Any<BookingReleaseRequest>(), Arg.Any<CancellationToken>());
+        });
     }
 
     [Fact]
-    public async Task Confirm_creates_booking_lazily_when_missing()
+    public async Task Confirm_throws_when_update_returns_false()
     {
-        var db = InMemoryDb.NewContext();
         var trackingPage = Substitute.For<ITrackingPageClient>();
-        var tenants = Substitute.For<ITenantResolver>();
+        var despatch = Substitute.For<IDespatchApiClient>();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
 
-        var svc = new PaxBookingService(db, trackingPage, tenants, time);
+        despatch.UpdateJobDeliveryAsync(0, null!, CancellationToken.None).ReturnsForAnyArgs(false);
+
+        var svc = new PaxBookingService(trackingPage, despatch, time);
 
         var input = new ConfirmBookingInput(
-            TenantId: 1,
-            JobId: 9999,
+            JobId: 42,
             new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
             time.GetUtcNow().UtcDateTime, time.GetUtcNow().UtcDateTime.AddHours(1),
             AtlOption.None, null, null);
 
-        await svc.ConfirmAsync(input, CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => svc.ConfirmAsync(input, CancellationToken.None));
 
-        var created = db.BagDelBookings.AsQueryable().Single();
-        Assert.Equal(1, created.TenantId);
-        Assert.Equal(9999, created.JobId);
-        Assert.NotNull(created.ConfirmedAtUtc);
+        await despatch.DidNotReceiveWithAnyArgs().ReleaseBaggageJobAsync(null!, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Confirm_throws_when_release_returns_false()
+    {
+        var trackingPage = Substitute.For<ITrackingPageClient>();
+        var despatch = Substitute.For<IDespatchApiClient>();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
+
+        despatch.UpdateJobDeliveryAsync(0, null!, CancellationToken.None).ReturnsForAnyArgs(true);
+        despatch.ReleaseBaggageJobAsync(null!, CancellationToken.None).ReturnsForAnyArgs(false);
+
+        var svc = new PaxBookingService(trackingPage, despatch, time);
+
+        var input = new ConfirmBookingInput(
+            JobId: 42,
+            new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
+            time.GetUtcNow().UtcDateTime, time.GetUtcNow().UtcDateTime.AddHours(1),
+            AtlOption.None, null, null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => svc.ConfirmAsync(input, CancellationToken.None));
     }
 }

@@ -9,7 +9,7 @@ public partial class BagDelNotificationLog
 {
     public int Id { get; set; }
 
-    public int BookingId { get; set; }
+    public int JobId { get; set; }
 
     public string Channel { get; set; }
 
@@ -30,6 +30,4 @@ public partial class BagDelNotificationLog
     public DateTime UpdatedAtUtc { get; set; }
 
     public byte[] RowVersion { get; set; }
-
-    public virtual BagDelBooking Booking { get; set; }
 }

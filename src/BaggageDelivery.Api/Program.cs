@@ -33,9 +33,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddAppAuthentication(builder.Configuration);
 
-builder.Services.AddHostedService<DespatchJobReleaseWorker>();
 builder.Services.AddHostedService<BookingLinkDispatchWorker>();
-builder.Services.AddHostedService<OrphanReconciliationWorker>();
 
 builder.Services.AddControllers(options => { options.MaxModelBindingCollectionSize = 100; });
 builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestBodySize = 4 * 1024 * 1024; });

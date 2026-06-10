@@ -22,6 +22,16 @@ public sealed class SendOnHoldBookingRequest
     public int BookingID { get; set; }
 }
 
+// NEW endpoint (handoff to api repo) - PATCH api/Jobs/{jobId}/status
+// Used on booking link mint to flip tucJob.UcjbStatus and write a
+// JobDeliveryJourney audit row in the same transaction. tucJob is read-only
+// from BaggageDelivery's SQL user — all tucJob writes route through the api.
+public sealed class JobStatusUpdateRequest
+{
+    public int Status { get; set; }
+    public string? Comment { get; set; }
+}
+
 // NEW endpoint (handoff to api repo) - PATCH api/Jobs/{jobId}/delivery
 public sealed class DeliveryUpdateRequest
 {

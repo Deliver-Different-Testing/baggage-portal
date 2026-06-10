@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using Microsoft.Extensions.Options;
@@ -29,25 +28,6 @@ public sealed class TrackingPageClient(HttpClient httpClient, IOptions<TrackingP
 
     public async Task<TrackingDto?> GetJobAsync(int jobId, CancellationToken ct)
     {
-        var (status, body) = await FetchAsync(jobId, ct);
-
-        if (status == JobExistenceResult.Exists && body?.Job is { } job)
-        {
-            return MapToTrackingDto(job);
-        }
-
-        return null;
-    }
-
-    public async Task<JobExistenceResult> CheckJobExistsAsync(int jobId, CancellationToken ct)
-    {
-        var (status, _) = await FetchAsync(jobId, ct);
-        return status;
-    }
-
-    private async Task<(JobExistenceResult Status, JobResponseWire? Body)> FetchAsync(
-        int jobId, CancellationToken ct)
-    {
         var baseUrl = urlOptions.Value.BaseUrl
             ?? throw new InvalidOperationException(
                 "TrackingPage base URL is not configured. " +
@@ -62,37 +42,31 @@ public sealed class TrackingPageClient(HttpClient httpClient, IOptions<TrackingP
             var parsed = TryDeserialize(content);
 
             // trackingpage maps job-not-found to 400 BadRequest with
-            // Success=false in the body (see API/Controllers/BaseController.cs).
-            // 200 + Success=true is the only exists signal.
-            if (response.IsSuccessStatusCode && parsed?.Success == true)
+            // Success=false. 200 + Success=true + Job populated is the
+            // only "found" signal; everything else returns null.
+            if (response.IsSuccessStatusCode && parsed?.Success == true && parsed.Job is { } job)
             {
-                return (JobExistenceResult.Exists, parsed);
+                return MapToTrackingDto(job);
             }
 
-            if (response.StatusCode == HttpStatusCode.BadRequest && parsed?.Success == false)
+            if (response.StatusCode != HttpStatusCode.BadRequest && response.StatusCode != HttpStatusCode.NotFound)
             {
-                return (JobExistenceResult.NotFound, parsed);
+                Log.Warning(
+                    "TrackingPage GetJob unexpected response for JobId={JobId}: {StatusCode}",
+                    jobId, response.StatusCode);
             }
 
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                return (JobExistenceResult.NotFound, null);
-            }
-
-            Log.Warning(
-                "TrackingPage GetJob unexpected response for JobId={JobId}: {StatusCode} Success={Success}",
-                jobId, response.StatusCode, parsed?.Success);
-            return (JobExistenceResult.Unknown, null);
+            return null;
         }
         catch (HttpRequestException ex)
         {
             Log.Warning(ex, "TrackingPage transport failure for JobId={JobId}", jobId);
-            return (JobExistenceResult.Unknown, null);
+            return null;
         }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         {
             Log.Warning("TrackingPage request timed out for JobId={JobId}", jobId);
-            return (JobExistenceResult.Unknown, null);
+            return null;
         }
     }
 
@@ -168,8 +142,6 @@ public sealed class TrackingPageClient(HttpClient httpClient, IOptions<TrackingP
     }
 
     // Wire models — subset of trackingpage's JobResponse / JobFullDto.
-    // Names match the JSON the controller serialises (no JsonPropertyName
-    // overrides needed since PascalCase is the default).
     private sealed record JobResponseWire(bool Success, JobWire? Job);
 
     private sealed record JobWire(

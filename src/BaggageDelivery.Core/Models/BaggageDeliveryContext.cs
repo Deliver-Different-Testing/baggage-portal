@@ -13,87 +13,23 @@ public partial class BaggageDeliveryContext : DbContext
     {
     }
 
-    public virtual DbSet<BagDelBooking> BagDelBookings { get; set; }
-
-    public virtual DbSet<BagDelConfirmationOutbox> BagDelConfirmationOutboxes { get; set; }
-
     public virtual DbSet<BagDelNotificationLog> BagDelNotificationLogs { get; set; }
+
+    public virtual DbSet<JobDeliveryJourney> JobDeliveryJourneys { get; set; }
+
+    public virtual DbSet<TblUndeliverableLocation> TblUndeliverableLocations { get; set; }
+
+    public virtual DbSet<TucJob> TucJobs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BagDelBooking>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__BagDelBo__3214EC07B98AE1DE");
-
-            entity.ToTable("BagDelBooking");
-
-            entity.HasIndex(e => e.JobId, "IX_BagDelBooking_JobId");
-
-            entity.HasIndex(e => e.CreatedAtUtc, "IX_BagDelBooking_ReconcileScan").HasFilter("([OrphanedAtUtc] IS NULL AND [DespatchSyncedAtUtc] IS NULL)");
-
-            entity.HasIndex(e => e.TenantId, "IX_BagDelBooking_TenantId");
-
-            entity.HasIndex(e => new { e.TenantId, e.JobId }, "UQ_BagDelBooking_Tenant_Job").IsUnique();
-
-            entity.Property(e => e.AccessNotes).HasMaxLength(500);
-            entity.Property(e => e.AddressLine1).HasMaxLength(200);
-            entity.Property(e => e.AddressLine2).HasMaxLength(200);
-            entity.Property(e => e.AtlOption)
-                .HasMaxLength(30)
-                .IsUnicode(false);
-            entity.Property(e => e.City).HasMaxLength(100);
-            entity.Property(e => e.ConfirmedAtUtc).HasColumnType("datetime");
-            entity.Property(e => e.Country)
-                .HasMaxLength(2)
-                .IsUnicode(false)
-                .IsFixedLength();
-            entity.Property(e => e.CreatedAtUtc).HasColumnType("datetime");
-            entity.Property(e => e.DespatchSyncedAtUtc).HasColumnType("datetime");
-            entity.Property(e => e.Latitude).HasColumnType("decimal(9, 6)");
-            entity.Property(e => e.Longitude).HasColumnType("decimal(9, 6)");
-            entity.Property(e => e.OrphanedAtUtc).HasColumnType("datetime");
-            entity.Property(e => e.OrphanedReason).HasMaxLength(200);
-            entity.Property(e => e.PhoneOverride).HasMaxLength(40);
-            entity.Property(e => e.PostCode).HasMaxLength(20);
-            entity.Property(e => e.Suburb).HasMaxLength(100);
-            entity.Property(e => e.TimeSlotEndUtc).HasColumnType("datetime");
-            entity.Property(e => e.TimeSlotStartUtc).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<BagDelConfirmationOutbox>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__BagDelCo__3214EC070899C255");
-
-            entity.ToTable("BagDelConfirmationOutbox");
-
-            entity.HasIndex(e => e.NextAttemptUtc, "IX_BagDelConfirmationOutbox_Pending").HasFilter("([Status]='Pending')");
-
-            entity.HasIndex(e => e.Status, "IX_BagDelConfirmationOutbox_Status");
-
-            entity.Property(e => e.CreatedAtUtc)
-                .HasDefaultValueSql("(getutcdate())", "DF_BagDelConfirmationOutbox_Created")
-                .HasColumnType("datetime");
-            entity.Property(e => e.NextAttemptUtc).HasColumnType("datetime");
-            entity.Property(e => e.RowVersion)
-                .IsRequired()
-                .IsRowVersion()
-                .IsConcurrencyToken();
-            entity.Property(e => e.Status)
-                .IsRequired()
-                .HasMaxLength(20)
-                .IsUnicode(false);
-
-            entity.HasOne(d => d.Booking).WithMany(p => p.BagDelConfirmationOutboxes)
-                .HasForeignKey(d => d.BookingId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BagDelConfirmationOutbox_Booking");
-        });
-
         modelBuilder.Entity<BagDelNotificationLog>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__BagDelNo__3214EC07F291F729");
+            entity.HasKey(e => e.Id).HasName("PK__BagDelNo__3214EC075A48CD81");
 
             entity.ToTable("BagDelNotificationLog");
+
+            entity.HasIndex(e => e.JobId, "IX_BagDelNotificationLog_JobId");
 
             entity.HasIndex(e => e.NextAttemptUtc, "IX_BagDelNotificationLog_Pending").HasFilter("([Status]='Pending')");
 
@@ -122,11 +58,549 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.UpdatedAtUtc)
                 .HasDefaultValueSql("(getutcdate())", "DF_BagDelNotificationLog_Updated")
                 .HasColumnType("datetime");
+        });
 
-            entity.HasOne(d => d.Booking).WithMany(p => p.BagDelNotificationLogs)
-                .HasForeignKey(d => d.BookingId)
+        modelBuilder.Entity<JobDeliveryJourney>(entity =>
+        {
+            entity.HasKey(e => e.JourneyId).HasName("PK__JobDeliv__4159B9CFA99F08CB");
+
+            entity.ToTable("JobDeliveryJourney");
+
+            entity.HasIndex(e => e.ChangeType, "IX_JobDeliveryJourney_ChangeType");
+
+            entity.HasIndex(e => e.CourierId, "IX_JobDeliveryJourney_CourierID");
+
+            entity.HasIndex(e => new { e.CourierId, e.UpdatedAt }, "IX_JobDeliveryJourney_Courier_Date").HasFilter("([CourierID] IS NOT NULL)");
+
+            entity.HasIndex(e => e.JobId, "IX_JobDeliveryJourney_JobID");
+
+            entity.HasIndex(e => new { e.JobId, e.ChangeType, e.UpdatedAt }, "IX_JobDeliveryJourney_Job_ChangeType_Date");
+
+            entity.HasIndex(e => e.StaffId, "IX_JobDeliveryJourney_StaffID");
+
+            entity.HasIndex(e => new { e.StaffId, e.UpdatedAt }, "IX_JobDeliveryJourney_Staff_Date").HasFilter("([StaffID] IS NOT NULL)");
+
+            entity.HasIndex(e => e.UpdatedAt, "IX_JobDeliveryJourney_UpdatedAt");
+
+            entity.Property(e => e.JourneyId).HasColumnName("JourneyID");
+            entity.Property(e => e.ChangeType)
+                .IsRequired()
+                .HasMaxLength(30);
+            entity.Property(e => e.Comments).HasMaxLength(500);
+            entity.Property(e => e.CourierId).HasColumnName("CourierID");
+            entity.Property(e => e.FieldName).HasMaxLength(100);
+            entity.Property(e => e.FlightId).HasColumnName("FlightID");
+            entity.Property(e => e.JobId).HasColumnName("JobID");
+            entity.Property(e => e.NewAgentId).HasColumnName("NewAgentID");
+            entity.Property(e => e.NewCourierId).HasColumnName("NewCourierID");
+            entity.Property(e => e.NewInternalStatusId).HasColumnName("NewInternalStatusID");
+            entity.Property(e => e.NewJobStatusId).HasColumnName("NewJobStatusID");
+            entity.Property(e => e.OldAgentId).HasColumnName("OldAgentID");
+            entity.Property(e => e.OldCourierId).HasColumnName("OldCourierID");
+            entity.Property(e => e.OldInternalStatusId).HasColumnName("OldInternalStatusID");
+            entity.Property(e => e.OldJobStatusId).HasColumnName("OldJobStatusID");
+            entity.Property(e => e.StaffId).HasColumnName("StaffID");
+            entity.Property(e => e.UpdatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(getdate())");
+            entity.Property(e => e.UpdatedByType)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            entity.HasOne(d => d.Job).WithMany(p => p.JobDeliveryJourneys)
+                .HasForeignKey(d => d.JobId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BagDelNotificationLog_Booking");
+                .HasConstraintName("FK_JobDeliveryJourney_Job");
+        });
+
+        modelBuilder.Entity<TblUndeliverableLocation>(entity =>
+        {
+            entity.HasKey(e => e.UndeliverableLocationId);
+
+            entity.ToTable("tblUndeliverableLocation");
+
+            entity.HasIndex(e => e.JobTypeId, "JobTypeID");
+
+            entity.Property(e => e.UndeliverableLocationId).HasColumnName("UndeliverableLocationID");
+            entity.Property(e => e.Created)
+                .HasDefaultValueSql("(getdate())", "DF_tblUndeliverableLocation_Created")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.JobTypeId).HasColumnName("JobTypeID");
+            entity.Property(e => e.LastModified)
+                .HasDefaultValueSql("(getdate())", "DF_tblUndeliverableLocation_LastModified")
+                .HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Message)
+                .IsRequired()
+                .HasColumnType("ntext");
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.Podname)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnName("PODName");
+            entity.Property(e => e.WebDeliveredTimeLabel)
+                .IsRequired()
+                .HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<TucJob>(entity =>
+        {
+            entity.HasKey(e => e.UcjbId)
+                .IsClustered(false)
+                .HasFillFactor(80);
+
+            entity.ToTable("tucJob", tb =>
+                {
+                    tb.HasTrigger("TR_tucJob_PricingBreakdown_Sync");
+                    tb.HasTrigger("trg_TucJob_Notes_Update");
+                    tb.HasTrigger("trg_tucJob_Update");
+                    tb.HasTrigger("tucJob_ChangeAmount");
+                    tb.HasTrigger("tucJob_ChangeWeight");
+                    tb.HasTrigger("tucJob_InsertJob");
+                    tb.HasTrigger("tucJob_InsertScan");
+                    tb.HasTrigger("tucJob_InsertUpdate_CalculateCourierPayment");
+                    tb.HasTrigger("tucJob_Insert_ClearListAreaOrder");
+                    tb.HasTrigger("tucJob_Insert_DatacomCode");
+                    tb.HasTrigger("tucJob_Insert_GPS");
+                    tb.HasTrigger("tucJob_Update");
+                    tb.HasTrigger("tucJob_Update_AddPickupAmountToNationwideAmount");
+                    tb.HasTrigger("tucJob_Update_AutomaticSpeedUpdate");
+                    tb.HasTrigger("tucJob_Update_ClearListAreaOrder");
+                    tb.HasTrigger("tucJob_Update_ClosestCourierID");
+                    tb.HasTrigger("tucJob_Update_CompletedTime");
+                    tb.HasTrigger("tucJob_Update_CourierID_FTPJobCreate");
+                    tb.HasTrigger("tucJob_Update_FTP_PickupDelivery");
+                    tb.HasTrigger("tucJob_Update_GPS");
+                    tb.HasTrigger("tucJob_Update_Linehual_JobCompleted");
+                    tb.HasTrigger("tucJob_Update_Notified");
+                    tb.HasTrigger("tucJob_Update_PPD");
+                    tb.HasTrigger("tucJob_Update_PickedUpTime");
+                    tb.HasTrigger("tucJob_Update_RecalculateAmount");
+                    tb.HasTrigger("tucJob_Update_RecalculateFuelSurcharge");
+                    tb.HasTrigger("tucJob_Update_RecalculateRawBaseAmount_And_CourierBonus");
+                    tb.HasTrigger("tucJob_Update_SendToDevices");
+                    tb.HasTrigger("tucJob_Update_Speed");
+                    tb.HasTrigger("tucJob_Update_Status_CreateEvent");
+                    tb.HasTrigger("tucJob_Update_Status_CreateWebHook");
+                    tb.HasTrigger("tucJob_Update_TruckHire_JobCompleted");
+                    tb.HasTrigger("tucJob_Update_UpdateBaggageJobFromPickupJob");
+                    tb.HasTrigger("tucJob_Update_UpdateDeliveryGPS");
+                    tb.HasTrigger("tucJob_Update_UpdateNationwideJobFromPickupJob");
+                });
+
+            entity.HasIndex(e => e.AcceptedJobTypeId, "AcceptedJobTypeID");
+
+            entity.HasIndex(e => e.ContactId, "ContactID");
+
+            entity.HasIndex(e => e.DesiredJobTypeId, "DesiredJobTypeID");
+
+            entity.HasIndex(e => e.UcjbDate, "DespatchWebSearch2");
+
+            entity.HasIndex(e => new { e.UcjbClientId, e.UcjbDate }, "IX_Client_Date");
+
+            entity.HasIndex(e => e.MasterCourierId, "IX_MasterCourierId");
+
+            entity.HasIndex(e => new { e.ShopId, e.ShopRef1, e.ShopRef2, e.ShopRef3, e.ShopRef4, e.ShopRef5 }, "IX_Shop");
+
+            entity.HasIndex(e => new { e.UcjbVoid, e.UcjbJobDone, e.UcjbCourierId, e.UcjbDate }, "IX_TucJob_ActiveJobs").HasFillFactor(90);
+
+            entity.HasIndex(e => e.ContactId, "IX_TucJob_ContactID");
+
+            entity.HasIndex(e => new { e.UcjbCourierId, e.UcjbVoid, e.UcjbJobDone, e.UcjbDate }, "IX_TucJob_CourierStatus_Date").HasFillFactor(90);
+
+            entity.HasIndex(e => e.UcjbSpeed, "IX_TucJob_Speed");
+
+            entity.HasIndex(e => new { e.ParentId, e.UcjbCourierId }, "IX_TucJobs_ChildJobAssignment").HasFillFactor(90);
+
+            entity.HasIndex(e => e.UcjbCourierId, "IX_TucJobs_CourierId");
+
+            entity.HasIndex(e => new { e.UcjbDate, e.UcjbTime }, "IX_TucJobs_Date_Time");
+
+            entity.HasIndex(e => e.UcjbId, "IX_TucJobs_DeliveryCoordinates").HasFillFactor(90);
+
+            entity.HasIndex(e => e.UcjbId, "IX_TucJobs_Lookup");
+
+            entity.HasIndex(e => e.UcjbId, "IX_TucJobs_NationwideFlightQueries").HasFillFactor(90);
+
+            entity.HasIndex(e => e.UcjbId, "IX_TucJobs_PickupCoordinates").HasFillFactor(90);
+
+            entity.HasIndex(e => new { e.UcjbStatus, e.UcjbDate }, "IX_TucJobs_Status_Date");
+
+            entity.HasIndex(e => e.AgentId, "IX_tucJob_AgentID");
+
+            entity.HasIndex(e => new { e.UcjbStatus, e.UcjbJobDone, e.UcjbVoid }, "IX_tucJob_Archive_Status");
+
+            entity.HasIndex(e => new { e.UcjbJobDone, e.UcjbVoid, e.UcjbCourierId }, "IX_tucJob_CourierClearListBuild");
+
+            entity.HasIndex(e => e.DeliverToLeaveId, "IX_tucJob_DeliverToLeaveID");
+
+            entity.HasIndex(e => e.FdcourierId, "IX_tucJob_FDCourierID");
+
+            entity.HasIndex(e => e.FromAirportId, "IX_tucJob_FromAirportId");
+
+            entity.HasIndex(e => e.NpAgentId, "IX_tucJob_NpAgentId");
+
+            entity.HasIndex(e => e.PartnerJobGuid, "IX_tucJob_PartnerJobGuid");
+
+            entity.HasIndex(e => e.PartnerPairingId, "IX_tucJob_PartnerPairingId");
+
+            entity.HasIndex(e => new { e.RouteId, e.UcjbDate }, "IX_tucJob_RouteId_ucjbDate");
+
+            entity.HasIndex(e => e.SourceId, "IX_tucJob_SourceID");
+
+            entity.HasIndex(e => e.ToAirportId, "IX_tucJob_ToAirportId");
+
+            entity.HasIndex(e => e.UcjbDispId, "IX_tucJob_ucjbDispID");
+
+            entity.HasIndex(e => e.UcjbNumber, "IX_tucJob_ucjbNumber_Covering");
+
+            entity.HasIndex(e => e.UcjbSendTime, "IX_tucJob_ucjbSendTime");
+
+            entity.HasIndex(e => e.InformationParentId, "InformationParentID");
+
+            entity.HasIndex(e => e.JobRelationshipTypeId, "JobRelationshipTypeID");
+
+            entity.HasIndex(e => e.NotifiedJobTypeId, "NotifiedJobTypeID");
+
+            entity.HasIndex(e => e.ParentId, "ParentID");
+
+            entity.HasIndex(e => e.RootParentId, "RootParentID");
+
+            entity.HasIndex(e => e.UcjbStatus, "Scan1");
+
+            entity.HasIndex(e => new { e.UcjbClientCode, e.UcjbStatus }, "Scan2");
+
+            entity.HasIndex(e => e.UcjbClientCode, "Scan3");
+
+            entity.HasIndex(e => e.UcjbClientCode, "Scan4");
+
+            entity.HasIndex(e => new { e.UcjbClientCode, e.UcjbDate }, "Scan5");
+
+            entity.HasIndex(e => e.UndeliverableLocationId, "UndeliverableLocationID");
+
+            entity.HasIndex(e => e.UcjbClientId, "ucjbClientID").HasFillFactor(80);
+
+            entity.HasIndex(e => e.UcjbCourierId, "ucjbCourierID").HasFillFactor(80);
+
+            entity.HasIndex(e => new { e.UcjbDate, e.UcjbDispDate }, "ucjbDispDate");
+
+            entity.HasIndex(e => e.UcjbFrom, "ucjbFrom").HasFillFactor(80);
+
+            entity.HasIndex(e => e.UcjbNumber, "ucjbNumber")
+                .IsUnique()
+                .IsClustered()
+                .HasFillFactor(80);
+
+            entity.HasIndex(e => e.UcjbSpeed, "ucjbSpeed");
+
+            entity.HasIndex(e => e.UcjbTo, "ucjbTo");
+
+            entity.Property(e => e.UcjbId).HasColumnName("ucjbID");
+            entity.Property(e => e.AcceptedJobTypeId).HasColumnName("AcceptedJobTypeID");
+            entity.Property(e => e.AgentId).HasColumnName("AgentID");
+            entity.Property(e => e.AutoDespatch).HasDefaultValue(true, "DF_tucJob_AutoDespatch");
+            entity.Property(e => e.Barcode).HasMaxLength(300);
+            entity.Property(e => e.BookingParentId).HasColumnName("BookingParentID");
+            entity.Property(e => e.BulkParentId).HasColumnName("BulkParentID");
+            entity.Property(e => e.ClientItemIds).HasMaxLength(100);
+            entity.Property(e => e.ClientNotes).HasMaxLength(4000);
+            entity.Property(e => e.ClosestCourierConfidence).HasColumnType("decimal(5, 2)");
+            entity.Property(e => e.ClosestCourierId).HasColumnName("ClosestCourierID");
+            entity.Property(e => e.Connote).IsUnicode(false);
+            entity.Property(e => e.ContactId).HasColumnName("ContactID");
+            entity.Property(e => e.CourierBonus).HasColumnType("money");
+            entity.Property(e => e.CourierFuel).HasColumnType("money");
+            entity.Property(e => e.CourierPayment).HasColumnType("money");
+            entity.Property(e => e.CourierPaymentManualOverride).HasDefaultValue(false);
+            entity.Property(e => e.CourierPercentage).HasColumnType("numeric(18, 4)");
+            entity.Property(e => e.CourierPercentageOverride).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.CreatedTime)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CreatedTimeUtc)
+                .HasDefaultValueSql("(getutcdate())", "DF_tucJob_CreatedTimeUtc")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CustomJobName).HasMaxLength(255);
+            entity.Property(e => e.DeliverByTime).HasColumnType("datetime");
+            entity.Property(e => e.DeliverByTimeZoneId).HasColumnName("DeliverByTimeZoneID");
+            entity.Property(e => e.DeliverToContact).HasMaxLength(100);
+            entity.Property(e => e.DeliverToLeaveId).HasColumnName("DeliverToLeaveID");
+            entity.Property(e => e.DeliverToPhone).HasMaxLength(100);
+            entity.Property(e => e.DeliveryAddressLine1).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine2).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine3).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine4).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine5).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine6).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine7).HasMaxLength(255);
+            entity.Property(e => e.DeliveryAddressLine8).HasMaxLength(255);
+            entity.Property(e => e.DeliveryArrivalTime).HasColumnType("datetime");
+            entity.Property(e => e.DeliveryGps).HasMaxLength(50);
+            entity.Property(e => e.DeliveryLatitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.DeliveryLongitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.DeliveryPhoto).HasColumnType("image");
+            entity.Property(e => e.DeliverySignature).HasColumnType("image");
+            entity.Property(e => e.DesiredJobTypeId).HasColumnName("DesiredJobTypeID");
+            entity.Property(e => e.Dgclass).HasColumnName("DGClass");
+            entity.Property(e => e.Dgdocument).HasColumnName("DGDocument");
+            entity.Property(e => e.DisplayInDespatch).HasDefaultValue(true, "DF_tucJob_DisplayInDespatch");
+            entity.Property(e => e.DropOffLocationId).HasColumnName("DropOffLocationID");
+            entity.Property(e => e.DropoffAmount).HasColumnType("money");
+            entity.Property(e => e.DropoffRawAmount).HasColumnType("money");
+            entity.Property(e => e.DryIceWeight).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.EmailForJobFu)
+                .HasDefaultValue(false, "DF__tucJob__EmailFor__5713D034")
+                .HasColumnName("EmailForJobFU");
+            entity.Property(e => e.FdcourierId).HasColumnName("FDCourierID");
+            entity.Property(e => e.FollowupTime).HasColumnType("datetime");
+            entity.Property(e => e.FromAddressExtras)
+                .HasMaxLength(200)
+                .HasColumnName("fromAddressExtras");
+            entity.Property(e => e.FromAddressExtras2)
+                .HasMaxLength(200)
+                .HasColumnName("fromAddressExtras2");
+            entity.Property(e => e.FromAddressStreetName)
+                .HasMaxLength(200)
+                .HasColumnName("fromAddressStreetName");
+            entity.Property(e => e.FuelPercentage).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.FuelSurchargeAmount).HasColumnType("money");
+            entity.Property(e => e.GssTrackingUrl)
+                .HasMaxLength(400)
+                .HasColumnName("GssTrackingURL");
+            entity.Property(e => e.Gssamount)
+                .HasColumnType("money")
+                .HasColumnName("GSSAmount");
+            entity.Property(e => e.Gssconnote)
+                .HasMaxLength(50)
+                .HasColumnName("GSSConnote");
+            entity.Property(e => e.Gstrate)
+                .HasColumnType("decimal(18, 3)")
+                .HasColumnName("GSTRate");
+            entity.Property(e => e.InformationParentId).HasColumnName("InformationParentID");
+            entity.Property(e => e.InternalNotes).HasMaxLength(4000);
+            entity.Property(e => e.IsRecurringJob).HasDefaultValue(false);
+            entity.Property(e => e.ItemNotReadyNotificationNotes).HasMaxLength(4000);
+            entity.Property(e => e.JobRelationshipTypeId).HasColumnName("JobRelationshipTypeID");
+            entity.Property(e => e.LoggedInContactId).HasColumnName("LoggedInContactID");
+            entity.Property(e => e.NotifiedJobTypeId).HasColumnName("NotifiedJobTypeID");
+            entity.Property(e => e.NpCourierPayment).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Nwamount)
+                .HasColumnType("money")
+                .HasColumnName("NWAmount");
+            entity.Property(e => e.NwrawAmount)
+                .HasColumnType("money")
+                .HasColumnName("NWRawAmount");
+            entity.Property(e => e.OutForDelivery).HasColumnType("datetime");
+            entity.Property(e => e.ParentId).HasColumnName("ParentID");
+            entity.Property(e => e.PartnerAgreedRate).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.PickUpLatitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.PickUpLongitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.PickUpName).HasMaxLength(100);
+            entity.Property(e => e.PickUpSignature).HasColumnType("image");
+            entity.Property(e => e.PickUpTime).HasColumnType("datetime");
+            entity.Property(e => e.PickupAddressLine1).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine2).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine3).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine4).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine5).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine6).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine7).HasMaxLength(255);
+            entity.Property(e => e.PickupAddressLine8).HasMaxLength(255);
+            entity.Property(e => e.PickupAmount).HasColumnType("money");
+            entity.Property(e => e.PickupArrivalTime).HasColumnType("datetime");
+            entity.Property(e => e.PickupCondition).HasMaxLength(50);
+            entity.Property(e => e.PickupFromContact).HasMaxLength(100);
+            entity.Property(e => e.PickupFromPhone).HasMaxLength(100);
+            entity.Property(e => e.PickupGps)
+                .HasMaxLength(50)
+                .HasColumnName("PickupGPS");
+            entity.Property(e => e.PickupRawAmount).HasColumnType("money");
+            entity.Property(e => e.PickupTimeZoneId).HasColumnName("PickupTimeZoneID");
+            entity.Property(e => e.PodnotificationHasBeenSent).HasColumnName("PODNotificationHasBeenSent");
+            entity.Property(e => e.Ppdamount)
+                .HasColumnType("money")
+                .HasColumnName("PPDAmount");
+            entity.Property(e => e.PpdexclusiveAmount)
+                .HasColumnType("money")
+                .HasColumnName("PPDExclusiveAmount");
+            entity.Property(e => e.ProofOfDeliveryEmail).HasMaxLength(100);
+            entity.Property(e => e.ProofOfDeliveryMobile).HasMaxLength(100);
+            entity.Property(e => e.PumpPrice).HasColumnType("decimal(10, 4)");
+            entity.Property(e => e.RawAmount).HasColumnType("money");
+            entity.Property(e => e.RawBaseAmount).HasColumnType("money");
+            entity.Property(e => e.RebateAmt).HasColumnType("money");
+            entity.Property(e => e.RequiredDeliveryTime).HasColumnType("datetime");
+            entity.Property(e => e.RootParentId).HasColumnName("RootParentID");
+            entity.Property(e => e.RunName).HasMaxLength(50);
+            entity.Property(e => e.ScheduleId).HasColumnName("ScheduleID");
+            entity.Property(e => e.ScheduleName).HasMaxLength(200);
+            entity.Property(e => e.ShopRef1).HasMaxLength(50);
+            entity.Property(e => e.ShopRef2).HasMaxLength(50);
+            entity.Property(e => e.ShopRef3).HasMaxLength(50);
+            entity.Property(e => e.ShopRef4).HasMaxLength(50);
+            entity.Property(e => e.ShopRef5).HasMaxLength(50);
+            entity.Property(e => e.SourceId).HasColumnName("SourceID");
+            entity.Property(e => e.SpeedChangeNotificationHasBeenSent).HasDefaultValue(true, "DF_tucJob_SpeedChangeNotificationHasBeenSent");
+            entity.Property(e => e.StripeChargeId)
+                .HasMaxLength(50)
+                .HasColumnName("StripeChargeID");
+            entity.Property(e => e.SubContractorBonusPercentage).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.SubContractorFuelPercentage).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.SubContractorPercentage).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.TextRef1)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.TextRef2)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.TextRef3)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.TextRef4)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.ToAddressExtras)
+                .HasMaxLength(200)
+                .HasColumnName("toAddressExtras");
+            entity.Property(e => e.ToAddressExtras2)
+                .HasMaxLength(200)
+                .HasColumnName("toAddressExtras2");
+            entity.Property(e => e.ToAddressStreetName)
+                .HasMaxLength(200)
+                .HasColumnName("toAddressStreetName");
+            entity.Property(e => e.TotalDistance).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.TrackingEmail).HasMaxLength(500);
+            entity.Property(e => e.TrackingMobile).HasMaxLength(500);
+            entity.Property(e => e.TruckStartTime).HasColumnType("datetime");
+            entity.Property(e => e.UcjbAmount)
+                .HasColumnType("money")
+                .HasColumnName("ucjbAmount");
+            entity.Property(e => e.UcjbAttention).HasColumnName("ucjbAttention");
+            entity.Property(e => e.UcjbCbd).HasColumnName("ucjbCBD");
+            entity.Property(e => e.UcjbChargeType).HasColumnName("ucjbChargeType");
+            entity.Property(e => e.UcjbClientCode)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasColumnName("ucjbClientCode");
+            entity.Property(e => e.UcjbClientId).HasColumnName("ucjbClientID");
+            entity.Property(e => e.UcjbClientRefa)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("ucjbClientRefa");
+            entity.Property(e => e.UcjbClientRefb)
+                .HasMaxLength(15)
+                .IsUnicode(false)
+                .HasColumnName("ucjbClientRefb");
+            entity.Property(e => e.UcjbClientRefc)
+                .HasMaxLength(50)
+                .HasColumnName("ucjbClientRefc");
+            entity.Property(e => e.UcjbComplTime)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbComplTime");
+            entity.Property(e => e.UcjbContact)
+                .HasMaxLength(30)
+                .HasColumnName("ucjbContact");
+            entity.Property(e => e.UcjbContactPhone)
+                .HasMaxLength(15)
+                .IsUnicode(false)
+                .HasColumnName("ucjbContactPhone");
+            entity.Property(e => e.UcjbCourierId).HasColumnName("ucjbCourierID");
+            entity.Property(e => e.UcjbDate)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbDate");
+            entity.Property(e => e.UcjbDispDate)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbDispDate");
+            entity.Property(e => e.UcjbDispId).HasColumnName("ucjbDispID");
+            entity.Property(e => e.UcjbDispTime)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbDispTime");
+            entity.Property(e => e.UcjbFlightDetails)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ucjbFlightDetails");
+            entity.Property(e => e.UcjbFrom).HasColumnName("ucjbFrom");
+            entity.Property(e => e.UcjbFromAddr)
+                .HasMaxLength(150)
+                .IsUnicode(false)
+                .HasColumnName("ucjbFromAddr");
+            entity.Property(e => e.UcjbJobDone).HasColumnName("ucjbJobDone");
+            entity.Property(e => e.UcjbKm).HasColumnName("ucjbKm");
+            entity.Property(e => e.UcjbLateDel).HasColumnName("ucjbLateDel");
+            entity.Property(e => e.UcjbLatePick).HasColumnName("ucjbLatePick");
+            entity.Property(e => e.UcjbLocked).HasColumnName("ucjbLocked");
+            entity.Property(e => e.UcjbMobileSend).HasColumnName("ucjbMobileSend");
+            entity.Property(e => e.UcjbNotes)
+                .HasMaxLength(4000)
+                .HasColumnName("ucjbNotes");
+            entity.Property(e => e.UcjbNumber)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ucjbNumber");
+            entity.Property(e => e.UcjbOpId).HasColumnName("ucjbOpID");
+            entity.Property(e => e.UcjbOurRef)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("ucjbOurRef");
+            entity.Property(e => e.UcjbPaged).HasColumnName("ucjbPaged");
+            entity.Property(e => e.UcjbPagedTime)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbPagedTime");
+            entity.Property(e => e.UcjbPickUpFrom).HasColumnName("ucjbPickUpFrom");
+            entity.Property(e => e.UcjbPodname)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("ucjbPODName");
+            entity.Property(e => e.UcjbQty).HasColumnName("ucjbQty");
+            entity.Property(e => e.UcjbRefJobId)
+                .HasDefaultValue(0, "DF_tucJob_ucjbJobRefID")
+                .HasColumnName("ucjbRefJobID");
+            entity.Property(e => e.UcjbReturn).HasColumnName("ucjbReturn");
+            entity.Property(e => e.UcjbSendTime)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbSendTime");
+            entity.Property(e => e.UcjbSize).HasColumnName("ucjbSize");
+            entity.Property(e => e.UcjbSpeed).HasColumnName("ucjbSpeed");
+            entity.Property(e => e.UcjbStatus).HasColumnName("ucjbStatus");
+            entity.Property(e => e.UcjbTime)
+                .HasColumnType("datetime")
+                .HasColumnName("ucjbTime");
+            entity.Property(e => e.UcjbTo).HasColumnName("ucjbTo");
+            entity.Property(e => e.UcjbToAddr)
+                .HasMaxLength(150)
+                .IsUnicode(false)
+                .HasColumnName("ucjbToAddr");
+            entity.Property(e => e.UcjbToSpecial)
+                .HasMaxLength(120)
+                .IsUnicode(false)
+                .HasColumnName("ucjbToSpecial");
+            entity.Property(e => e.UcjbType).HasColumnName("ucjbType");
+            entity.Property(e => e.UcjbVan).HasColumnName("ucjbVan");
+            entity.Property(e => e.UcjbVoid).HasColumnName("ucjbVoid");
+            entity.Property(e => e.UcjbWeight).HasColumnName("ucjbWeight");
+            entity.Property(e => e.UndeliverableLocationId).HasColumnName("UndeliverableLocationID");
+            entity.Property(e => e.VanOk).HasColumnName("VanOK");
+            entity.Property(e => e.WhenColsolidateMarsInformation).HasColumnType("datetime");
+            entity.Property(e => e.WhenItemNotReadyNotificationSent).HasColumnType("datetime");
+            entity.Property(e => e.WhenJobTrackingNotificationSent).HasColumnType("datetime");
+            entity.Property(e => e.WhenLateDeliveryNotificationSent).HasColumnType("datetime");
+            entity.Property(e => e.WhenLatePickupNotificationSent).HasColumnType("datetime");
+            entity.Property(e => e.WhenPodnotificationSent)
+                .HasColumnType("datetime")
+                .HasColumnName("WhenPODNotificationSent");
+            entity.Property(e => e.WhenSpeedChangeNotificationSent).HasColumnType("datetime");
+
+            entity.HasOne(d => d.UndeliverableLocation).WithMany(p => p.TucJobs)
+                .HasForeignKey(d => d.UndeliverableLocationId)
+                .HasConstraintName("FK_tucJob_tblUndeliverableLocation");
         });
 
         OnModelCreatingPartial(modelBuilder);

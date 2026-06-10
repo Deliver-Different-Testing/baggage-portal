@@ -1,4 +1,3 @@
-using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http.Models;
 
 namespace BaggageDelivery.Core.Interfaces;
@@ -7,17 +6,11 @@ namespace BaggageDelivery.Core.Interfaces;
 // for tracking.{domain}). It reads the Despatch DB directly, runs without
 // auth (the encrypted-ID endpoint is the gate for customer use), and
 // already handles live + archived + bulk job fall-through. BaggageDelivery
-// calls it server-to-server for both pax summary rendering and
-// orphan-reconciliation probes.
+// calls it server-to-server.
 public interface ITrackingPageClient
 {
     // Returns the tracking snapshot for a job. Null when trackingpage
-    // definitively reports the job doesn't exist; null also on transient
-    // failures (logged) so callers degrade to row-only data.
+    // reports the job doesn't exist OR when the call fails transiently
+    // (logged) — callers degrade gracefully either way.
     Task<TrackingDto?> GetJobAsync(int jobId, CancellationToken ct);
-
-    // Tri-state probe used by OrphanReconciliationService. Unknown is
-    // distinct from NotFound so transient 5xx / circuit-breaker trips never
-    // flip a real booking to orphaned.
-    Task<JobExistenceResult> CheckJobExistsAsync(int jobId, CancellationToken ct);
 }

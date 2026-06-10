@@ -17,20 +17,20 @@ public sealed class PaxBookingController(
     [HttpGet("")]
     public async Task<ActionResult<BookingSummaryDto>> GetBooking(string id, CancellationToken ct)
     {
-        var token = encryption.DecryptToken(id);
-        if (token is null)
+        var jobId = encryption.DecryptId(id);
+        if (jobId is null)
         {
             return NotFound();
         }
 
-        var summary = await paxBooking.GetSummaryAsync(token.Value.TenantId, token.Value.JobId, ct);
+        var summary = await paxBooking.GetSummaryAsync(jobId.Value, ct);
         return summary is null ? NotFound() : Ok(MapSummary(summary));
     }
 
     [HttpGet("timeslots")]
     public ActionResult<TimeSlotDto[]> GetTimeslots(string id, [FromQuery] DateTime? date)
     {
-        if (encryption.DecryptToken(id) is null)
+        if (encryption.DecryptId(id) is null)
         {
             return NotFound();
         }
@@ -55,44 +55,35 @@ public sealed class PaxBookingController(
         [FromBody] ConfirmBookingRequest body,
         CancellationToken ct)
     {
-        var token = encryption.DecryptToken(id);
-        if (token is null)
+        var jobId = encryption.DecryptId(id);
+        if (jobId is null)
         {
             return NotFound();
         }
 
-        try
-        {
-            await paxBooking.ConfirmAsync(new ConfirmBookingInput(
-                TenantId: token.Value.TenantId,
-                JobId: token.Value.JobId,
-                Address: new AddressUpdateDto
-                {
-                    Line1 = body.Address.Line1,
-                    Line2 = body.Address.Line2,
-                    Suburb = body.Address.Suburb,
-                    City = body.Address.City,
-                    PostCode = body.Address.PostCode,
-                    Country = body.Address.Country,
-                    Latitude = body.Address.Latitude,
-                    Longitude = body.Address.Longitude
-                },
-                TimeSlotStartUtc: body.TimeSlotStartUtc,
-                TimeSlotEndUtc: body.TimeSlotEndUtc,
-                AtlOption: body.AtlOption,
-                AccessNotes: body.AccessNotes,
-                PhoneOverride: body.PhoneOverride), ct);
+        await paxBooking.ConfirmAsync(new ConfirmBookingInput(
+            JobId: jobId.Value,
+            Address: new AddressUpdateDto
+            {
+                Line1 = body.Address.Line1,
+                Line2 = body.Address.Line2,
+                Suburb = body.Address.Suburb,
+                City = body.Address.City,
+                PostCode = body.Address.PostCode,
+                Country = body.Address.Country,
+                Latitude = body.Address.Latitude,
+                Longitude = body.Address.Longitude
+            },
+            TimeSlotStartUtc: body.TimeSlotStartUtc,
+            TimeSlotEndUtc: body.TimeSlotEndUtc,
+            AtlOption: body.AtlOption,
+            AccessNotes: body.AccessNotes,
+            PhoneOverride: body.PhoneOverride), ct);
 
-            return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
-        }
-        catch (ConfirmationAlreadyExistsException)
-        {
-            return Conflict(new { reason = "already_confirmed" });
-        }
+        return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
     }
 
     private static BookingSummaryDto MapSummary(BookingSummary s) => new(
-        BookingId: s.BookingId,
         JobId: s.JobId,
         Reference: s.Reference,
         AirlineLabel: s.AirlineLabel,

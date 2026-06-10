@@ -5,7 +5,6 @@ using Amazon.SimpleNotificationService;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Secrets;
 using BaggageDelivery.Core.Security;
@@ -31,18 +30,12 @@ public static class DependencyInjection
             services.AddSingleton<IEncryptionService, EncryptionService>();
             services.AddScoped<IPaxBookingService, PaxBookingService>();
             services.AddScoped<IPaxTrackingService, PaxTrackingService>();
-            services.AddScoped<IDespatchJobReleaseService, DespatchJobReleaseService>();
             services.AddScoped<IBookingLinkDispatchService, BookingLinkDispatchService>();
-            services.AddScoped<IOrphanReconciliationService, OrphanReconciliationService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<ISmsSender, SnsSmsSender>();
             services.AddScoped<IEmailSender, SesEmailSender>();
-            services.AddScoped<ConfigTenantResolver>();
-            services.AddScoped<ITenantResolver>(sp => new CachingTenantResolver(
-                sp.GetRequiredService<ConfigTenantResolver>(),
-                sp.GetRequiredService<IMemoryCache>()));
         }
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)
@@ -132,6 +125,8 @@ public static class DependencyInjection
                     opts.ApiBaseUrl = new Uri(apiUrl.TrimEnd('/') + "/");
                 }
             });
+
+            services.Configure<DespatchOptions>(configuration.GetSection(DespatchOptions.SectionName));
 
             var retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()

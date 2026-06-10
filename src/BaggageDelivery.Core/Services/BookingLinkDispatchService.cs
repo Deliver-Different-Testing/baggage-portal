@@ -20,7 +20,7 @@ internal sealed class BookingLinkDispatchService(
         var now = time.GetUtcNow().UtcDateTime;
         var entity = new BagDelNotificationLog
         {
-            BookingId = request.BookingId,
+            JobId = request.JobId,
             Channel = request.Channel,
             Recipient = request.Recipient,
             Status = NotificationStatus.Pending,
@@ -97,8 +97,8 @@ internal sealed class BookingLinkDispatchService(
             row.ProviderMsgId = result.ProviderMessageId;
             row.LastError = null;
             Log.Information(
-                "Notification sent: BookingId={BookingId} Channel={Channel} ProviderMsgId={ProviderMsgId}",
-                row.BookingId, row.Channel, row.ProviderMsgId);
+                "Notification sent: JobId={JobId} Channel={Channel} ProviderMsgId={ProviderMsgId}",
+                row.JobId, row.Channel, row.ProviderMsgId);
         }
         else
         {
@@ -107,8 +107,8 @@ internal sealed class BookingLinkDispatchService(
             {
                 row.Status = NotificationStatus.Failed;
                 Log.Error(
-                    "Notification FAILED after {Attempts}: BookingId={BookingId} Channel={Channel} Error={Error}",
-                    row.AttemptCount, row.BookingId, row.Channel, result.Error);
+                    "Notification FAILED after {Attempts}: JobId={JobId} Channel={Channel} Error={Error}",
+                    row.AttemptCount, row.JobId, row.Channel, result.Error);
             }
             else
             {

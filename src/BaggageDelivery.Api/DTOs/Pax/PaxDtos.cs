@@ -3,7 +3,6 @@ using System.ComponentModel.DataAnnotations;
 namespace BaggageDelivery.Api.DTOs.Pax;
 
 public sealed record BookingSummaryDto(
-    int BookingId,
     int JobId,
     string Reference,
     string AirlineLabel,

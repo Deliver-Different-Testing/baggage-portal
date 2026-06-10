@@ -36,38 +36,6 @@ public sealed class EncryptionService : IEncryptionService
             : null;
     }
 
-    public string EncryptToken(int tenantId, int jobId)
-    {
-        var plain = string.Create(CultureInfo.InvariantCulture, $"{tenantId}:{jobId}");
-        return EncryptString(plain);
-    }
-
-    public BookingToken? DecryptToken(string? encryptedToken)
-    {
-        var plaintext = DecryptToString(encryptedToken);
-        if (plaintext is null)
-        {
-            return null;
-        }
-
-        var sep = plaintext.IndexOf(':');
-        if (sep <= 0 || sep == plaintext.Length - 1)
-        {
-            return null;
-        }
-
-        var tenantSpan = plaintext.AsSpan(0, sep);
-        var jobSpan = plaintext.AsSpan(sep + 1);
-
-        if (!int.TryParse(tenantSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var tenantId) ||
-            !int.TryParse(jobSpan, NumberStyles.Integer, CultureInfo.InvariantCulture, out var jobId))
-        {
-            return null;
-        }
-
-        return new BookingToken(tenantId, jobId);
-    }
-
     private string EncryptString(string plain)
     {
         try
