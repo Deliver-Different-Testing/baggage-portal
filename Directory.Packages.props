@@ -8,8 +8,6 @@
   </PropertyGroup>
   <ItemGroup Label="AWS">
     <PackageVersion Include="Amazon.AspNetCore.DataProtection.SSM" Version="4.0.3" />
-    <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.4.5" />
-    <PackageVersion Include="AWSSDK.SecretsManager" Version="4.0.5.2" />
   </ItemGroup>
   <ItemGroup Label="Microsoft / EF Core / ASP.NET">
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />

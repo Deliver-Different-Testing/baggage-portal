@@ -1,11 +1,9 @@
 using System.Net;
-using Amazon.SecretsManager;
 using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
-using BaggageDelivery.Core.Secrets;
 using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
 using Microsoft.EntityFrameworkCore;
@@ -35,11 +33,11 @@ public static class DependencyInjection
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)
         {
+            _ = isDevelopment;
             services.AddDatabase(configuration);
-            services.AddAwsServices(isDevelopment);
             services.AddEncryption(configuration);
             services.AddBookingLinks(configuration);
-            services.AddDespatchClient(configuration);
+            services.AddDespatchOptions(configuration);
             services.AddTrackingPageClient(configuration);
             services.AddAddressLookup(configuration);
         }
@@ -49,27 +47,14 @@ public static class DependencyInjection
             services.AddMemoryCache();
 
             var connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException(
-                    "Despatch DB connection string not configured (ConnectionStrings:DefaultConnection / ConnectionStrings__DefaultConnection env var).");
+                                   ?? throw new InvalidOperationException(
+                                       "Despatch DB connection string not configured (ConnectionStrings:DefaultConnection / ConnectionStrings__DefaultConnection env var).");
 
             services.AddDbContextPool<BaggageDeliveryContext>(opts =>
             {
                 opts.UseSqlServer(connectionString)
                     .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
             });
-        }
-
-        private void AddAwsServices(bool isDevelopment)
-        {
-            if (isDevelopment)
-            {
-                services.AddSingleton<ISecretsService, InMemorySecretsService>();
-            }
-            else
-            {
-                services.AddAWSService<IAmazonSecretsManager>();
-                services.AddScoped<ISecretsService, AwsSecretsService>();
-            }
         }
 
         private void AddEncryption(IConfiguration configuration)
@@ -96,39 +81,9 @@ public static class DependencyInjection
             });
         }
 
-        private void AddDespatchClient(IConfiguration configuration)
+        private void AddDespatchOptions(IConfiguration configuration)
         {
-            services.Configure<DespatchUrlsOptions>(configuration.GetSection(DespatchUrlsOptions.SectionName));
-            services.PostConfigure<DespatchUrlsOptions>(opts =>
-            {
-                var apiUrl = Environment.GetEnvironmentVariable("WebAPIUrl")
-                             ?? configuration["WebAPIUrl"];
-                if (!string.IsNullOrEmpty(apiUrl))
-                {
-                    opts.ApiBaseUrl = new Uri(apiUrl.TrimEnd('/') + "/");
-                }
-            });
-
             services.Configure<DespatchOptions>(configuration.GetSection(DespatchOptions.SectionName));
-
-            var retryPolicy = HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
-
-            var circuitBreakerPolicy = HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
-
-            services.AddHttpClient<IDespatchApiClient, DespatchApiClient>(client =>
-                {
-                    client.Timeout = TimeSpan.FromSeconds(30);
-                })
-                .AddPolicyHandler(retryPolicy)
-                .AddPolicyHandler(circuitBreakerPolicy)
-                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                });
         }
 
         private void AddTrackingPageClient(IConfiguration configuration)
@@ -144,10 +99,6 @@ public static class DependencyInjection
                 }
             });
 
-            // Same resilience profile as DespatchApiClient — short retries
-            // for transient blips, breaker to shield trackingpage from a
-            // reconciler runaway. trackingpage itself is anonymous so no
-            // token plumbing.
             var retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()
                 .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));

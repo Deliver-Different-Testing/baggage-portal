@@ -1,6 +1,4 @@
 using BaggageDelivery.Api.DTOs.Admin;
-using BaggageDelivery.Core.Enums;
-using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
@@ -20,7 +18,6 @@ namespace BaggageDelivery.Api.Controllers.Admin;
 public sealed class BookingLinksController(
     IEncryptionService encryption,
     INotificationService notifications,
-    IDespatchApiClient despatchClient,
     IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
     [HttpPost("")]
@@ -34,34 +31,10 @@ public sealed class BookingLinksController(
         {
             return Problem("BookingLinks:PublicBaseUrl is not configured");
         }
-
-        // No shadow row to upsert — tucJob is the canonical record, JobId
-        // is what the URL encrypts. Idempotent by construction: minting
-        // for the same JobId twice produces the same URL.
+        
         var token = encryption.EncryptId(body.JobId);
         var confirmUrl = $"{publicBase}/c/{token}";
         var trackUrl = $"{publicBase}/t/{token}";
-
-        // Flip the courier job to JobStatus.New via the api repo — tucJob
-        // is read-only from BaggageDelivery's DB user, all writes route
-        // through the SC-JWT-authed api endpoint which also stamps the
-        // JobDeliveryJourney audit row. Best-effort: any failure is logged
-        // and swallowed so the passenger link still gets minted.
-        var statusOk = await despatchClient.UpdateJobStatusAsync(
-            body.JobId,
-            new JobStatusUpdateRequest
-            {
-                Status = (int)JobStatus.New,
-                Comment = "Pax confirmation link sent"
-            },
-            ct);
-
-        if (!statusOk)
-        {
-            Log.Warning(
-                "Mint: api UpdateJobStatus({JobId}, New) returned false (link still minted)",
-                body.JobId);
-        }
 
         var passengerName = body.PassengerName ?? "there";
         var airline = body.AirlineLabel ?? "Urgent";

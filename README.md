@@ -5,19 +5,22 @@ confirmation and tracking. SITA WorldTracer pushes a Baggage Delivery
 Order (BDO) into IntegrationManager, which creates an ON HOLD courier job
 in Despatch and then POSTs to this service's admin API to mint a passenger
 link. The passenger opens the PWA, confirms the delivery address, picks a
-time slot, sets Authority-to-Leave, and the courier job flips to NEW
-(ready for dispatch). They then follow the live tracking page.
+time slot, sets Authority-to-Leave, and the courier job flips out of ON
+HOLD (ready for dispatch) in the same `PATCH api/Jobs/{id}/delivery`
+that records the address. They then follow the live tracking page.
 
 This service does **not** talk to SITA or own a copy of the booking —
 `tucJob` in the Despatch DB is the canonical record. The URL encrypts the
-`JobId`; reads and writes flow back to Despatch via the existing API.
+`JobId`; reads and writes hit Despatch directly via EF Core
+(`BaggageDeliveryContext`). One BaggageDelivery deployment per tenant,
+matching inboundagent.
 
 ## Stack
 
 - ASP.NET Core 10 (.NET SDK pinned to `10.0.102`, C# 14)
 - EF Core 10 against existing SQL Server (Despatch DB, read-mostly)
 - React 19 + Vite 8 + MUI v7 + `vite-plugin-pwa`
-- Serilog, Polly (retry + circuit breaker), AWS Secrets Manager,
+- Serilog, AWS Secrets Manager, Polly on the trackingpage HTTP client,
   Data Protection keys in AWS SSM (prod) / local file (dev)
 - xUnit.v3 + NSubstitute + `MockQueryable.NSubstitute`; integration tests
   via `WebApplicationFactory` + SQLite in-memory
@@ -31,7 +34,7 @@ src/
     Controllers/Admin/        SC-JWT-authed link mint endpoint
     Controllers/Pax/          Anonymous booking / tracking / address-lookup endpoints
   BaggageDelivery.Core/       Domain, EF, HTTP clients, encryption, notifications
-    Http/                     DespatchApiClient, TrackingPageClient (Polly-wrapped)
+    Http/                     TrackingPageClient (Polly-wrapped)
     Security/                 AES-256-CBC EncryptionService, JWT helpers, options
     Services/                 PaxBookingService, PaxTrackingService
     Notifications/            MJML/SMS renderer + TucManualMessage sender
@@ -50,7 +53,7 @@ tests/
 | `/t/:id`                   | URL-encrypted | Live tracking page                           |
 | `/internal/process-map`    | SC-JWT      | Internal ops view                              |
 | `/expired`                 | none        | Fallback when token can't be decrypted         |
-| `POST /api/v1/admin/booking-links` | SC-JWT bearer | Mint passenger link, flip job to NEW |
+| `POST /api/v1/admin/booking-links` | SC-JWT bearer | Mint passenger link + send notifications |
 | `GET  /api/v1/pax/{id}/booking`    | anonymous | Read booking summary by encrypted token |
 | `GET  /api/v1/pax/{id}/booking/timeslots` | anonymous | Available time slots             |
 | `POST /api/v1/pax/{id}/booking/confirm`   | anonymous | Confirm delivery details         |
@@ -74,11 +77,16 @@ PWA dev server runs on `http://baggagedelivery.local.deliverdifferent.com:5173`
 
 Required env vars (in addition to `appsettings.Development.json`):
 
-- `ConnectionStrings__DefaultConnection` — Despatch DB
+- `ConnectionStrings__DefaultConnection` — Despatch DB (the
+  BaggageDelivery SQL user; requires SELECT on `tucJob`, `tucClient`,
+  `JobDeliveryJourney`, `tblJobLeaveNotHome`, `tblEcoSetting`; UPDATE on
+  `tucJob`; SELECT + INSERT on `tucManualMessage`)
 - `BaggageDeliveryEncryptionKey` / `BaggageDeliveryEncryptionIV` — base64,
   32-byte key + 16-byte IV (startup validates)
-- `JWTSecretKey`, `Issuer`, `Audience`, `ClaimsKey` — SC-JWT shared with IM
-- `WebAPIUrl` — Despatch `api` base URL (for `DespatchApiClient`)
+- `JWTSecretKey`, `Issuer`, `Audience` — SC-JWT inbound validation
+  (IM → admin booking-link mint)
+- `Despatch__TimeZone` — IANA timezone for the deployment's tenant
+  (`Pacific/Auckland`, `Australia/Sydney`, …)
 - `TrackingPageUrl` — trackingpage base URL
 - `BaggageDeliveryPublicBaseUrl` — the URL prefix burned into minted links
 - `Domain` — cookie domain shared with the deliverdifferent family

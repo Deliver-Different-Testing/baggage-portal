@@ -1,4 +1,5 @@
 using System.Globalization;
+using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
@@ -11,7 +12,6 @@ namespace BaggageDelivery.Core.Services;
 
 internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
-    IDespatchApiClient despatch,
     IOptions<DespatchOptions> despatchOptions,
     TimeProvider time) : IPaxBookingService
 {
@@ -89,8 +89,8 @@ internal sealed class PaxBookingService(
         }
     }
 
-    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(
-        int jobId, DateTime? localDate, CancellationToken ct)
+    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId, DateTime? localDate,
+        CancellationToken ct)
     {
         var setting = await db.TblEcoSettings
             .AsNoTracking()
@@ -193,33 +193,59 @@ internal sealed class PaxBookingService(
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var deliveryUpdate = new DeliveryUpdateRequest
-        {
-            Address = input.Address,
-            TimeSlotStartUtc = input.TimeSlotStartUtc,
-            TimeSlotEndUtc = input.TimeSlotEndUtc,
-            AtlOption = input.AtlOption,
-            AccessNotes = input.AccessNotes,
-            PassengerName = input.PassengerName,
-            PassengerPhone = input.PassengerPhone,
-            PassengerEmail = input.PassengerEmail
-        };
+        var leaveId = int.TryParse(input.AtlOption, out var parsed) ? parsed : (int?)null;
+        var deliverByLocal = UtcToTenantLocal(input.TimeSlotEndUtc, despatchOptions.Value.TimeZone);
+        
+        var rows = await db.TucJobs
+            .Where(j => j.UcjbId == input.JobId)
+            .ExecuteUpdateAsync(s => s
+                    .SetProperty(j => j.DeliverToContact, input.PassengerName)
+                    .SetProperty(j => j.DeliverToPhone, input.PassengerPhone)
+                    .SetProperty(j => j.ProofOfDeliveryEmail, input.PassengerEmail)
+                    .SetProperty(j => j.DeliverToLeaveId, leaveId)
+                    .SetProperty(j => j.UcjbToSpecial, input.AccessNotes)
+                    .SetProperty(j => j.DeliveryAddressLine1, input.Address.Line1)
+                    .SetProperty(j => j.DeliveryAddressLine2, input.Address.Line2)
+                    .SetProperty(j => j.DeliveryAddressLine3, input.Address.Suburb)
+                    .SetProperty(j => j.DeliveryAddressLine4, input.Address.City)
+                    .SetProperty(j => j.DeliveryAddressLine5, input.Address.PostCode)
+                    .SetProperty(j => j.DeliveryAddressLine6, input.Address.Country)
+                    .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
+                    .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)
+                    .SetProperty(j => j.DeliverByTime, deliverByLocal)
+                    .SetProperty(j => j.UcjbStatus, (int)JobStatus.New),
+                ct);
 
-        var updateOk = await despatch.UpdateJobDeliveryAsync(input.JobId, deliveryUpdate, ct);
-        if (!updateOk)
+        if (rows == 0)
         {
             throw new InvalidOperationException(
-                $"api Jobs/{input.JobId}/delivery returned non-success — pax confirmation not persisted");
-        }
-
-        var releaseOk = await despatch.ReleaseBaggageJobAsync(
-            new BookingReleaseRequest { JobID = input.JobId }, ct);
-        if (!releaseOk)
-        {
-            throw new InvalidOperationException(
-                $"api Baggage/release returned non-success for JobId={input.JobId} — pax confirmation not persisted");
+                $"tucJob {input.JobId} not found — pax confirmation not persisted");
         }
 
         Log.Information("Pax confirmation released: JobId={JobId}", input.JobId);
+    }
+
+    private static DateTime? UtcToTenantLocal(DateTime utc, string? timeZoneCode)
+    {
+        if (string.IsNullOrWhiteSpace(timeZoneCode))
+        {
+            return null;
+        }
+
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneCode);
+            return TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), tz);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            Log.Warning("Tenant timezone {TimeZoneCode} not found on this host", timeZoneCode);
+            return null;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            Log.Warning("Tenant timezone {TimeZoneCode} is invalid", timeZoneCode);
+            return null;
+        }
     }
 }
