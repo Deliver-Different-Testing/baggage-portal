@@ -37,6 +37,27 @@ const pulse = keyframes`
   100% { box-shadow: 0 0 0 0 transparent; opacity: 0; }
 `
 
+const STATUS_INFO = {
+  Delivered: {
+    icon: <CheckCircleRoundedIcon sx={{ fontSize: 16 }} />,
+    label: 'Delivered',
+    headline: 'Your bag has arrived',
+    description: "Thanks for using our delivery service. We hope it arrived safely.",
+  },
+  OutForDelivery: {
+    icon: <LocalShippingRoundedIcon sx={{ fontSize: 16 }} />,
+    label: 'On the way',
+    headline: 'Your bag is on the way',
+    description: "Our driver is heading to your delivery address now.",
+  },
+} as const
+
+const PENDING_STATUS = {
+  icon: <HourglassEmptyRoundedIcon sx={{ fontSize: 16 }} />,
+  headline: 'Preparing your delivery',
+  description: "We'll keep this page updated as your bag moves through our network.",
+}
+
 export function Tracking() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -45,7 +66,8 @@ export function Tracking() {
     queryKey: ['pax', 'tracking', id],
     queryFn: () => getTracking(id ?? ''),
     enabled: !!id,
-    refetchInterval: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.currentStatus === 'Delivered' ? false : 30_000,
     retry: false,
   })
 
@@ -193,7 +215,7 @@ export function Tracking() {
                   Most recent updates first
                 </Typography>
                 {tracking.data ? (
-                  <TimelineList data={tracking.data} />
+                  <TimelineList data={tracking.data} nowMs={tracking.dataUpdatedAt} />
                 ) : (
                   <Typography color="text.secondary">No updates yet.</Typography>
                 )}
@@ -212,28 +234,10 @@ function getStatusInfo(status: string): {
   headline: string
   description: string
 } {
-  if (status === 'Delivered') {
-    return {
-      icon: <CheckCircleRoundedIcon sx={{ fontSize: 16 }} />,
-      label: 'Delivered',
-      headline: 'Your bag has arrived',
-      description: "Thanks for using our delivery service. We hope it arrived safely.",
-    }
+  if (status in STATUS_INFO) {
+    return STATUS_INFO[status as keyof typeof STATUS_INFO]
   }
-  if (status === 'OutForDelivery') {
-    return {
-      icon: <LocalShippingRoundedIcon sx={{ fontSize: 16 }} />,
-      label: 'On the way',
-      headline: 'Your bag is on the way',
-      description: "Our driver is heading to your delivery address now.",
-    }
-  }
-  return {
-    icon: <HourglassEmptyRoundedIcon sx={{ fontSize: 16 }} />,
-    label: status,
-    headline: 'Preparing your delivery',
-    description: 'We\'ll keep this page updated as your bag moves through our network.',
-  }
+  return { ...PENDING_STATUS, label: status }
 }
 
 function EtaCard({
@@ -320,7 +324,7 @@ function DriverCard({ name, vehicle }: { name: string; vehicle?: string | null }
   )
 }
 
-function TimelineList({ data }: { data: TrackingTimeline }) {
+function TimelineList({ data, nowMs }: { data: TrackingTimeline; nowMs: number }) {
   const events = [...data.events].sort((a, b) => +new Date(b.atUtc) - +new Date(a.atUtc))
   return (
     <Timeline
@@ -342,7 +346,7 @@ function TimelineList({ data }: { data: TrackingTimeline }) {
                 pt: 1.25,
               }}
             >
-              {formatRelativeTime(event.atUtc)}
+              {formatRelativeTime(event.atUtc, nowMs)}
             </TimelineOppositeContent>
             <TimelineSeparator>
               <TimelineDot
@@ -392,16 +396,14 @@ function formatStatus(status: string): string {
   return status.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim()
 }
 
-function formatRelativeTime(utc: string): string {
+function formatRelativeTime(utc: string, nowMs: number): string {
   const date = new Date(utc)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60_000)
+  const diffMin = Math.floor((nowMs - date.getTime()) / 60_000)
   if (diffMin < 1) return 'Just now'
   if (diffMin < 60) return `${diffMin}m ago`
   const diffHr = Math.floor(diffMin / 60)
   if (diffHr < 24) return `${diffHr}h ago`
-  const sameYear = date.getFullYear() === now.getFullYear()
+  const sameYear = date.getFullYear() === new Date(nowMs).getFullYear()
   return date.toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'short',
