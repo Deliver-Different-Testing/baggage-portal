@@ -85,7 +85,7 @@ Required env vars (in addition to `appsettings.Development.json`):
   32-byte key + 16-byte IV (startup validates)
 - `JWTSecretKey`, `Issuer`, `Audience` — SC-JWT inbound validation
   (IM → admin booking-link mint)
-- `Despatch__TimeZone` — IANA timezone for the deployment's tenant
+- `TimeZone` — IANA timezone for the deployment's tenant
   (`Pacific/Auckland`, `Australia/Sydney`, …)
 - `TrackingPageUrl` — trackingpage base URL
 - `BaggageDeliveryPublicBaseUrl` — the URL prefix burned into minted links

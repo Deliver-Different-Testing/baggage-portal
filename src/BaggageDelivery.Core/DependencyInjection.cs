@@ -84,6 +84,15 @@ public static class DependencyInjection
         private void AddDespatchOptions(IConfiguration configuration)
         {
             services.Configure<DespatchOptions>(configuration.GetSection(DespatchOptions.SectionName));
+            services.PostConfigure<DespatchOptions>(opts =>
+            {
+                var timeZone = Environment.GetEnvironmentVariable("TimeZone")
+                               ?? configuration["TimeZone"];
+                if (!string.IsNullOrEmpty(timeZone))
+                {
+                    opts.TimeZone = timeZone;
+                }
+            });
         }
 
         private void AddTrackingPageClient(IConfiguration configuration)
