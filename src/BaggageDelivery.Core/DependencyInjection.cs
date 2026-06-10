@@ -53,6 +53,7 @@ public static class DependencyInjection
             services.AddEncryption(configuration);
             services.AddBookingLinks(configuration);
             services.AddDespatchClient(configuration);
+            services.AddTrackingPageClient(configuration);
         }
 
         private void AddDatabase(IConfiguration configuration)
@@ -143,6 +144,43 @@ public static class DependencyInjection
             services.AddHttpClient<IDespatchApiClient, DespatchApiClient>(client =>
                 {
                     client.Timeout = TimeSpan.FromSeconds(30);
+                })
+                .AddPolicyHandler(retryPolicy)
+                .AddPolicyHandler(circuitBreakerPolicy)
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+                });
+        }
+
+        private void AddTrackingPageClient(IConfiguration configuration)
+        {
+            services.Configure<TrackingPageUrlsOptions>(configuration.GetSection(TrackingPageUrlsOptions.SectionName));
+            services.PostConfigure<TrackingPageUrlsOptions>(opts =>
+            {
+                var trackingUrl = Environment.GetEnvironmentVariable("TrackingPageUrl")
+                                  ?? configuration["TrackingPageUrl"];
+                if (!string.IsNullOrEmpty(trackingUrl))
+                {
+                    opts.BaseUrl = new Uri(trackingUrl.TrimEnd('/') + "/");
+                }
+            });
+
+            // Same resilience profile as DespatchApiClient — short retries
+            // for transient blips, breaker to shield trackingpage from a
+            // reconciler runaway. trackingpage itself is anonymous so no
+            // token plumbing.
+            var retryPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+            var circuitBreakerPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
+
+            services.AddHttpClient<ITrackingPageClient, TrackingPageClient>(client =>
+                {
+                    client.Timeout = TimeSpan.FromSeconds(15);
                 })
                 .AddPolicyHandler(retryPolicy)
                 .AddPolicyHandler(circuitBreakerPolicy)

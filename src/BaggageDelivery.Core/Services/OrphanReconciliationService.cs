@@ -6,20 +6,9 @@ using Serilog;
 
 namespace BaggageDelivery.Core.Services;
 
-// Hygiene job: a BagDelBooking.JobId is a soft reference to tucJob.ucjbID
-// (CLAUDE.md — FK was dropped to keep BaggageDelivery and Despatch in their
-// own bounded contexts). When a courier job is deleted/archived in Despatch
-// we never hear about it, so this service periodically asks Despatch
-// whether each un-synced booking's JobId still exists and marks the
-// stragglers as orphaned. Marking also fails any pending child outbox rows
-// so we don't keep retrying delivery updates against a vanished job.
-//
-// Definitive 404 ⇒ orphan. Any other failure (network, 5xx, circuit-breaker
-// open) ⇒ Unknown ⇒ leave alone and try again next cycle. A booking is
-// never flipped to orphaned based on a transient signal.
 internal sealed class OrphanReconciliationService(
     BaggageDeliveryContext db,
-    IDespatchApiClient despatch,
+    ITrackingPageClient trackingPage,
     ITenantResolver tenants,
     TimeProvider time) : IOrphanReconciliationService
 {
@@ -49,16 +38,13 @@ internal sealed class OrphanReconciliationService(
             return;
         }
 
-        // Group by tenant so we resolve the tenant context once per tenant,
-        // not once per booking. CachingTenantResolver already memoises but
-        // grouping also makes the per-tenant log line cleaner.
+        // Group by tenant only for the early-skip check below; trackingpage
+        // doesn't need tenant context for the HTTP call itself.
         foreach (var perTenant in candidates.GroupBy(c => c.TenantId))
         {
-            TenantContextOrSkip resolved;
             try
             {
-                var tenant = await tenants.ResolveAsync(perTenant.Key, ct);
-                resolved = new TenantContextOrSkip(tenant.Connection, tenant.TimeZone);
+                _ = await tenants.ResolveAsync(perTenant.Key, ct);
             }
             catch (InvalidOperationException ex)
             {
@@ -70,20 +56,17 @@ internal sealed class OrphanReconciliationService(
 
             foreach (var candidate in perTenant)
             {
-                await ProcessOneAsync(candidate, resolved, ct);
+                await ProcessOneAsync(candidate, ct);
             }
         }
     }
 
-    private async Task ProcessOneAsync(
-        ReconcileCandidate candidate, TenantContextOrSkip tenant, CancellationToken ct)
+    private async Task ProcessOneAsync(ReconcileCandidate candidate, CancellationToken ct)
     {
         JobExistenceResult result;
         try
         {
-            result = await despatch.CheckJobExistsAsync(
-                candidate.TenantId, tenant.Connection, tenant.TimeZone,
-                clientId: null, contactId: 0, candidate.JobId, ct);
+            result = await trackingPage.CheckJobExistsAsync(candidate.JobId, ct);
         }
         catch (Exception ex)
         {
@@ -99,7 +82,7 @@ internal sealed class OrphanReconciliationService(
         }
 
         var now = time.GetUtcNow().UtcDateTime;
-        const string reason = "Despatch job not found (404)";
+        const string reason = "Despatch job not found via trackingpage";
 
         // Re-check OrphanedAtUtc IS NULL in the UPDATE WHERE clause so two
         // concurrent reconcilers can't double-mark; the second one no-ops.
@@ -137,6 +120,4 @@ internal sealed class OrphanReconciliationService(
     }
 
     private sealed record ReconcileCandidate(int BookingId, int TenantId, int JobId);
-
-    private sealed record TenantContextOrSkip(string Connection, string TimeZone);
 }

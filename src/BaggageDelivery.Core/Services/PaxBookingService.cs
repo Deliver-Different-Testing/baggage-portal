@@ -1,7 +1,6 @@
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -9,21 +8,21 @@ namespace BaggageDelivery.Core.Services;
 
 internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
-    IDespatchApiClient despatch,
+    ITrackingPageClient trackingPage,
     ITenantResolver tenants,
     TimeProvider time) : IPaxBookingService
 {
     public async Task<BookingSummary?> GetSummaryAsync(int tenantId, int jobId, CancellationToken ct)
     {
-        TenantContext ctx;
         try
         {
-            ctx = await tenants.ResolveAsync(tenantId, ct);
+            _ = await tenants.ResolveAsync(tenantId, ct);
         }
         catch (InvalidOperationException ex)
         {
             // Tenant not configured — treat the link as stale so the passenger
-            // sees /expired rather than a 500.
+            // sees /expired rather than a 500. Trackingpage itself is
+            // anonymous, but a retired tenant means the URL is stale.
             Log.Warning(ex, "GetSummary: tenant {TenantId} is not configured", tenantId);
             return null;
         }
@@ -34,12 +33,11 @@ internal sealed class PaxBookingService(
             return null;
         }
 
-        var tracking = await despatch.GetJobTrackingAsync(
-            tenantId, ctx.Connection, ctx.TimeZone, clientId: null, contactId: 0, jobId, ct);
+        var tracking = await trackingPage.GetJobAsync(jobId, ct);
 
         if (tracking is null)
         {
-            Log.Warning("GetSummary: Despatch returned no tracking for job {JobId} — falling back to row-only summary", jobId);
+            Log.Warning("GetSummary: trackingpage returned no data for job {JobId} — falling back to row-only summary", jobId);
         }
 
         var now = time.GetUtcNow().UtcDateTime;

@@ -14,7 +14,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_updates_booking_row_in_place_and_queues_outbox()
     {
         var db = InMemoryDb.NewContext();
-        var despatch = Substitute.For<IDespatchApiClient>();
+        var trackingPage = Substitute.For<ITrackingPageClient>();
         var tenants = Substitute.For<ITenantResolver>();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
 
@@ -27,7 +27,7 @@ public class PaxBookingServiceTests
         db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(CancellationToken.None);
 
-        var svc = new PaxBookingService(db, despatch, tenants, time);
+        var svc = new PaxBookingService(db, trackingPage, tenants, time);
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             TenantId: booking.TenantId,
@@ -51,7 +51,7 @@ public class PaxBookingServiceTests
     public async Task Confirming_same_booking_twice_throws()
     {
         var db = InMemoryDb.NewContext();
-        var despatch = Substitute.For<IDespatchApiClient>();
+        var trackingPage = Substitute.For<ITrackingPageClient>();
         var tenants = Substitute.For<ITenantResolver>();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
 
@@ -64,7 +64,7 @@ public class PaxBookingServiceTests
         db.BagDelBookings.Add(booking);
         await db.SaveChangesAsync(CancellationToken.None);
 
-        var svc = new PaxBookingService(db, despatch, tenants, time);
+        var svc = new PaxBookingService(db, trackingPage, tenants, time);
 
         var input = new ConfirmBookingInput(
             TenantId: booking.TenantId,
@@ -83,11 +83,11 @@ public class PaxBookingServiceTests
     public async Task Confirm_creates_booking_lazily_when_missing()
     {
         var db = InMemoryDb.NewContext();
-        var despatch = Substitute.For<IDespatchApiClient>();
+        var trackingPage = Substitute.For<ITrackingPageClient>();
         var tenants = Substitute.For<ITenantResolver>();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 12, 0, 0, DateTimeKind.Utc));
 
-        var svc = new PaxBookingService(db, despatch, tenants, time);
+        var svc = new PaxBookingService(db, trackingPage, tenants, time);
 
         var input = new ConfirmBookingInput(
             TenantId: 1,

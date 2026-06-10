@@ -1,8 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
-using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Security;
@@ -15,8 +12,6 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
     : IDespatchApiClient
 {
     private const string TokenName = "BaggageDelivery";
-
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public async Task<bool> ReleaseBaggageJobAsync(int tenantId, string connection, string timeZone,
         int? clientId, int contactId, BookingReleaseRequest request, CancellationToken ct)
@@ -84,63 +79,6 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         Log.Warning("api Jobs/{JobId}/delivery PATCH failed: {StatusCode} {Body}",
             jobId, response.StatusCode, body);
         return false;
-    }
-
-    public async Task<TrackingDto?> GetJobTrackingAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, int jobId, CancellationToken ct)
-    {
-        using var response = await SendAsync<object?>(HttpMethod.Get, $"api/Jobs/{jobId}/tracking",
-            tenantId, connection, timeZone, clientId, contactId, body: null, ct);
-
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-
-        var body = await response.Content.ReadAsStringAsync(ct);
-
-        if (response.IsSuccessStatusCode)
-        {
-            return JsonSerializer.Deserialize<TrackingDto>(body, JsonOptions);
-        }
-
-        Log.Warning("api Jobs/{JobId}/tracking failed: {StatusCode} {Body}",
-            jobId, response.StatusCode, body);
-        return null;
-    }
-
-    // Reconciliation only cares whether the job exists; we reuse the tracking
-    // endpoint and map: 200 → Exists, 404 → NotFound, anything else → Unknown.
-    // Unknown is deliberately distinct from NotFound so transient 5xx /
-    // circuit-breaker trips never flip a real booking to orphaned.
-    public async Task<JobExistenceResult> CheckJobExistsAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, int jobId, CancellationToken ct)
-    {
-        try
-        {
-            using var response = await SendAsync<object?>(HttpMethod.Get, $"api/Jobs/{jobId}/tracking",
-                tenantId, connection, timeZone, clientId, contactId, body: null, ct);
-
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            {
-                return JobExistenceResult.NotFound;
-            }
-
-            if (response.IsSuccessStatusCode)
-            {
-                return JobExistenceResult.Exists;
-            }
-
-            var body = await response.Content.ReadAsStringAsync(ct);
-            Log.Warning("CheckJobExists: api Jobs/{JobId}/tracking returned {StatusCode} {Body}",
-                jobId, response.StatusCode, body);
-            return JobExistenceResult.Unknown;
-        }
-        catch (HttpRequestException ex)
-        {
-            Log.Warning(ex, "CheckJobExists: transport failure for JobId={JobId}", jobId);
-            return JobExistenceResult.Unknown;
-        }
     }
 
     private async Task<HttpResponseMessage> SendAsync<T>(HttpMethod method, string path,
