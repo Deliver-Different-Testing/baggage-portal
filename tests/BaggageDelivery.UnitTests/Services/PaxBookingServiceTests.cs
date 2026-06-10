@@ -12,10 +12,6 @@ namespace BaggageDelivery.UnitTests.Services;
 
 public class PaxBookingServiceTests
 {
-    // GetSummary's tucJob read isn't unit-testable here — InMemoryDb
-    // deliberately Ignores TucJob to keep the test schema lean. The
-    // not-found and happy paths are covered at the integration layer.
-
     private static IOptions<DespatchOptions> DespatchOpts() =>
         Options.Create(new DespatchOptions { TenantId = 1, Connection = "TEST", TimeZone = "Pacific/Auckland" });
 
