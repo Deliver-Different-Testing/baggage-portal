@@ -135,28 +135,11 @@ const sharedColors = {
   divider: 'rgba(0, 0, 0, 0.16)',
 }
 
-// Hub login-page background — mirrors `body#login` in
-// `hub/wwwroot/css/site.less:1053`. Four layers: white SVG line pattern
-// (repeated) on top of three fixed radial gradients, all anchored to the
-// viewport so they don't scroll with content. The base surface is the same
-// dark slate hub uses for its auth screen.
-const HUB_BG_SURFACE = '#1e293b'
-const HUB_BG_SVG_PATTERN =
-  "url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M28 46 L40 58 L28 70' opacity='0.16'/%3E%3Cpath d='M42 46 L54 58 L42 70' opacity='0.16'/%3E%3Cpath d='M92 110 L108 110 M114 110 L130 110' opacity='0.12'/%3E%3Ccircle cx='118' cy='32' r='3' fill='%23ffffff' stroke='none' opacity='0.18'/%3E%3Cpath d='M118 35 L118 44' opacity='0.18'/%3E%3Cpath d='M22 122 L32 132 L22 142' opacity='0.10'/%3E%3Cpath d='M70 26 L82 26' opacity='0.12'/%3E%3Ccircle cx='140' cy='80' r='1.8' fill='%23ffffff' stroke='none' opacity='0.18'/%3E%3Ccircle cx='12' cy='80' r='1.2' fill='%23ffffff' stroke='none' opacity='0.14'/%3E%3C/svg%3E\")"
-
-function hubHomeBackgroundImage(primaryRgb: string): string {
-  return [
-    HUB_BG_SVG_PATTERN,
-    `radial-gradient(ellipse at 15% 80%, rgba(${primaryRgb}, 0.2) 0%, transparent 50%)`,
-    'radial-gradient(ellipse at 85% 15%, rgba(56, 189, 248, 0.12) 0%, transparent 45%)',
-    'radial-gradient(ellipse at 50% 50%, rgba(30, 41, 59, 0.85) 0%, transparent 80%)',
-  ].join(', ')
-}
+const APP_BG_SURFACE = accentPalette[50]
 
 export function createAppTheme(isUsCustomer: boolean): Theme {
   const primaryPalette = isUsCustomer ? dfrntPrimaryPalette : urgentPrimaryPalette
   const primaryContrastText = isUsCustomer ? '#FFFFFF' : 'rgba(0, 0, 0, 0.87)'
-  const primaryRgb = isUsCustomer ? '33, 150, 243' : '244, 196, 48'
 
   const colors = {
     primary: {
@@ -239,40 +222,42 @@ export function createAppTheme(isUsCustomer: boolean): Theme {
       fontWeightMedium: 500,
       fontWeightBold: 700,
       h1: {
-        fontSize: '2.125rem',
-        fontWeight: 400,
-        lineHeight: 1.2,
-        letterSpacing: '-0.01562em',
+        fontSize: '2.5rem',
+        fontWeight: 700,
+        lineHeight: 1.1,
+        letterSpacing: '-0.03em',
       },
       h2: {
-        fontSize: '1.5rem',
-        fontWeight: 400,
-        lineHeight: 1.25,
-        letterSpacing: '0em',
+        fontSize: '1.75rem',
+        fontWeight: 700,
+        lineHeight: 1.2,
+        letterSpacing: '-0.02em',
       },
       h3: {
         fontSize: '1.25rem',
-        fontWeight: 500,
+        fontWeight: 700,
         lineHeight: 1.3,
-        letterSpacing: '0.0075em',
+        letterSpacing: '-0.01em',
       },
       h4: {
-        fontSize: '1.125rem',
-        fontWeight: 500,
+        fontSize: '1rem',
+        fontWeight: 600,
         lineHeight: 1.35,
-        letterSpacing: '0.00735em',
+        letterSpacing: '0em',
       },
       h5: {
-        fontSize: '1rem',
-        fontWeight: 500,
+        fontSize: '0.9375rem',
+        fontWeight: 600,
         lineHeight: 1.4,
         letterSpacing: '0em',
       },
       h6: {
-        fontSize: '0.875rem',
-        fontWeight: 500,
+        fontSize: '0.8125rem',
+        fontWeight: 600,
         lineHeight: 1.4,
-        letterSpacing: '0.0075em',
+        letterSpacing: '0.01em',
+        textTransform: 'uppercase',
+        color: 'rgba(0, 0, 0, 0.64)',
       },
       subtitle1: {
         fontSize: '1rem',
@@ -356,10 +341,9 @@ export function createAppTheme(isUsCustomer: boolean): Theme {
             scrollbarWidth: 'thin',
             scrollbarColor: `${accentPalette[400]} transparent`,
             minHeight: '100vh',
-            backgroundColor: HUB_BG_SURFACE,
-            backgroundImage: hubHomeBackgroundImage(primaryRgb),
-            backgroundRepeat: 'repeat, no-repeat, no-repeat, no-repeat',
-            backgroundAttachment: 'fixed, fixed, fixed, fixed',
+            backgroundColor: APP_BG_SURFACE,
+            WebkitFontSmoothing: 'antialiased',
+            MozOsxFontSmoothing: 'grayscale',
           },
         },
       },
@@ -369,26 +353,27 @@ export function createAppTheme(isUsCustomer: boolean): Theme {
         },
         styleOverrides: {
           root: {
-            borderRadius: tokens.radius.sm,
-            padding: '6px 16px',
-            fontWeight: 500,
+            borderRadius: tokens.radius.full,
+            padding: '8px 20px',
+            fontWeight: 600,
             fontSize: '0.875rem',
             textTransform: 'none' as const,
             letterSpacing: '0.01em',
-            minHeight: 36,
+            minHeight: 40,
             transition: `all ${tokens.duration.normal}ms cubic-bezier(0.4, 0, 0.2, 1)`,
           },
           sizeSmall: {
-            padding: '4px 12px',
+            padding: '4px 14px',
             fontSize: '0.8125rem',
             minHeight: 32,
           },
           sizeLarge: {
-            padding: '8px 22px',
+            padding: '12px 28px',
             fontSize: '0.9375rem',
-            minHeight: 42,
+            minHeight: 48,
           },
           contained: {
+            boxShadow: 'none',
             '&:hover': {
               boxShadow: tokens.shadow.sm,
             },
@@ -398,6 +383,11 @@ export function createAppTheme(isUsCustomer: boolean): Theme {
             '&:hover': {
               borderColor: colors.primary.main,
               backgroundColor: alpha(colors.primary.main, 0.04),
+            },
+          },
+          text: {
+            '&:hover': {
+              backgroundColor: alpha(colors.primary.main, 0.06),
             },
           },
         },
@@ -444,11 +434,21 @@ export function createAppTheme(isUsCustomer: boolean): Theme {
         },
         styleOverrides: {
           root: {
-            borderRadius: tokens.radius.md,
-            borderColor: 'rgba(0, 0, 0, 0.10)',
-            boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)',
+            borderRadius: tokens.radius.lg,
+            borderColor: 'rgba(0, 0, 0, 0.08)',
+            boxShadow: 'none',
             backgroundColor: '#FFFFFF',
             transition: `box-shadow ${tokens.duration.normal}ms cubic-bezier(0.4, 0, 0.2, 1)`,
+          },
+        },
+      },
+      MuiCardContent: {
+        styleOverrides: {
+          root: {
+            padding: 20,
+            '&:last-child': {
+              paddingBottom: 20,
+            },
           },
         },
       },
