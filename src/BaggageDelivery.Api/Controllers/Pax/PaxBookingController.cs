@@ -78,7 +78,9 @@ public sealed class PaxBookingController(
             TimeSlotEndUtc: body.TimeSlotEndUtc,
             AtlOption: body.AtlOption,
             AccessNotes: body.AccessNotes,
-            PhoneOverride: body.PhoneOverride), ct);
+            PassengerName: body.PassengerName,
+            PassengerPhone: body.PassengerPhone,
+            PassengerEmail: body.PassengerEmail), ct);
 
         return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
     }
@@ -100,5 +102,6 @@ public sealed class PaxBookingController(
             s.DeliveryAddress.Latitude,
             s.DeliveryAddress.Longitude),
         EarliestSlotUtc: s.EarliestSlotUtc,
-        LatestSlotUtc: s.LatestSlotUtc);
+        LatestSlotUtc: s.LatestSlotUtc,
+        AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))]);
 }

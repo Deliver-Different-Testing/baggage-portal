@@ -5,13 +5,10 @@ export const addressAutocompleteApi = {
   autocomplete: async (
     bookingId: string,
     text: string,
-    countryCode?: string,
   ): Promise<AddressSearchResult[]> => {
-    const params: Record<string, string> = { text }
-    if (countryCode) params.countryCode = countryCode
     const response = await apiClient.get<AddressSearchResult[]>(
       `/pax/${bookingId}/address/autocomplete`,
-      { params },
+      { params: { text } },
     )
     return response.data
   },

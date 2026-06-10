@@ -5,13 +5,12 @@ import type { AddressDetail, AddressSearchResult } from '../types/address'
 
 interface UseAddressSearchOptions {
   bookingId: string
-  countryCode?: string
   minChars?: number
   debounceMs?: number
 }
 
 export function useAddressSearch(options: UseAddressSearchOptions) {
-  const { bookingId, countryCode, minChars = 3, debounceMs = 300 } = options
+  const { bookingId, minChars = 3, debounceMs = 300 } = options
   const [inputValue, setInputValue] = useState('')
   const [debouncedValue, setDebouncedValue] = useState('')
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -29,8 +28,8 @@ export function useAddressSearch(options: UseAddressSearchOptions) {
   const effectiveDebouncedValue = inputIsLongEnough ? debouncedValue : ''
 
   const { data: suggestions = [], isLoading } = useQuery({
-    queryKey: ['pax', 'addressAutocomplete', bookingId, effectiveDebouncedValue, countryCode],
-    queryFn: () => addressAutocompleteApi.autocomplete(bookingId, effectiveDebouncedValue, countryCode),
+    queryKey: ['pax', 'addressAutocomplete', bookingId, effectiveDebouncedValue],
+    queryFn: () => addressAutocompleteApi.autocomplete(bookingId, effectiveDebouncedValue),
     enabled: !!bookingId && effectiveDebouncedValue.length >= minChars,
     staleTime: 30_000,
   })

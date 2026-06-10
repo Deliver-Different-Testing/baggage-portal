@@ -11,7 +11,6 @@ interface AddressAutocompleteProps {
   bookingId: string
   label?: string
   placeholder?: string
-  countryCode?: string
   onAddressSelect: (detail: AddressDetail) => void
 }
 
@@ -19,12 +18,10 @@ export function AddressAutocomplete({
   bookingId,
   label = 'Search address',
   placeholder = 'Start typing an address...',
-  countryCode,
   onAddressSelect,
 }: AddressAutocompleteProps) {
   const { setInputValue, suggestions, isLoading, getDetails } = useAddressSearch({
     bookingId,
-    countryCode,
   })
   const [isLookingUp, setIsLookingUp] = useState(false)
   const [displayValue, setDisplayValue] = useState('')

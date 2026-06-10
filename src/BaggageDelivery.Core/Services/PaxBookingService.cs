@@ -1,48 +1,91 @@
+using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
+using BaggageDelivery.Core.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace BaggageDelivery.Core.Services;
 
-// No BagDelBooking shadow row anymore — tucJob holds the canonical state.
-// GetSummary reads from trackingpage (anonymous read of the Despatch DB);
-// Confirm writes through the api repo (SC-JWT, never direct to tucJob).
-// Idempotency comes from the api side: re-confirming a job already at
-// Dispatched is a no-op.
 internal sealed class PaxBookingService(
-    ITrackingPageClient trackingPage,
+    BaggageDeliveryContext db,
     IDespatchApiClient despatch,
+    IOptions<DespatchOptions> despatchOptions,
     TimeProvider time) : IPaxBookingService
 {
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
     {
-        var tracking = await trackingPage.GetJobAsync(jobId, ct);
-        if (tracking is null)
+        var job = await db.TucJobs
+            .AsNoTracking()
+            .Where(j => j.UcjbId == jobId)
+            .Select(j => new
+            {
+                j.DeliverByTime,
+                j.DeliverToContact,
+                j.DeliverToPhone,
+                j.ProofOfDeliveryEmail,
+                ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (job is null)
         {
-            Log.Warning("GetSummary: trackingpage returned no data for job {JobId}", jobId);
+            Log.Warning("GetSummary: tucJob {JobId} not found", jobId);
             return null;
         }
 
+        var atlOptions = await db.TblJobLeaveNotHomes
+            .AsNoTracking()
+            .Where(l => l.AllowLeave)
+            .OrderBy(l => l.Sequence).ThenBy(l => l.Name)
+            .Select(l => new AtlOptionDto(l.LeaveNotHomeId, l.Name))
+            .ToListAsync(ct);
+
         var now = time.GetUtcNow().UtcDateTime;
+        var etaUtc = TenantLocalToUtc(job.DeliverByTime, despatchOptions.Value.TimeZone);
+
         return new BookingSummary(
             JobId: jobId,
-            Reference: tracking.JobId.ToString(),
-            AirlineLabel: tracking.CourierFirstName ?? "Your Airline",
-            PassengerName: string.Empty,
-            PassengerPhone: null,
-            PassengerEmail: null,
-            // Pax-facing summary doesn't carry a delivery address yet —
-            // trackingpage doesn't expose tucJob.DeliveryAddressLine* in
-            // its JobFullDto. Address surfaces after the api delivery
-            // patch lands when the pax submits the form.
+            Reference: jobId.ToString(),
+            AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
+            PassengerName: job.DeliverToContact ?? string.Empty,
+            PassengerPhone: job.DeliverToPhone,
+            PassengerEmail: job.ProofOfDeliveryEmail,
             DeliveryAddress: new AddressUpdateDto
             {
                 Line1 = string.Empty,
                 City = string.Empty,
-                Country = "NZ"
+                Country = despatchOptions.Value.Countries is { Length: > 0 } cs ? cs[0] : "NZ"
             },
-            EarliestSlotUtc: tracking.EtaWindowStartUtc ?? now,
-            LatestSlotUtc: tracking.EtaWindowEndUtc ?? now.AddDays(2));
+            EarliestSlotUtc: etaUtc ?? now,
+            LatestSlotUtc: etaUtc ?? now.AddDays(2),
+            AtlOptions: atlOptions);
+    }
+
+    private static DateTime? TenantLocalToUtc(DateTime? local, string? timeZoneCode)
+    {
+        if (local is null || string.IsNullOrWhiteSpace(timeZoneCode))
+        {
+            return null;
+        }
+
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneCode);
+            var unspecified = DateTime.SpecifyKind(local.Value, DateTimeKind.Unspecified);
+            return TimeZoneInfo.ConvertTimeToUtc(unspecified, tz);
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            Log.Warning("Tenant timezone {TimeZoneCode} not found on this host", timeZoneCode);
+            return null;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            Log.Warning("Tenant timezone {TimeZoneCode} is invalid", timeZoneCode);
+            return null;
+        }
     }
 
     public async Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
@@ -56,7 +99,9 @@ internal sealed class PaxBookingService(
             TimeSlotEndUtc = input.TimeSlotEndUtc,
             AtlOption = input.AtlOption,
             AccessNotes = input.AccessNotes,
-            PhoneOverride = input.PhoneOverride
+            PassengerName = input.PassengerName,
+            PassengerPhone = input.PassengerPhone,
+            PassengerEmail = input.PassengerEmail
         };
 
         var updateOk = await despatch.UpdateJobDeliveryAsync(input.JobId, deliveryUpdate, ct);

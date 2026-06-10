@@ -17,7 +17,9 @@ public partial class BaggageDeliveryContext : DbContext
 
     public virtual DbSet<JobDeliveryJourney> JobDeliveryJourneys { get; set; }
 
-    public virtual DbSet<TblUndeliverableLocation> TblUndeliverableLocations { get; set; }
+    public virtual DbSet<TblJobLeaveNotHome> TblJobLeaveNotHomes { get; set; }
+
+    public virtual DbSet<TucClient> TucClients { get; set; }
 
     public virtual DbSet<TucJob> TucJobs { get; set; }
 
@@ -113,42 +115,440 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasConstraintName("FK_JobDeliveryJourney_Job");
         });
 
-        modelBuilder.Entity<TblUndeliverableLocation>(entity =>
+        modelBuilder.Entity<TblJobLeaveNotHome>(entity =>
         {
-            entity.HasKey(e => e.UndeliverableLocationId);
+            entity.HasKey(e => e.LeaveNotHomeId);
 
-            entity.ToTable("tblUndeliverableLocation");
+            entity.ToTable("tblJobLeaveNotHome");
 
-            entity.HasIndex(e => e.JobTypeId, "JobTypeID");
-
-            entity.Property(e => e.UndeliverableLocationId).HasColumnName("UndeliverableLocationID");
-            entity.Property(e => e.Created)
-                .HasDefaultValueSql("(getdate())", "DF_tblUndeliverableLocation_Created")
-                .HasColumnType("datetime");
+            entity.Property(e => e.LeaveNotHomeId).HasColumnName("LeaveNotHomeID");
+            entity.Property(e => e.AllowLeave).HasDefaultValue(true, "DF_tblJobLeaveNotHome_AllowLeave");
+            entity.Property(e => e.Category).HasMaxLength(100);
+            entity.Property(e => e.Created).HasColumnType("datetime");
             entity.Property(e => e.CreatedBy)
                 .IsRequired()
                 .HasMaxLength(50);
-            entity.Property(e => e.JobTypeId).HasColumnName("JobTypeID");
-            entity.Property(e => e.LastModified)
-                .HasDefaultValueSql("(getdate())", "DF_tblUndeliverableLocation_LastModified")
-                .HasColumnType("datetime");
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
             entity.Property(e => e.LastModifiedBy)
                 .IsRequired()
                 .HasMaxLength(50);
-            entity.Property(e => e.Message)
-                .IsRequired()
-                .HasColumnType("ntext");
             entity.Property(e => e.Name)
                 .IsRequired()
-                .HasMaxLength(50);
+                .HasMaxLength(100);
             entity.Property(e => e.Notes).HasColumnType("ntext");
-            entity.Property(e => e.Podname)
+            entity.Property(e => e.Smsname)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnName("SMSName");
+        });
+
+        modelBuilder.Entity<TucClient>(entity =>
+        {
+            entity.HasKey(e => e.UcclId)
+                .IsClustered(false)
+                .HasFillFactor(80);
+
+            entity.ToTable("tucClient", tb =>
+                {
+                    tb.HasTrigger("UTL_trgClient_Update");
+                    tb.HasTrigger("tucClient_Insert");
+                });
+
+            entity.HasIndex(e => e.UcclCode, "IDX_tucClient_ucclCode")
+                .IsUnique()
+                .HasFillFactor(80);
+
+            entity.HasIndex(e => e.InvoiceScheduleId, "IX_InvoiceScheduleId");
+
+            entity.HasIndex(e => e.InvoiceTemplateId, "IX_InvoiceTemplateId");
+
+            entity.HasIndex(e => e.PaymentTermId, "IX_PaymentTermId");
+
+            entity.HasIndex(e => e.XeroId, "IX_XeroId");
+
+            entity.HasIndex(e => e.ClientTypeId, "IX_tucClient_ClientTypeId");
+
+            entity.HasIndex(e => e.NpAgentId, "IX_tucClient_NpAgentId");
+
+            entity.HasIndex(e => e.UcclName, "Name").IsUnique();
+
+            entity.HasIndex(e => e.SiteId, "SiteID");
+
+            entity.HasIndex(e => e.UtaddtionalItemRateCodeId, "UTAddtionalItemRateCodeID");
+
+            entity.HasIndex(e => e.UtrateCodeId, "UTRateCodeID");
+
+            entity.HasIndex(e => e.UcclBillingType, "ucclBillingType");
+
+            entity.HasIndex(e => e.UcclIndustry, "ucclIndustry");
+
+            entity.HasIndex(e => e.UcclSuburbId, "ucclSuburbID").HasFillFactor(80);
+
+            entity.Property(e => e.UcclId).HasColumnName("ucclID");
+            entity.Property(e => e.AccountProfileId).HasColumnName("AccountProfileID");
+            entity.Property(e => e.AccountsContact).HasMaxLength(100);
+            entity.Property(e => e.AccountsEmail).HasMaxLength(500);
+            entity.Property(e => e.AccountsPhone).HasMaxLength(100);
+            entity.Property(e => e.AddonPercentage).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.AddressExtras).HasMaxLength(200);
+            entity.Property(e => e.AddressLine1).HasMaxLength(255);
+            entity.Property(e => e.AddressLine2).HasMaxLength(255);
+            entity.Property(e => e.AddressLine3).HasMaxLength(255);
+            entity.Property(e => e.AddressLine4).HasMaxLength(255);
+            entity.Property(e => e.AddressLine5).HasMaxLength(255);
+            entity.Property(e => e.AddressLine6).HasMaxLength(255);
+            entity.Property(e => e.AddressLine7).HasMaxLength(255);
+            entity.Property(e => e.AddressLine8).HasMaxLength(255);
+            entity.Property(e => e.AddressStreetName).HasMaxLength(200);
+            entity.Property(e => e.AirNzknownShipper).HasColumnName("AirNZKnownShipper");
+            entity.Property(e => e.AirNzmargin)
+                .HasDefaultValue(0.57m, "DF_tucClient_AirNZMargin")
+                .HasColumnType("decimal(18, 2)")
+                .HasColumnName("AirNZMargin");
+            entity.Property(e => e.ApplyCitySurcharge).HasDefaultValue(true, "DF_tucClient_ApplyCitySurcharge");
+            entity.Property(e => e.BaggageRateCodeId).HasColumnName("BaggageRateCodeID");
+            entity.Property(e => e.BulkAternoonHomePickupTime).HasColumnType("datetime");
+            entity.Property(e => e.BulkHomeDeliveryPickupRateId).HasColumnName("BulkHomeDeliveryPickupRateID");
+            entity.Property(e => e.BulkHomeDeliveryVanItemSurcharge).HasColumnType("money");
+            entity.Property(e => e.ChilledTruckExcessZoneRateCodeId).HasColumnName("ChilledTruckExcessZoneRateCodeID");
+            entity.Property(e => e.ChilledTruckHireRateCodeId).HasColumnName("ChilledTruckHireRateCodeID");
+            entity.Property(e => e.ChilledTruckRateCodeId).HasColumnName("ChilledTruckRateCodeID");
+            entity.Property(e => e.ChilledVanHireRateCodeId).HasColumnName("ChilledVanHireRateCodeID");
+            entity.Property(e => e.CitySurchargeRate)
+                .HasDefaultValue(1.75m, "DF_tucClient_CitySurchargeRate")
+                .HasColumnType("money");
+            entity.Property(e => e.ClientTypeId).HasDefaultValue(2, "DF_tucClient_ClientTypeId");
+            entity.Property(e => e.CommissionDate).HasColumnType("datetime");
+            entity.Property(e => e.CourierPercentage).HasColumnType("decimal(18, 6)");
+            entity.Property(e => e.CreateBulkHomeDeliveryPickup).HasDefaultValue(false, "DF__tucClient__Creat__163A3110");
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.DangerousServiceRateCodeId).HasColumnName("DangerousServiceRateCodeID");
+            entity.Property(e => e.DefaultJobListFilter).HasMaxLength(50);
+            entity.Property(e => e.DeliverDifferent).HasDefaultValue(false, "DF__tucClient__Deliv__1AFEE62D");
+            entity.Property(e => e.DgdryIce)
+                .HasColumnType("decimal(18, 2)")
+                .HasColumnName("DGDryIce");
+            entity.Property(e => e.Dgfee)
+                .HasColumnType("decimal(18, 2)")
+                .HasColumnName("DGFee");
+            entity.Property(e => e.Discount).HasColumnType("decimal(5, 4)");
+            entity.Property(e => e.DropoffReport).HasMaxLength(10);
+            entity.Property(e => e.EconomyFlightMarkup).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.EconomyFlightOffPeak1RateId).HasColumnName("EconomyFlightOffPeak1RateID");
+            entity.Property(e => e.EconomyFlightOffPeak2RateId).HasColumnName("EconomyFlightOffPeak2RateID");
+            entity.Property(e => e.EconomyFlightOffPeak3RateId).HasColumnName("EconomyFlightOffPeak3RateID");
+            entity.Property(e => e.EconomyFlightOffPeak4RateId).HasColumnName("EconomyFlightOffPeak4RateID");
+            entity.Property(e => e.EconomyFlightOffPeakKg1rateId).HasColumnName("EconomyFlightOffPeakKG1RateID");
+            entity.Property(e => e.EconomyFlightOffPeakKg2rateId).HasColumnName("EconomyFlightOffPeakKG2RateID");
+            entity.Property(e => e.EconomyFlightOffPeakKg3rateId).HasColumnName("EconomyFlightOffPeakKG3RateID");
+            entity.Property(e => e.EconomyFlightOffPeakKg4rateId).HasColumnName("EconomyFlightOffPeakKG4RateID");
+            entity.Property(e => e.EconomyFlightPeak1RateId).HasColumnName("EconomyFlightPeak1RateID");
+            entity.Property(e => e.EconomyFlightPeak2RateId).HasColumnName("EconomyFlightPeak2RateID");
+            entity.Property(e => e.EconomyFlightPeak3RateId).HasColumnName("EconomyFlightPeak3RateID");
+            entity.Property(e => e.EconomyFlightPeak4RateId).HasColumnName("EconomyFlightPeak4RateID");
+            entity.Property(e => e.EconomyFlightPeakKg1rateId).HasColumnName("EconomyFlightPeakKG1RateID");
+            entity.Property(e => e.EconomyFlightPeakKg2rateId).HasColumnName("EconomyFlightPeakKG2RateID");
+            entity.Property(e => e.EconomyFlightPeakKg3rateId).HasColumnName("EconomyFlightPeakKG3RateID");
+            entity.Property(e => e.EconomyFlightPeakKg4rateId).HasColumnName("EconomyFlightPeakKG4RateID");
+            entity.Property(e => e.EconomyMinimumJobRateCodeId).HasColumnName("EconomyMinimumJobRateCodeID");
+            entity.Property(e => e.EconomyRateCodeId).HasColumnName("EconomyRateCodeID");
+            entity.Property(e => e.EconomyRun1).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun2).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun3).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun4).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun5).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun6).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun7).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRun8).HasColumnType("datetime");
+            entity.Property(e => e.EconomyRunItemsExcessRateCodeId).HasColumnName("EconomyRunItemsExcessRateCodeID");
+            entity.Property(e => e.EconomyRunRateCodeId).HasColumnName("EconomyRunRateCodeID");
+            entity.Property(e => e.ExpressRateCodeId).HasColumnName("ExpressRateCodeID");
+            entity.Property(e => e.FastPalletExpressRateCodeId).HasColumnName("FastPalletExpressRateCodeID");
+            entity.Property(e => e.FastPalletStandardRateCodeId).HasColumnName("FastPalletStandardRateCodeID");
+            entity.Property(e => e.FastPalletSuperRateCodeId).HasColumnName("FastPalletSuperRateCodeID");
+            entity.Property(e => e.FastParcelRateCodeId).HasColumnName("FastParcelRateCodeID");
+            entity.Property(e => e.FrozenTruckExcessZoneRateCodeId).HasColumnName("FrozenTruckExcessZoneRateCodeID");
+            entity.Property(e => e.FrozenTruckHireRateCodeId).HasColumnName("FrozenTruckHireRateCodeID");
+            entity.Property(e => e.FrozenTruckRateCodeId).HasColumnName("FrozenTruckRateCodeID");
+            entity.Property(e => e.GssregularPickupClient)
+                .HasDefaultValue(false, "DF__tucClient__GSSRe__108157BA")
+                .HasColumnName("GSSRegularPickupClient");
+            entity.Property(e => e.GssregularPickupTime)
+                .HasColumnType("datetime")
+                .HasColumnName("GSSRegularPickupTime");
+            entity.Property(e => e.HamiltonDayRunDeliveryRateCodeId).HasColumnName("HamiltonDayRunDeliveryRateCodeID");
+            entity.Property(e => e.HamiltonDayRunPurateCodeId).HasColumnName("HamiltonDayRunPURateCodeID");
+            entity.Property(e => e.HamiltonNextDayDeliveryRateCodeId).HasColumnName("HamiltonNextDayDeliveryRateCodeID");
+            entity.Property(e => e.HamiltonNextDayPurateCodeId).HasColumnName("HamiltonNextDayPURateCodeID");
+            entity.Property(e => e.HamiltonRunAdditionalItemsRateCodeId).HasColumnName("HamiltonRunAdditionalItemsRateCodeID");
+            entity.Property(e => e.HiabHourRateCodeId).HasColumnName("HiabHourRateCodeID");
+            entity.Property(e => e.InternetDisplaySavedJobsAsCombo).HasDefaultValue(true, "DF_tucClient_InternetDisplaySavedJobsAsCombo");
+            entity.Property(e => e.InternetRebate).HasColumnType("money");
+            entity.Property(e => e.InternetShowPickUpLocation).HasDefaultValue(true, "DF_tucClient_InternetShowPickUpLocation");
+            entity.Property(e => e.Invoice).HasDefaultValue(true, "DF_tucClient_Invoice");
+            entity.Property(e => e.InvoiceEmail).HasMaxLength(500);
+            entity.Property(e => e.InvoiceGroupBy).HasMaxLength(50);
+            entity.Property(e => e.InvoiceMemo).HasMaxLength(100);
+            entity.Property(e => e.InvoiceMethod).HasMaxLength(50);
+            entity.Property(e => e.JobPrefix).HasMaxLength(3);
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Latitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.Longitude).HasColumnType("decimal(18, 9)");
+            entity.Property(e => e.MarkUp).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.MedicalActive).HasDefaultValue(false, "DF_tucClient_MedicalActive");
+            entity.Property(e => e.MedicalRunAdditionalItemsRateId).HasColumnName("MedicalRunAdditionalItemsRateID");
+            entity.Property(e => e.MedicalRunFirstItemRateId).HasColumnName("MedicalRunFirstItemRateID");
+            entity.Property(e => e.NextFlight1KgrateId).HasColumnName("NextFlight1KGRateID");
+            entity.Property(e => e.NextFlight1RateId).HasColumnName("NextFlight1RateID");
+            entity.Property(e => e.NextFlight2KgrateId).HasColumnName("NextFlight2KGRateID");
+            entity.Property(e => e.NextFlight2RateId).HasColumnName("NextFlight2RateID");
+            entity.Property(e => e.NextFlight3KgrateId).HasColumnName("NextFlight3KGRateID");
+            entity.Property(e => e.NextFlight3RateId).HasColumnName("NextFlight3RateID");
+            entity.Property(e => e.NextFlight4KgrateId).HasColumnName("NextFlight4KGRateID");
+            entity.Property(e => e.NextFlight4RateId).HasColumnName("NextFlight4RateID");
+            entity.Property(e => e.NextFlightMarkup).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.NoUtpickUp).HasColumnName("NoUTPickUp");
+            entity.Property(e => e.NzPostSiteCode)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+            entity.Property(e => e.OvernightPickupNotRequired).HasDefaultValue(false, "DF_tucClient_OvernightPickupNotRequired");
+            entity.Property(e => e.OversizeRateCodeId).HasColumnName("OversizeRateCodeID");
+            entity.Property(e => e.PpdgraceDays).HasColumnName("PPDGraceDays");
+            entity.Property(e => e.Ppdrate)
+                .HasDefaultValue(0.05m, "DF_tucClient_PPDRate")
+                .HasColumnType("decimal(18, 4)")
+                .HasColumnName("PPDRate");
+            entity.Property(e => e.PrivateAddressSurchargeRateCodeId).HasColumnName("PrivateAddressSurchargeRateCodeID");
+            entity.Property(e => e.PromoCode).HasMaxLength(50);
+            entity.Property(e => e.PromptForEmailAddress).HasDefaultValue(true, "DF_tucClient_PromptForEmailAddress");
+            entity.Property(e => e.PurchaseOrderNumber).HasMaxLength(100);
+            entity.Property(e => e.RateRr).HasColumnName("RateRR");
+            entity.Property(e => e.RateShortRr)
+                .HasDefaultValue(52, "DF_tucClient_RateShortRR")
+                .HasColumnName("RateShortRR");
+            entity.Property(e => e.ReferenceAdefineList).HasColumnName("ReferenceADefineList");
+            entity.Property(e => e.ReferenceAmandatory).HasColumnName("ReferenceAMandatory");
+            entity.Property(e => e.ReferenceAmessage)
+                .HasMaxLength(500)
+                .HasColumnName("ReferenceAMessage");
+            entity.Property(e => e.ReferenceBdefineList).HasColumnName("ReferenceBDefineList");
+            entity.Property(e => e.ReferenceBmandatory).HasColumnName("ReferenceBMandatory");
+            entity.Property(e => e.ReferenceBmessage)
+                .HasMaxLength(500)
+                .HasColumnName("ReferenceBMessage");
+            entity.Property(e => e.ReferenceCdefineList).HasColumnName("ReferenceCDefineList");
+            entity.Property(e => e.ReferenceCmandatory).HasColumnName("ReferenceCMandatory");
+            entity.Property(e => e.ReferenceCmessage)
+                .HasMaxLength(500)
+                .HasColumnName("ReferenceCMessage");
+            entity.Property(e => e.RerateJobs).HasDefaultValue(true, "RerateJobs");
+            entity.Property(e => e.RuralDeliveryRateCodeId).HasColumnName("RuralDeliveryRateCodeID");
+            entity.Property(e => e.Sddenabled)
+                .HasDefaultValue(true, "DF__tucClient__SDDEn__6EEF5278")
+                .HasColumnName("SDDEnabled");
+            entity.Property(e => e.Sdrenabled)
+                .HasDefaultValue(true, "DF__tucClient__SDREn__6FE376B1")
+                .HasColumnName("SDREnabled");
+            entity.Property(e => e.ShowNwagent)
+                .HasDefaultValue(true)
+                .HasColumnName("ShowNWAgent");
+            entity.Property(e => e.ShowNwflight)
+                .HasDefaultValue(true, "DF__tucClient__ShowN__1A0AC1F4")
+                .HasColumnName("ShowNWFlight");
+            entity.Property(e => e.SigRequiredDefault).HasMaxLength(500);
+            entity.Property(e => e.SiteId).HasColumnName("SiteID");
+            entity.Property(e => e.SiteUrl)
+                .HasMaxLength(500)
+                .HasColumnName("SiteURL");
+            entity.Property(e => e.Smsname)
                 .IsRequired()
                 .HasMaxLength(50)
-                .HasColumnName("PODName");
-            entity.Property(e => e.WebDeliveredTimeLabel)
+                .HasColumnName("SMSName");
+            entity.Property(e => e.StartingWeightExcess).HasDefaultValue(30, "DF_tucClient_StartingWeightExcess");
+            entity.Property(e => e.StripeClientId)
+                .HasMaxLength(50)
+                .HasColumnName("StripeClientID");
+            entity.Property(e => e.TailLiftRateCodeId).HasColumnName("TailLiftRateCodeID");
+            entity.Property(e => e.TrackingEta).HasColumnName("TrackingETA");
+            entity.Property(e => e.TruckBulkRateCodeId).HasColumnName("TruckBulkRateCodeID");
+            entity.Property(e => e.TruckCitySurchargeRate)
+                .HasDefaultValue(10m, "DF_tucClient_TruckCitySurchargeRate")
+                .HasColumnType("money");
+            entity.Property(e => e.TruckEconomyExcessZoneRateCodeId).HasColumnName("TruckEconomyExcessZoneRateCodeID");
+            entity.Property(e => e.TruckEconomyRateCodeId).HasColumnName("TruckEconomyRateCodeID");
+            entity.Property(e => e.TruckExcessPalletEconomyRateCodeId).HasColumnName("TruckExcessPalletEconomyRateCodeID");
+            entity.Property(e => e.TruckExcessPalletFastRateCodeId).HasColumnName("TruckExcessPalletFastRateCodeID");
+            entity.Property(e => e.TruckExcessPalletSlowRateCodeId).HasColumnName("TruckExcessPalletSlowRateCodeID");
+            entity.Property(e => e.TruckExcessPalletSuperRateCodeId).HasColumnName("TruckExcessPalletSuperRateCodeID");
+            entity.Property(e => e.TruckExcessWeightFastRateCodeId).HasColumnName("TruckExcessWeightFastRateCodeID");
+            entity.Property(e => e.TruckExcessWeightSlowRateCodeId).HasColumnName("TruckExcessWeightSlowRateCodeID");
+            entity.Property(e => e.TruckExcessZoneRateCodeId).HasColumnName("TruckExcessZoneRateCodeID");
+            entity.Property(e => e.TruckExpressExcessZoneRateCodeId).HasColumnName("TruckExpressExcessZoneRateCodeID");
+            entity.Property(e => e.TruckRateCodeId).HasColumnName("TruckRateCodeID");
+            entity.Property(e => e.TruckRoadRateCodeId).HasColumnName("TruckRoadRateCodeID");
+            entity.Property(e => e.TruckStandardExcessZoneRateCodeId).HasColumnName("TruckStandardExcessZoneRateCodeID");
+            entity.Property(e => e.TruckSuperExcessZoneRateCodeId).HasColumnName("TruckSuperExcessZoneRateCodeID");
+            entity.Property(e => e.UcclAccountStatus).HasColumnName("ucclAccountStatus");
+            entity.Property(e => e.UcclActive)
+                .HasDefaultValue(true, "DF_tucClient_ucclActive")
+                .HasColumnName("ucclActive");
+            entity.Property(e => e.UcclAddress)
+                .HasMaxLength(150)
+                .HasColumnName("ucclAddress");
+            entity.Property(e => e.UcclAverageDaily)
+                .HasDefaultValue(0m, "DF_tucClient_ucclAverageDaily")
+                .HasColumnType("money")
+                .HasColumnName("ucclAverageDaily");
+            entity.Property(e => e.UcclAverageDailyGroup).HasColumnName("ucclAverageDailyGroup");
+            entity.Property(e => e.UcclAwesome).HasColumnName("ucclAwesome");
+            entity.Property(e => e.UcclBillingType).HasColumnName("ucclBillingType");
+            entity.Property(e => e.UcclCash).HasColumnName("ucclCash");
+            entity.Property(e => e.UcclCode)
                 .IsRequired()
-                .HasMaxLength(50);
+                .HasMaxLength(50)
+                .HasColumnName("ucclCode");
+            entity.Property(e => e.UcclDateJoined)
+                .HasColumnType("datetime")
+                .HasColumnName("ucclDateJoined");
+            entity.Property(e => e.UcclDmfirstName)
+                .HasMaxLength(50)
+                .HasColumnName("ucclDMFirstName");
+            entity.Property(e => e.UcclDmlastName)
+                .HasMaxLength(50)
+                .HasColumnName("ucclDMLastName");
+            entity.Property(e => e.UcclExtraAddress)
+                .HasMaxLength(550)
+                .HasColumnName("ucclExtraAddress");
+            entity.Property(e => e.UcclFax)
+                .HasMaxLength(50)
+                .HasColumnName("ucclFax");
+            entity.Property(e => e.UcclGroupId)
+                .HasDefaultValue(0, "DF_tucClient_ucclGroupID")
+                .HasColumnName("ucclGroupID");
+            entity.Property(e => e.UcclGstinc).HasColumnName("ucclGSTInc");
+            entity.Property(e => e.UcclInActiveDate)
+                .HasColumnType("datetime")
+                .HasColumnName("ucclInActiveDate");
+            entity.Property(e => e.UcclInActiveSetBy)
+                .HasMaxLength(50)
+                .HasColumnName("ucclInActiveSetBy");
+            entity.Property(e => e.UcclIndustry).HasColumnName("ucclIndustry");
+            entity.Property(e => e.UcclInternal).HasColumnName("ucclInternal");
+            entity.Property(e => e.UcclInternet)
+                .HasMaxLength(100)
+                .HasColumnName("ucclInternet");
+            entity.Property(e => e.UcclLegalName)
+                .IsRequired()
+                .HasMaxLength(150)
+                .HasColumnName("ucclLegalName");
+            entity.Property(e => e.UcclMcfirstName)
+                .HasMaxLength(50)
+                .HasColumnName("ucclMCFirstName");
+            entity.Property(e => e.UcclMclastName)
+                .HasMaxLength(50)
+                .HasColumnName("ucclMCLastName");
+            entity.Property(e => e.UcclMobile)
+                .HasMaxLength(50)
+                .HasColumnName("ucclMobile");
+            entity.Property(e => e.UcclName)
+                .IsRequired()
+                .HasMaxLength(75)
+                .HasColumnName("ucclName");
+            entity.Property(e => e.UcclNote)
+                .HasColumnType("ntext")
+                .HasColumnName("ucclNote");
+            entity.Property(e => e.UcclNotes)
+                .HasMaxLength(550)
+                .HasColumnName("ucclNotes");
+            entity.Property(e => e.UcclPassword)
+                .HasMaxLength(50)
+                .HasColumnName("ucclPassword");
+            entity.Property(e => e.UcclPedal).HasColumnName("ucclPedal");
+            entity.Property(e => e.UcclPhone)
+                .HasMaxLength(50)
+                .HasColumnName("ucclPhone");
+            entity.Property(e => e.UcclPhone2)
+                .HasMaxLength(50)
+                .HasColumnName("ucclPhone2");
+            entity.Property(e => e.UcclPodrequired).HasColumnName("ucclPODRequired");
+            entity.Property(e => e.UcclPostCode)
+                .HasMaxLength(50)
+                .HasColumnName("ucclPostCode");
+            entity.Property(e => e.UcclPostal)
+                .HasMaxLength(150)
+                .HasColumnName("ucclPostal");
+            entity.Property(e => e.UcclRate).HasColumnName("ucclRate");
+            entity.Property(e => e.UcclRateDoc)
+                .HasDefaultValue(69, "DF_tucClient_ucclRateDoc")
+                .HasColumnName("ucclRateDoc");
+            entity.Property(e => e.UcclRateMainTrunk)
+                .HasDefaultValue(70, "DF_tucClient_ucclRateMainTrunk")
+                .HasColumnName("ucclRateMainTrunk");
+            entity.Property(e => e.UcclRateMainTrunkKg)
+                .HasDefaultValue(71, "DF_tucClient_ucclRateMainTrunkKG")
+                .HasColumnName("ucclRateMainTrunkKG");
+            entity.Property(e => e.UcclRateNi)
+                .HasDefaultValue(67, "DF_tucClient_ucclRateNI")
+                .HasColumnName("ucclRateNI");
+            entity.Property(e => e.UcclRateNiweight)
+                .HasDefaultValue(74, "DF_tucClient_ucclRateNIWeight")
+                .HasColumnName("ucclRateNIWeight");
+            entity.Property(e => e.UcclRateOther)
+                .HasDefaultValue(72, "DF_tucClient_ucclRateOther")
+                .HasColumnName("ucclRateOther");
+            entity.Property(e => e.UcclRateOtherKg)
+                .HasDefaultValue(73, "DF_tucClient_ucclRateOtherKG")
+                .HasColumnName("ucclRateOtherKG");
+            entity.Property(e => e.UcclRateShorthaul)
+                .HasDefaultValue(76, "DF_tucClient_ucclRateShorhaul")
+                .HasColumnName("ucclRateShorthaul");
+            entity.Property(e => e.UcclRateShorthaulKg)
+                .HasDefaultValue(77, "DF_tucClient_ucclRateShorthaulKG")
+                .HasColumnName("ucclRateShorthaulKG");
+            entity.Property(e => e.UcclRateSi)
+                .HasDefaultValue(68, "DF_tucClient_ucclRateSI")
+                .HasColumnName("ucclRateSI");
+            entity.Property(e => e.UcclRateSiweight)
+                .HasDefaultValue(75, "DF_tucClient_ucclRateSIWeight")
+                .HasColumnName("ucclRateSIWeight");
+            entity.Property(e => e.UcclReferralNotes)
+                .HasColumnType("ntext")
+                .HasColumnName("ucclReferralNotes");
+            entity.Property(e => e.UcclReferralSource).HasColumnName("ucclReferralSource");
+            entity.Property(e => e.UcclSlow).HasColumnName("ucclSlow");
+            entity.Property(e => e.UcclStaff).HasColumnName("ucclStaff");
+            entity.Property(e => e.UcclSuburbId).HasColumnName("ucclSuburbID");
+            entity.Property(e => e.UcclType)
+                .HasMaxLength(50)
+                .HasColumnName("ucclType");
+            entity.Property(e => e.UcclUseGroup).HasColumnName("ucclUseGroup");
+            entity.Property(e => e.Ucclemail)
+                .HasMaxLength(100)
+                .HasColumnName("ucclemail");
+            entity.Property(e => e.UrgentTonightCategoryId).HasColumnName("UrgentTonightCategoryID");
+            entity.Property(e => e.UrgentTonightLogo).HasMaxLength(500);
+            entity.Property(e => e.UrgentTonightSequence).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UrgentTonightStyleSheet).HasMaxLength(500);
+            entity.Property(e => e.UtaddtionalItemRateCodeId).HasColumnName("UTAddtionalItemRateCodeID");
+            entity.Property(e => e.UtcutOff)
+                .HasColumnType("datetime")
+                .HasColumnName("UTCutOff");
+            entity.Property(e => e.UtminimumJobsAmount)
+                .HasColumnType("money")
+                .HasColumnName("UTMinimumJobsAmount");
+            entity.Property(e => e.UtminimumJobsPerDay).HasColumnName("UTMinimumJobsPerDay");
+            entity.Property(e => e.UtpickupTime)
+                .HasColumnType("datetime")
+                .HasColumnName("UTPickupTime");
+            entity.Property(e => e.UtrateCodeId).HasColumnName("UTRateCodeID");
+            entity.Property(e => e.WebServicePassword).HasMaxLength(100);
+            entity.Property(e => e.XeroId).HasMaxLength(50);
         });
 
         modelBuilder.Entity<TucJob>(entity =>
@@ -598,9 +998,13 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasColumnName("WhenPODNotificationSent");
             entity.Property(e => e.WhenSpeedChangeNotificationSent).HasColumnType("datetime");
 
-            entity.HasOne(d => d.UndeliverableLocation).WithMany(p => p.TucJobs)
-                .HasForeignKey(d => d.UndeliverableLocationId)
-                .HasConstraintName("FK_tucJob_tblUndeliverableLocation");
+            entity.HasOne(d => d.DeliverToLeave).WithMany(p => p.TucJobs)
+                .HasForeignKey(d => d.DeliverToLeaveId)
+                .HasConstraintName("FK_tucJob_LeaveNotHome");
+
+            entity.HasOne(d => d.UcjbClient).WithMany(p => p.TucJobs)
+                .HasForeignKey(d => d.UcjbClientId)
+                .HasConstraintName("FK_tucJob_Client");
         });
 
         OnModelCreatingPartial(modelBuilder);

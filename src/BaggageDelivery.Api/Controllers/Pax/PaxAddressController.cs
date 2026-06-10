@@ -1,7 +1,9 @@
 using BaggageDelivery.Core.AddressLookup;
+using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace BaggageDelivery.Api.Controllers.Pax;
 
@@ -10,13 +12,13 @@ namespace BaggageDelivery.Api.Controllers.Pax;
 [AllowAnonymous]
 public sealed class PaxAddressController(
     IEncryptionService encryption,
-    IAddressLookupService addressLookup) : ControllerBase
+    IAddressLookupService addressLookup,
+    IOptions<DespatchOptions> despatchOptions) : ControllerBase
 {
     [HttpGet("autocomplete")]
     public async Task<ActionResult<IReadOnlyList<AddressSearchResult>>> Autocomplete(
         string id,
         [FromQuery] string text,
-        [FromQuery] string? countryCode,
         CancellationToken ct)
     {
         if (encryption.DecryptId(id) is null)
@@ -29,7 +31,7 @@ public sealed class PaxAddressController(
             return Ok(Array.Empty<AddressSearchResult>());
         }
 
-        var results = await addressLookup.AutocompleteAsync(text, countryCode, ct);
+        var results = await addressLookup.AutocompleteAsync(text, despatchOptions.Value.Countries, ct);
         return Ok(results);
     }
 

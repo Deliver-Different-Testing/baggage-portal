@@ -135,9 +135,28 @@ const sharedColors = {
   divider: 'rgba(0, 0, 0, 0.16)',
 }
 
+// Hub login-page background — mirrors `body#login` in
+// `hub/wwwroot/css/site.less:1053`. Four layers: white SVG line pattern
+// (repeated) on top of three fixed radial gradients, all anchored to the
+// viewport so they don't scroll with content. The base surface is the same
+// dark slate hub uses for its auth screen.
+const HUB_BG_SURFACE = '#1e293b'
+const HUB_BG_SVG_PATTERN =
+  "url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160' fill='none' stroke='%23ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M28 46 L40 58 L28 70' opacity='0.16'/%3E%3Cpath d='M42 46 L54 58 L42 70' opacity='0.16'/%3E%3Cpath d='M92 110 L108 110 M114 110 L130 110' opacity='0.12'/%3E%3Ccircle cx='118' cy='32' r='3' fill='%23ffffff' stroke='none' opacity='0.18'/%3E%3Cpath d='M118 35 L118 44' opacity='0.18'/%3E%3Cpath d='M22 122 L32 132 L22 142' opacity='0.10'/%3E%3Cpath d='M70 26 L82 26' opacity='0.12'/%3E%3Ccircle cx='140' cy='80' r='1.8' fill='%23ffffff' stroke='none' opacity='0.18'/%3E%3Ccircle cx='12' cy='80' r='1.2' fill='%23ffffff' stroke='none' opacity='0.14'/%3E%3C/svg%3E\")"
+
+function hubHomeBackgroundImage(primaryRgb: string): string {
+  return [
+    HUB_BG_SVG_PATTERN,
+    `radial-gradient(ellipse at 15% 80%, rgba(${primaryRgb}, 0.2) 0%, transparent 50%)`,
+    'radial-gradient(ellipse at 85% 15%, rgba(56, 189, 248, 0.12) 0%, transparent 45%)',
+    'radial-gradient(ellipse at 50% 50%, rgba(30, 41, 59, 0.85) 0%, transparent 80%)',
+  ].join(', ')
+}
+
 export function createAppTheme(isUsCustomer: boolean): Theme {
   const primaryPalette = isUsCustomer ? dfrntPrimaryPalette : urgentPrimaryPalette
   const primaryContrastText = isUsCustomer ? '#FFFFFF' : 'rgba(0, 0, 0, 0.87)'
+  const primaryRgb = isUsCustomer ? '33, 150, 243' : '244, 196, 48'
 
   const colors = {
     primary: {
@@ -336,6 +355,11 @@ export function createAppTheme(isUsCustomer: boolean): Theme {
           body: {
             scrollbarWidth: 'thin',
             scrollbarColor: `${accentPalette[400]} transparent`,
+            minHeight: '100vh',
+            backgroundColor: HUB_BG_SURFACE,
+            backgroundImage: hubHomeBackgroundImage(primaryRgb),
+            backgroundRepeat: 'repeat, no-repeat, no-repeat, no-repeat',
+            backgroundAttachment: 'fixed, fixed, fixed, fixed',
           },
         },
       },

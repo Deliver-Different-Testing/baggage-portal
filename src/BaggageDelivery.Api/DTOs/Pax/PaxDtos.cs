@@ -11,7 +11,10 @@ public sealed record BookingSummaryDto(
     string? PassengerEmail,
     AddressDto DeliveryAddress,
     DateTime EarliestSlotUtc,
-    DateTime LatestSlotUtc);
+    DateTime LatestSlotUtc,
+    AtlOptionDto[] AtlOptions);
+
+public sealed record AtlOptionDto(int Id, string Name);
 
 public sealed record AddressDto(
     [Required, MaxLength(200)] string Line1,
@@ -31,6 +34,8 @@ public sealed record ConfirmBookingRequest(
     [Required] DateTime TimeSlotEndUtc,
     [Required, MaxLength(30)] string AtlOption,
     [MaxLength(500)] string? AccessNotes,
-    [MaxLength(40)] string? PhoneOverride);
+    [Required, MaxLength(100)] string PassengerName,
+    [MaxLength(40)] string? PassengerPhone,
+    [MaxLength(254), EmailAddress] string? PassengerEmail);
 
 public sealed record ConfirmBookingResponse(string Status, DateTime ReleasedAtUtc);

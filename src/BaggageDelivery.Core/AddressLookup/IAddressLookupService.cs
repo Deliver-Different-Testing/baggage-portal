@@ -2,7 +2,11 @@ namespace BaggageDelivery.Core.AddressLookup;
 
 public interface IAddressLookupService
 {
-    Task<IReadOnlyList<AddressSearchResult>> AutocompleteAsync(string text, string? countryCode, CancellationToken ct = default);
+    Task<IReadOnlyList<AddressSearchResult>> AutocompleteAsync(
+        string text,
+        IReadOnlyList<string>? countryCodes,
+        CancellationToken ct = default);
+
     Task<AddressDetail?> LookupAsync(string addressId, CancellationToken ct = default);
 }
 

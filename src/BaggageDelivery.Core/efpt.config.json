@@ -27,7 +27,11 @@
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[tblUndeliverableLocation]",
+         "Name": "[dbo].[tblJobLeaveNotHome]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucClient]",
          "ObjectType": 0
       },
       {

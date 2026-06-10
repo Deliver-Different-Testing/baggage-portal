@@ -1,13 +1,6 @@
  namespace BaggageDelivery.Core.Models;
 
-public static class OutboxStatus
-{
-    public const string Pending = "Pending";
-    public const string Done = "Done";
-    public const string Failed = "Failed";
-}
-
-public static class NotificationStatus
+ public static class NotificationStatus
 {
     public const string Pending = "Pending";
     public const string Sent = "Sent";

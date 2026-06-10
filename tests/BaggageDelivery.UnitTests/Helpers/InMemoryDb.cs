@@ -8,21 +8,6 @@ namespace BaggageDelivery.UnitTests.Helpers;
 
 internal static class InMemoryDb
 {
-    // SQLite in-memory rather than the EF InMemory provider because the latter
-    // does not support ExecuteUpdateAsync, which our drain services use for
-    // single-statement mutations.
-    //
-    // BagDelNotificationLog.RowVersion is mapped IsRowVersion (SQL Server
-    // stamps it). SQLite has no equivalent, so we subclass the context to
-    // mark the property as ValueGeneratedNever and use an interceptor to
-    // stamp a fresh byte[] on every insert/update.
-    //
-    // The Despatch DB tables we scaffolded into the context for reads
-    // (tucJob, JobDeliveryJourney, tblUndeliverableLocation) are .Ignore()'d
-    // in the test context — they're SELECT-only via api/trackingpage in
-    // production and unit tests have no business creating their schema in
-    // SQLite (the real tucJob schema has triggers, foreign keys, and types
-    // SQLite can't model anyway).
     public static BaggageDeliveryContext NewContext()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -52,7 +37,7 @@ internal static class InMemoryDb
 
             modelBuilder.Ignore<TucJob>();
             modelBuilder.Ignore<JobDeliveryJourney>();
-            modelBuilder.Ignore<TblUndeliverableLocation>();
+            modelBuilder.Ignore<TblJobLeaveNotHome>();
         }
     }
 

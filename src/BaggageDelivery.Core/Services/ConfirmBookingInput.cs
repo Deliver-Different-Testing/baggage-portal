@@ -9,4 +9,6 @@ public sealed record ConfirmBookingInput(
     DateTime TimeSlotEndUtc,
     string AtlOption,
     string? AccessNotes,
-    string? PhoneOverride);
+    string PassengerName,
+    string? PassengerPhone,
+    string? PassengerEmail);

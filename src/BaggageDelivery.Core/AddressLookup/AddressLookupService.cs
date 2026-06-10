@@ -34,7 +34,10 @@ public sealed class AddressLookupService(
     private const string DefaultCountryCode = "NZ";
     private const string DefaultCoordinates = "-40.900557,174.885971";
 
-    public async Task<IReadOnlyList<AddressSearchResult>> AutocompleteAsync(string text, string? countryCode, CancellationToken ct = default)
+    public async Task<IReadOnlyList<AddressSearchResult>> AutocompleteAsync(
+        string text,
+        IReadOnlyList<string>? countryCodes,
+        CancellationToken ct = default)
     {
         var apiKey = options.Value.ApiKey;
         if (string.IsNullOrEmpty(apiKey))
@@ -45,16 +48,19 @@ public sealed class AddressLookupService(
 
         var client = httpClientFactory.CreateClient("HereMaps");
 
-        var country = countryCode ?? DefaultCountryCode;
-        var at = CountryCoordinates.GetValueOrDefault(country, DefaultCoordinates);
-        var iso3 = CountryCodeMap.GetValueOrDefault(country, country);
+        var effectiveCountries = countryCodes is { Count: > 0 } ? countryCodes : [DefaultCountryCode];
+        // `at` is a single bias point — anchor on the first configured country.
+        var primary = effectiveCountries[0];
+        var at = CountryCoordinates.GetValueOrDefault(primary, DefaultCoordinates);
+        var iso3List = string.Join(',', effectiveCountries
+            .Select(c => CountryCodeMap.GetValueOrDefault(c, c)));
 
         var queryParams = new Dictionary<string, string>
         {
             ["q"] = text,
             ["apiKey"] = apiKey,
             ["at"] = at,
-            ["in"] = $"countryCode:{iso3}",
+            ["in"] = $"countryCode:{iso3List}",
             ["limit"] = "10"
         };
         var queryString = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));

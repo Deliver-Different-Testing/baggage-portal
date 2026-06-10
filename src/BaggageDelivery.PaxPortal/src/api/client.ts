@@ -66,6 +66,12 @@ export type BookingSummary = {
   deliveryAddress: AddressDto
   earliestSlotUtc: string
   latestSlotUtc: string
+  atlOptions: AtlOption[]
+}
+
+export type AtlOption = {
+  id: number
+  name: string
 }
 
 export type TimeSlot = {
@@ -82,7 +88,9 @@ export type ConfirmBookingRequest = {
   timeSlotEndUtc: string
   atlOption: string
   accessNotes?: string | null
-  phoneOverride?: string | null
+  passengerName: string
+  passengerPhone?: string | null
+  passengerEmail?: string | null
 }
 
 export type TrackingEvent = {

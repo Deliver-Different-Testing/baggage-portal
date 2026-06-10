@@ -493,7 +493,9 @@ public partial class TucJob
 
     public int? RouteId { get; set; }
 
+    public virtual TblJobLeaveNotHome DeliverToLeave { get; set; }
+
     public virtual ICollection<JobDeliveryJourney> JobDeliveryJourneys { get; set; } = new List<JobDeliveryJourney>();
 
-    public virtual TblUndeliverableLocation UndeliverableLocation { get; set; }
+    public virtual TucClient UcjbClient { get; set; }
 }

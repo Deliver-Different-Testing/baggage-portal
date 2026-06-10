@@ -11,4 +11,5 @@ public sealed record BookingSummary(
     string? PassengerEmail,
     AddressUpdateDto DeliveryAddress,
     DateTime EarliestSlotUtc,
-    DateTime LatestSlotUtc);
+    DateTime LatestSlotUtc,
+    IReadOnlyList<AtlOptionDto> AtlOptions);
