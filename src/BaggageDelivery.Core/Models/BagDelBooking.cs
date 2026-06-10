@@ -47,6 +47,10 @@ public partial class BagDelBooking
 
     public string DespatchSyncError { get; set; }
 
+    public DateTime? OrphanedAtUtc { get; set; }
+
+    public string OrphanedReason { get; set; }
+
     public virtual ICollection<BagDelConfirmationOutbox> BagDelConfirmationOutboxes { get; set; } = new List<BagDelConfirmationOutbox>();
 
     public virtual ICollection<BagDelNotificationLog> BagDelNotificationLogs { get; set; } = new List<BagDelNotificationLog>();

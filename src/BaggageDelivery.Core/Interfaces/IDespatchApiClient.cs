@@ -1,3 +1,4 @@
+using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http.Models;
 
 namespace BaggageDelivery.Core.Interfaces;
@@ -17,5 +18,8 @@ public interface IDespatchApiClient
         int? clientId, int contactId, int jobId, DeliveryUpdateRequest request, CancellationToken ct);
 
     Task<TrackingDto?> GetJobTrackingAsync(int tenantId, string connection, string timeZone,
+        int? clientId, int contactId, int jobId, CancellationToken ct);
+
+    Task<JobExistenceResult> CheckJobExistsAsync(int tenantId, string connection, string timeZone,
         int? clientId, int contactId, int jobId, CancellationToken ct);
 }

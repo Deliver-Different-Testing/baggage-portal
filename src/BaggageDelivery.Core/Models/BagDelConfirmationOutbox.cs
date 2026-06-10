@@ -25,5 +25,7 @@ public partial class BagDelConfirmationOutbox
 
     public DateTime CreatedAtUtc { get; set; }
 
+    public byte[] RowVersion { get; set; }
+
     public virtual BagDelBooking Booking { get; set; }
 }

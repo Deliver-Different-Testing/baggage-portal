@@ -33,6 +33,7 @@ public static class DependencyInjection
             services.AddScoped<IPaxTrackingService, PaxTrackingService>();
             services.AddScoped<IDespatchJobReleaseService, DespatchJobReleaseService>();
             services.AddScoped<IBookingLinkDispatchService, BookingLinkDispatchService>();
+            services.AddScoped<IOrphanReconciliationService, OrphanReconciliationService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, NotificationService>();

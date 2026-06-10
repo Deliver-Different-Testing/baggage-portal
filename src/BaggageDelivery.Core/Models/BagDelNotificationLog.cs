@@ -29,5 +29,7 @@ public partial class BagDelNotificationLog
 
     public DateTime UpdatedAtUtc { get; set; }
 
+    public byte[] RowVersion { get; set; }
+
     public virtual BagDelBooking Booking { get; set; }
 }

@@ -29,7 +29,11 @@ public partial class BaggageDeliveryContext : DbContext
 
             entity.HasIndex(e => e.JobId, "IX_BagDelBooking_JobId");
 
+            entity.HasIndex(e => e.CreatedAtUtc, "IX_BagDelBooking_ReconcileScan").HasFilter("([OrphanedAtUtc] IS NULL AND [DespatchSyncedAtUtc] IS NULL)");
+
             entity.HasIndex(e => e.TenantId, "IX_BagDelBooking_TenantId");
+
+            entity.HasIndex(e => new { e.TenantId, e.JobId }, "UQ_BagDelBooking_Tenant_Job").IsUnique();
 
             entity.Property(e => e.AccessNotes).HasMaxLength(500);
             entity.Property(e => e.AddressLine1).HasMaxLength(200);
@@ -47,6 +51,8 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.DespatchSyncedAtUtc).HasColumnType("datetime");
             entity.Property(e => e.Latitude).HasColumnType("decimal(9, 6)");
             entity.Property(e => e.Longitude).HasColumnType("decimal(9, 6)");
+            entity.Property(e => e.OrphanedAtUtc).HasColumnType("datetime");
+            entity.Property(e => e.OrphanedReason).HasMaxLength(200);
             entity.Property(e => e.PhoneOverride).HasMaxLength(40);
             entity.Property(e => e.PostCode).HasMaxLength(20);
             entity.Property(e => e.Suburb).HasMaxLength(100);
@@ -60,14 +66,18 @@ public partial class BaggageDeliveryContext : DbContext
 
             entity.ToTable("BagDelConfirmationOutbox");
 
+            entity.HasIndex(e => e.NextAttemptUtc, "IX_BagDelConfirmationOutbox_Pending").HasFilter("([Status]='Pending')");
+
             entity.HasIndex(e => e.Status, "IX_BagDelConfirmationOutbox_Status");
 
-            entity.Property(e => e.AttemptCount).HasAnnotation("Relational:DefaultConstraintName", "DF_BagDelConfirmationOutbox_Attempts");
             entity.Property(e => e.CreatedAtUtc)
-                .HasDefaultValueSql("(getutcdate())")
-                .HasAnnotation("Relational:DefaultConstraintName", "DF_BagDelConfirmationOutbox_Created")
+                .HasDefaultValueSql("(getutcdate())", "DF_BagDelConfirmationOutbox_Created")
                 .HasColumnType("datetime");
             entity.Property(e => e.NextAttemptUtc).HasColumnType("datetime");
+            entity.Property(e => e.RowVersion)
+                .IsRequired()
+                .IsRowVersion()
+                .IsConcurrencyToken();
             entity.Property(e => e.Status)
                 .IsRequired()
                 .HasMaxLength(20)
@@ -85,29 +95,32 @@ public partial class BaggageDeliveryContext : DbContext
 
             entity.ToTable("BagDelNotificationLog");
 
+            entity.HasIndex(e => e.NextAttemptUtc, "IX_BagDelNotificationLog_Pending").HasFilter("([Status]='Pending')");
+
             entity.HasIndex(e => e.Status, "IX_BagDelNotificationLog_Status");
 
-            entity.Property(e => e.AttemptCount).HasAnnotation("Relational:DefaultConstraintName", "DF_BagDelNotificationLog_Attempts");
             entity.Property(e => e.Channel)
                 .IsRequired()
                 .HasMaxLength(10)
                 .IsUnicode(false);
             entity.Property(e => e.CreatedAtUtc)
-                .HasDefaultValueSql("(getutcdate())")
-                .HasAnnotation("Relational:DefaultConstraintName", "DF_BagDelNotificationLog_Created")
+                .HasDefaultValueSql("(getutcdate())", "DF_BagDelNotificationLog_Created")
                 .HasColumnType("datetime");
             entity.Property(e => e.NextAttemptUtc).HasColumnType("datetime");
             entity.Property(e => e.ProviderMsgId).HasMaxLength(100);
             entity.Property(e => e.Recipient)
                 .IsRequired()
                 .HasMaxLength(200);
+            entity.Property(e => e.RowVersion)
+                .IsRequired()
+                .IsRowVersion()
+                .IsConcurrencyToken();
             entity.Property(e => e.Status)
                 .IsRequired()
                 .HasMaxLength(20)
                 .IsUnicode(false);
             entity.Property(e => e.UpdatedAtUtc)
-                .HasDefaultValueSql("(getutcdate())")
-                .HasAnnotation("Relational:DefaultConstraintName", "DF_BagDelNotificationLog_Updated")
+                .HasDefaultValueSql("(getutcdate())", "DF_BagDelNotificationLog_Updated")
                 .HasColumnType("datetime");
 
             entity.HasOne(d => d.Booking).WithMany(p => p.BagDelNotificationLogs)
