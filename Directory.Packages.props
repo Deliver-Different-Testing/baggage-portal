@@ -11,6 +11,7 @@
     <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.4.5" />
     <PackageVersion Include="AWSSDK.SecretsManager" Version="4.0.5.2" />
     <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.0.5" />
+    <PackageVersion Include="AWSSDK.SimpleNotificationService" Version="4.0.3.2" />
   </ItemGroup>
   <ItemGroup Label="Microsoft / EF Core / ASP.NET">
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
@@ -38,7 +39,6 @@
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.0" />
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.1" />
-    <PackageVersion Include="Twilio" Version="7.14.9" />
   </ItemGroup>
   <ItemGroup Label="Test Dependencies">
     <PackageVersion Include="MockQueryable.NSubstitute" Version="10.0.8" />

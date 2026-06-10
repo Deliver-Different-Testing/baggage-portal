@@ -1,12 +1,17 @@
 namespace BaggageDelivery.Core.Notifications;
 
-public sealed class TwilioOptions
+public sealed class SnsOptions
 {
-    public const string SectionName = "Twilio";
+    public const string SectionName = "Sns";
 
-    public string AccountSid { get; set; } = "";
-    public string AuthToken { get; set; } = "";
-    public string FromNumber { get; set; } = "";
+    // Optional alphanumeric sender ID shown on the recipient's handset where
+    // the destination country supports it (NZ does; US does not). When empty
+    // AWS uses its long-code pool.
+    public string? SenderId { get; set; }
+
+    // "Transactional" gives higher delivery priority and is the correct class
+    // for one-shot magic links. "Promotional" is cheaper but lower priority.
+    public string SmsType { get; set; } = "Transactional";
 }
 
 public sealed class SesOptions

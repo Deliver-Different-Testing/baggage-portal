@@ -1,6 +1,7 @@
 using System.Net;
 using Amazon.SecretsManager;
 using Amazon.SimpleEmailV2;
+using Amazon.SimpleNotificationService;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
@@ -35,7 +36,7 @@ public static class DependencyInjection
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, NotificationService>();
-            services.AddScoped<ISmsSender, TwilioSmsSender>();
+            services.AddScoped<ISmsSender, SnsSmsSender>();
             services.AddScoped<IEmailSender, SesEmailSender>();
             services.AddScoped<ConfigTenantResolver>();
             services.AddScoped<ITenantResolver>(sp => new CachingTenantResolver(
@@ -70,10 +71,11 @@ public static class DependencyInjection
 
         private void AddAwsServices(bool isDevelopment)
         {
-            // SES uses the default AWS credentials chain (env vars → shared
-            // creds file → IAM role) — same path the rest of the AWS stack
-            // uses, so dev SSO + prod task role both work without a switch.
+            // SES + SNS both use the default AWS credentials chain (env vars →
+            // shared creds file → IAM role) — same path the rest of the AWS
+            // stack uses, so dev SSO + prod task role both work without a switch.
             services.AddAWSService<IAmazonSimpleEmailServiceV2>();
+            services.AddAWSService<IAmazonSimpleNotificationService>();
 
             if (isDevelopment)
             {
@@ -88,14 +90,7 @@ public static class DependencyInjection
 
         private void AddNotifications(IConfiguration configuration)
         {
-            services.Configure<TwilioOptions>(configuration.GetSection(TwilioOptions.SectionName));
-            services.PostConfigure<TwilioOptions>(opts =>
-            {
-                opts.AccountSid = Environment.GetEnvironmentVariable("TwilioAccountSid") ?? opts.AccountSid;
-                opts.AuthToken = Environment.GetEnvironmentVariable("TwilioAuthToken") ?? opts.AuthToken;
-                opts.FromNumber = Environment.GetEnvironmentVariable("TwilioFromNumber") ?? opts.FromNumber;
-            });
-
+            services.Configure<SnsOptions>(configuration.GetSection(SnsOptions.SectionName));
             services.Configure<SesOptions>(configuration.GetSection(SesOptions.SectionName));
         }
 
