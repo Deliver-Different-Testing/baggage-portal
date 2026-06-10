@@ -1,9 +1,5 @@
 namespace BaggageDelivery.Core.Enums;
 
-// String values used in JobDeliveryJourney.ChangeType. Mirror of
-// DespatchWeb.Enums.DeliveryJourneyChangeType — kept in sync so the
-// dispatcher timeline reads BaggageDelivery's audit rows the same way it
-// reads despatchweb's. Use nameof(...) when stamping the column.
 public enum DeliveryJourneyChangeType
 {
     InternalStatus,
@@ -11,7 +7,8 @@ public enum DeliveryJourneyChangeType
     FlightAssignment,
     AgentAssignment,
     JobUpdate,
-    CourierAssignment
+    CourierAssignment,
+    BaggageDeliveryBooking
 }
 
 public enum DeliveryJourneyUpdatedByType

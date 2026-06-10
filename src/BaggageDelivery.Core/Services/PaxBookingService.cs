@@ -222,6 +222,30 @@ internal sealed class PaxBookingService(
                 $"tucJob {input.JobId} not found — pax confirmation not persisted");
         }
 
+        // Audit-only: record the pax-confirm on JobDeliveryJourney so the dispatcher's
+        // timeline shows the booking was created via the passenger self-service link.
+        // ChangeType / UpdatedByType are persisted-string contracts shared with
+        // DespatchWeb.Enums — keep the strings in sync if those enums are renamed.
+        // Best-effort: a journey-write failure must not undo the tucJob update.
+        try
+        {
+            await db.JobDeliveryJourneys.AddAsync(new JobDeliveryJourney
+            {
+                JobId = input.JobId,
+                ChangeType = nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking),
+                UpdatedAt = time.GetUtcNow().UtcDateTime,
+                UpdatedByType = nameof(DeliveryJourneyUpdatedByType.System),
+                Comments = "Baggage delivery booking created by passenger via self-service link"
+            }, ct);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Warning(ex,
+                "Pax confirmation JobId={JobId}: failed to record JobDeliveryJourney entry (audit-only, ignored)",
+                input.JobId);
+        }
+
         Log.Information("Pax confirmation released: JobId={JobId}", input.JobId);
     }
 

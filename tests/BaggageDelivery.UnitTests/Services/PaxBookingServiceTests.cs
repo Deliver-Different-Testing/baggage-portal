@@ -1,7 +1,10 @@
+using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http;
+using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Services;
 using BaggageDelivery.UnitTests.Helpers;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -117,6 +120,73 @@ public class PaxBookingServiceTests
             CancellationToken.None);
 
         Assert.Empty(slots);
+    }
+
+    [Fact]
+    public async Task Confirm_updates_tucJob_and_writes_baggage_delivery_booking_journey_row()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4242,
+            UcjbNumber = "TEST-4242",
+            DeliverToContact = "old name",
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4242,
+            Address: new AddressUpdateDto
+            {
+                Line1 = "1 Test Street",
+                City = "Auckland",
+                Country = "NZ"
+            },
+            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOption: null!,
+            AccessNotes: "Buzzer 3",
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+64 21 000",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("Jane Pax", job.DeliverToContact);
+        Assert.Equal((int)JobStatus.New, job.UcjbStatus);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4242, ct);
+        Assert.Equal(nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking), journey.ChangeType);
+        Assert.Equal(nameof(DeliveryJourneyUpdatedByType.System), journey.UpdatedByType);
+        Assert.Equal(time.GetUtcNow().UtcDateTime, journey.UpdatedAt);
+        Assert.Contains("self-service", journey.Comments);
+    }
+
+    [Fact]
+    public async Task Confirm_throws_when_tucJob_does_not_exist()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+        var ct = TestContext.Current.CancellationToken;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 9999,
+            Address: new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
+            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOption: null!,
+            AccessNotes: null,
+            PassengerName: "X",
+            PassengerPhone: null,
+            PassengerEmail: null), ct));
+
+        Assert.False(await db.JobDeliveryJourneys.AnyAsync(ct));
     }
 
     [Fact]
