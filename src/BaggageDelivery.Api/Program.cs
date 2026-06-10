@@ -2,6 +2,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading.RateLimiting;
 using BaggageDelivery.Api.Auth;
+using BaggageDelivery.Api.Dev;
 using BaggageDelivery.Api.Services;
 using BaggageDelivery.Core;
 using Microsoft.AspNetCore.DataProtection;
@@ -191,5 +192,7 @@ if (Directory.Exists(app.Environment.WebRootPath))
 {
     app.MapFallbackToFile("index.html").AllowAnonymous();
 }
+
+app.LogTestMagicLinks();
 
 app.Run();
