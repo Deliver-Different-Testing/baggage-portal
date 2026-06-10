@@ -88,5 +88,10 @@ export default defineConfig({
     env: {
       VITE_API_URL: 'http://test-api.local/api/v1',
     },
+    server: {
+      deps: {
+        inline: [/@mui\//, 'react-transition-group'],
+      },
+    },
   },
 })

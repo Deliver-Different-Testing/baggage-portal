@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -195,7 +195,7 @@ function ConfirmForm({
     })
   }
 
-  if (confirmed) return <ConfirmedScreen summary={summary} slot={selectedSlot} />
+  if (confirmed) return <ConfirmedScreen summary={summary} slot={selectedSlot} bookingId={bookingId} />
 
   return (
     <Box sx={{ minHeight: '100vh', pb: { xs: 14, sm: 16 } }}>
@@ -792,7 +792,15 @@ function SlotOption({
   )
 }
 
-function ConfirmedScreen({ summary, slot }: { summary: BookingSummary; slot: TimeSlot | undefined }) {
+export function ConfirmedScreen({
+  summary,
+  slot,
+  bookingId,
+}: {
+  summary: BookingSummary
+  slot: TimeSlot | undefined
+  bookingId: string
+}) {
   return (
     <Box sx={{ minHeight: '100vh' }}>
       <Box
@@ -882,11 +890,22 @@ function ConfirmedScreen({ summary, slot }: { summary: BookingSummary; slot: Tim
             </Card>
           )}
 
+          <Button
+            component={RouterLink}
+            to={`/t/${bookingId}`}
+            variant="contained"
+            size="large"
+            fullWidth
+            endIcon={<ArrowForwardRoundedIcon />}
+            sx={{ py: 1.5, fontWeight: 600 }}
+          >
+            Track your delivery
+          </Button>
+
           <Card sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.06), border: 'none' })}>
             <CardContent>
               <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
-                We'll text you when our driver is on the way. You can track your
-                delivery live from the link in that message.
+                We'll also text you when our driver is on the way.
               </Typography>
             </CardContent>
           </Card>
