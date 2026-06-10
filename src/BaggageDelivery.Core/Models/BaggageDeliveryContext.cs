@@ -13,8 +13,6 @@ public partial class BaggageDeliveryContext : DbContext
     {
     }
 
-    public virtual DbSet<BagDelNotificationLog> BagDelNotificationLogs { get; set; }
-
     public virtual DbSet<JobDeliveryJourney> JobDeliveryJourneys { get; set; }
 
     public virtual DbSet<TblEcoSetting> TblEcoSettings { get; set; }
@@ -25,45 +23,10 @@ public partial class BaggageDeliveryContext : DbContext
 
     public virtual DbSet<TucJob> TucJobs { get; set; }
 
+    public virtual DbSet<TucManualMessage> TucManualMessages { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<BagDelNotificationLog>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK__BagDelNo__3214EC075A48CD81");
-
-            entity.ToTable("BagDelNotificationLog");
-
-            entity.HasIndex(e => e.JobId, "IX_BagDelNotificationLog_JobId");
-
-            entity.HasIndex(e => e.NextAttemptUtc, "IX_BagDelNotificationLog_Pending").HasFilter("([Status]='Pending')");
-
-            entity.HasIndex(e => e.Status, "IX_BagDelNotificationLog_Status");
-
-            entity.Property(e => e.Channel)
-                .IsRequired()
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.CreatedAtUtc)
-                .HasDefaultValueSql("(getutcdate())", "DF_BagDelNotificationLog_Created")
-                .HasColumnType("datetime");
-            entity.Property(e => e.NextAttemptUtc).HasColumnType("datetime");
-            entity.Property(e => e.ProviderMsgId).HasMaxLength(100);
-            entity.Property(e => e.Recipient)
-                .IsRequired()
-                .HasMaxLength(200);
-            entity.Property(e => e.RowVersion)
-                .IsRequired()
-                .IsRowVersion()
-                .IsConcurrencyToken();
-            entity.Property(e => e.Status)
-                .IsRequired()
-                .HasMaxLength(20)
-                .IsUnicode(false);
-            entity.Property(e => e.UpdatedAtUtc)
-                .HasDefaultValueSql("(getutcdate())", "DF_BagDelNotificationLog_Updated")
-                .HasColumnType("datetime");
-        });
-
         modelBuilder.Entity<JobDeliveryJourney>(entity =>
         {
             entity.HasKey(e => e.JourneyId).HasName("PK__JobDeliv__4159B9CFA99F08CB");
@@ -1026,6 +989,61 @@ public partial class BaggageDeliveryContext : DbContext
             entity.HasOne(d => d.UcjbClient).WithMany(p => p.TucJobs)
                 .HasForeignKey(d => d.UcjbClientId)
                 .HasConstraintName("FK_tucJob_Client");
+        });
+
+        modelBuilder.Entity<TucManualMessage>(entity =>
+        {
+            entity.HasKey(e => e.UcmmId)
+                .IsClustered(false)
+                .HasFillFactor(80);
+
+            entity.ToTable("tucManualMessage", tb => tb.HasTrigger("tucManualMessage_Insert"));
+
+            entity.HasIndex(e => new { e.UcmmSendToStaffId, e.Read }, "IX_TucManualMessage_Unread").HasFillFactor(90);
+
+            entity.HasIndex(e => new { e.UcmmSendToStaffId, e.Read, e.UcmmSendFromCourierId }, "IX_tucManualMessage_UnreadByCourier").HasFillFactor(90);
+
+            entity.HasIndex(e => new { e.UcmmSendToStaffId, e.Read, e.UcmmSendFromStaffId }, "IX_tucManualMessage_UnreadByStaff").HasFillFactor(90);
+
+            entity.HasIndex(e => new { e.UcmmSendToStaffId, e.Read }, "IX_tucManualMessage_UnreadCount").HasFillFactor(90);
+
+            entity.Property(e => e.UcmmId).HasColumnName("ucmmID");
+            entity.Property(e => e.FileName).HasMaxLength(255);
+            entity.Property(e => e.FilePath).HasMaxLength(1000);
+            entity.Property(e => e.FileType).HasMaxLength(100);
+            entity.Property(e => e.JobId).HasColumnName("JobID");
+            entity.Property(e => e.ReplyToEmailAddress).HasMaxLength(500);
+            entity.Property(e => e.SendToEmailAddress).HasMaxLength(500);
+            entity.Property(e => e.SendToMobile).HasMaxLength(500);
+            entity.Property(e => e.Subject).HasMaxLength(500);
+            entity.Property(e => e.TimeRead).HasColumnType("datetime");
+            entity.Property(e => e.UcmmAttempts)
+                .HasDefaultValue(0, "DF_tucManualMessage_ucmmAttempts")
+                .HasColumnName("ucmmAttempts");
+            entity.Property(e => e.UcmmDate)
+                .HasDefaultValueSql("(getdate())", "DF_tucManualMessage_ucmmDate")
+                .HasColumnType("datetime")
+                .HasColumnName("ucmmDate");
+            entity.Property(e => e.UcmmMessage)
+                .IsRequired()
+                .HasColumnType("ntext")
+                .HasColumnName("ucmmMessage");
+            entity.Property(e => e.UcmmSendFromCourierId).HasColumnName("ucmmSendFromCourierID");
+            entity.Property(e => e.UcmmSendFromStaffId).HasColumnName("ucmmSendFromStaffID");
+            entity.Property(e => e.UcmmSendTo).HasColumnName("ucmmSendTo");
+            entity.Property(e => e.UcmmSendToCourierId).HasColumnName("ucmmSendToCourierID");
+            entity.Property(e => e.UcmmSendToStaffId).HasColumnName("ucmmSendToStaffID");
+            entity.Property(e => e.UcmmSent).HasColumnName("ucmmSent");
+            entity.Property(e => e.UcmmStaffId)
+                .HasDefaultValue(0, "DF_tucManualMessage_ucmmStaffID")
+                .HasColumnName("ucmmStaffID");
+            entity.Property(e => e.UcmmTimeSent)
+                .HasColumnType("datetime")
+                .HasColumnName("ucmmTimeSent");
+            entity.Property(e => e.UcmmWindowsUser)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("ucmmWindowsUser");
         });
 
         OnModelCreatingPartial(modelBuilder);

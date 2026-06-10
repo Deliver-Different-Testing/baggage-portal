@@ -1,8 +1,6 @@
 using BaggageDelivery.Core.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace BaggageDelivery.UnitTests.Helpers;
 
@@ -16,7 +14,6 @@ internal static class InMemoryDb
         var options = new DbContextOptionsBuilder<BaggageDeliveryContext>()
             .UseSqlite(connection)
             .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
-            .AddInterceptors(new RowVersionStampInterceptor())
             .Options;
 
         var ctx = new TestBaggageDeliveryContext(options);
@@ -31,54 +28,9 @@ internal static class InMemoryDb
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<BagDelNotificationLog>()
-                .Property(n => n.RowVersion)
-                .ValueGeneratedNever();
-
             modelBuilder.Ignore<TucJob>();
             modelBuilder.Ignore<JobDeliveryJourney>();
             modelBuilder.Ignore<TblJobLeaveNotHome>();
-        }
-    }
-
-    private sealed class RowVersionStampInterceptor : SaveChangesInterceptor
-    {
-        public override InterceptionResult<int> SavingChanges(
-            DbContextEventData eventData, InterceptionResult<int> result)
-        {
-            Stamp(eventData.Context);
-            return base.SavingChanges(eventData, result);
-        }
-
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken ct = default)
-        {
-            Stamp(eventData.Context);
-            return base.SavingChangesAsync(eventData, result, ct);
-        }
-
-        private static void Stamp(DbContext? ctx)
-        {
-            if (ctx is null) return;
-            foreach (var entry in ctx.ChangeTracker.Entries())
-            {
-                if (entry.State is not EntityState.Added and not EntityState.Modified)
-                {
-                    continue;
-                }
-
-                StampIfPresent(entry, "RowVersion");
-            }
-        }
-
-        private static void StampIfPresent(EntityEntry entry, string propertyName)
-        {
-            var prop = entry.Metadata.FindProperty(propertyName);
-            if (prop?.ClrType != typeof(byte[]))
-            {
-                return;
-            }
-            entry.Property(propertyName).CurrentValue = Guid.NewGuid().ToByteArray();
         }
     }
 }

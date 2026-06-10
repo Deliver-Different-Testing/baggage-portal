@@ -3,8 +3,8 @@ using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
+using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Security;
-using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,8 +19,8 @@ namespace BaggageDelivery.Api.Controllers.Admin;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public sealed class BookingLinksController(
     IEncryptionService encryption,
-    IBookingLinkDispatchService dispatch,
-    IDespatchApiClient despatch_,
+    INotificationService notifications,
+    IDespatchApiClient despatchClient,
     IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
     [HttpPost("")]
@@ -47,7 +47,7 @@ public sealed class BookingLinksController(
         // through the SC-JWT-authed api endpoint which also stamps the
         // JobDeliveryJourney audit row. Best-effort: any failure is logged
         // and swallowed so the passenger link still gets minted.
-        var statusOk = await despatch_.UpdateJobStatusAsync(
+        var statusOk = await despatchClient.UpdateJobStatusAsync(
             body.JobId,
             new JobStatusUpdateRequest
             {
@@ -69,14 +69,20 @@ public sealed class BookingLinksController(
 
         if (body.Channel is "sms" or "both" && !string.IsNullOrWhiteSpace(body.Phone))
         {
-            await dispatch.EnqueueAsync(new EnqueueNotificationRequest(
-                body.JobId, NotificationChannel.Sms, body.Phone!, passengerName, airline, reference, confirmUrl), ct);
+            await notifications.SendBookingLinkAsync(
+                body.JobId, body.Phone!,
+                new BookingNotificationContext(
+                    NotificationChannel.Sms, passengerName, airline, reference, confirmUrl),
+                ct);
         }
 
         if (body.Channel is "email" or "both" && !string.IsNullOrWhiteSpace(body.Email))
         {
-            await dispatch.EnqueueAsync(new EnqueueNotificationRequest(
-                body.JobId, NotificationChannel.Email, body.Email!, passengerName, airline, reference, confirmUrl), ct);
+            await notifications.SendBookingLinkAsync(
+                body.JobId, body.Email!,
+                new BookingNotificationContext(
+                    NotificationChannel.Email, passengerName, airline, reference, confirmUrl),
+                ct);
         }
 
         Log.Information(

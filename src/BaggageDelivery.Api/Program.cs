@@ -3,7 +3,6 @@ using System.Security.Principal;
 using System.Threading.RateLimiting;
 using BaggageDelivery.Api.Auth;
 using BaggageDelivery.Api.Dev;
-using BaggageDelivery.Api.Services;
 using BaggageDelivery.Core;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -32,8 +31,6 @@ builder.Host.UseSerilog();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddAppAuthentication(builder.Configuration);
-
-builder.Services.AddHostedService<BookingLinkDispatchWorker>();
 
 builder.Services.AddControllers(options => { options.MaxModelBindingCollectionSize = 100; });
 builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestBodySize = 4 * 1024 * 1024; });

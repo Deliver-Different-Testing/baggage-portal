@@ -4,5 +4,5 @@ namespace BaggageDelivery.Core.Interfaces;
 
 public interface INotificationService
 {
-    Task<NotificationResult> SendAsync(NotificationMessage message, CancellationToken ct);
+    Task SendBookingLinkAsync(int jobId, string recipient, BookingNotificationContext context, CancellationToken ct);
 }

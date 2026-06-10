@@ -19,10 +19,6 @@
    "T4TemplatePath": null,
    "Tables": [
       {
-         "Name": "[dbo].[BagDelNotificationLog]",
-         "ObjectType": 0
-      },
-      {
          "Name": "[dbo].[JobDeliveryJourney]",
          "ObjectType": 0
       },
@@ -40,6 +36,10 @@
       },
       {
          "Name": "[dbo].[tucJob]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucManualMessage]",
          "ObjectType": 0
       }
    ],

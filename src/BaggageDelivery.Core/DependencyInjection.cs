@@ -1,7 +1,5 @@
 using System.Net;
 using Amazon.SecretsManager;
-using Amazon.SimpleEmailV2;
-using Amazon.SimpleNotificationService;
 using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
@@ -11,7 +9,6 @@ using BaggageDelivery.Core.Secrets;
 using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -31,19 +28,15 @@ public static class DependencyInjection
             services.AddSingleton<IEncryptionService, EncryptionService>();
             services.AddScoped<IPaxBookingService, PaxBookingService>();
             services.AddScoped<IPaxTrackingService, PaxTrackingService>();
-            services.AddScoped<IBookingLinkDispatchService, BookingLinkDispatchService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
-            services.AddScoped<INotificationService, NotificationService>();
-            services.AddScoped<ISmsSender, SnsSmsSender>();
-            services.AddScoped<IEmailSender, SesEmailSender>();
+            services.AddScoped<INotificationService, TucManualMessageSender>();
         }
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)
         {
             services.AddDatabase(configuration);
             services.AddAwsServices(isDevelopment);
-            services.AddNotifications(configuration);
             services.AddEncryption(configuration);
             services.AddBookingLinks(configuration);
             services.AddDespatchClient(configuration);
@@ -68,12 +61,6 @@ public static class DependencyInjection
 
         private void AddAwsServices(bool isDevelopment)
         {
-            // SES + SNS both use the default AWS credentials chain (env vars →
-            // shared creds file → IAM role) — same path the rest of the AWS
-            // stack uses, so dev SSO + prod task role both work without a switch.
-            services.AddAWSService<IAmazonSimpleEmailServiceV2>();
-            services.AddAWSService<IAmazonSimpleNotificationService>();
-
             if (isDevelopment)
             {
                 services.AddSingleton<ISecretsService, InMemorySecretsService>();
@@ -83,12 +70,6 @@ public static class DependencyInjection
                 services.AddAWSService<IAmazonSecretsManager>();
                 services.AddScoped<ISecretsService, AwsSecretsService>();
             }
-        }
-
-        private void AddNotifications(IConfiguration configuration)
-        {
-            services.Configure<SnsOptions>(configuration.GetSection(SnsOptions.SectionName));
-            services.Configure<SesOptions>(configuration.GetSection(SesOptions.SectionName));
         }
 
         private void AddEncryption(IConfiguration configuration)
