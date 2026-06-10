@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
-        name: 'Urgent Baggage Delivery',
+        name: 'Baggage Delivery - Deliver DFRNT',
         short_name: 'Baggage',
         description: 'Confirm delivery details and track your baggage',
         theme_color: '#001F3D',
