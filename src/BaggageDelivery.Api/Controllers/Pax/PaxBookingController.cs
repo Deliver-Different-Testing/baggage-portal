@@ -28,24 +28,19 @@ public sealed class PaxBookingController(
     }
 
     [HttpGet("timeslots")]
-    public ActionResult<TimeSlotDto[]> GetTimeslots(string id, [FromQuery] DateTime? date)
+    public async Task<ActionResult<TimeSlotDto[]>> GetTimeslots(
+        string id, [FromQuery] DateTime? date, CancellationToken ct)
     {
-        if (encryption.DecryptId(id) is null)
+        var jobId = encryption.DecryptId(id);
+        if (jobId is null)
         {
             return NotFound();
         }
 
-        // v1: server generates slot windows in UTC. Real implementation should pull
-        // available runs from Despatch once GET api/Jobs/{id}/slots ships.
-        var anchor = (date ?? DateTime.UtcNow).Date;
-        var slots = new[]
-        {
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddHours(9), anchor.AddHours(12), "9:00 AM - 12:00 PM", FirstAvailable: true),
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddHours(14), anchor.AddHours(17), "2:00 PM - 5:00 PM", FirstAvailable: false),
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddDays(1).AddHours(9), anchor.AddDays(1).AddHours(12), "Tomorrow 9 AM - 12 PM", FirstAvailable: false),
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddDays(1).AddHours(14), anchor.AddDays(1).AddHours(17), "Tomorrow 2 PM - 5 PM", FirstAvailable: false)
-        };
-        return Ok(slots);
+        var slots = await paxBooking.GetTimeslotsAsync(jobId.Value, date, ct);
+        return Ok(slots
+            .Select(s => new TimeSlotDto(s.Id, s.StartUtc, s.EndUtc, s.Label, s.FirstAvailable))
+            .ToArray());
     }
 
     [HttpPost("confirm")]

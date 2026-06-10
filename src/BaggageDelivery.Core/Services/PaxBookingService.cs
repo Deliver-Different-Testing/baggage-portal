@@ -1,3 +1,4 @@
+using System.Globalization;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
@@ -87,6 +88,106 @@ internal sealed class PaxBookingService(
             return null;
         }
     }
+
+    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(
+        int jobId, DateTime? localDate, CancellationToken ct)
+    {
+        var setting = await db.TblEcoSettings
+            .AsNoTracking()
+            .OrderBy(s => s.SettingId)
+            .Select(s => new
+            {
+                s.EconomyRun1,
+                s.EconomyRun2,
+                s.EconomyRun3,
+                s.EconomyRun4,
+                s.EconomyRun5
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (setting is null)
+        {
+            Log.Warning("GetTimeslots: tblEcoSetting has no rows — returning empty slot list");
+            return [];
+        }
+
+        var runs = new[]
+        {
+            setting.EconomyRun1,
+            setting.EconomyRun2,
+            setting.EconomyRun3,
+            setting.EconomyRun4,
+            setting.EconomyRun5
+        };
+
+        var timeZone = despatchOptions.Value.TimeZone;
+        var now = time.GetUtcNow().UtcDateTime;
+        var anchor = TenantToday(localDate, timeZone, now);
+
+        var slots = new List<BookingTimeSlot>(capacity: 4);
+        var firstAvailableAssigned = false;
+        for (var i = 0; i < runs.Length - 1; i++)
+        {
+            var start = runs[i];
+            var end = runs[i + 1];
+            if (start is null || end is null)
+            {
+                continue;
+            }
+
+            var startUtc = TenantLocalToUtc(anchor.Add(start.Value.TimeOfDay), timeZone);
+            var endUtc = TenantLocalToUtc(anchor.Add(end.Value.TimeOfDay), timeZone);
+            if (startUtc is null || endUtc is null)
+            {
+                continue;
+            }
+
+            var firstAvailable = !firstAvailableAssigned && endUtc > now;
+            if (firstAvailable)
+            {
+                firstAvailableAssigned = true;
+            }
+
+            slots.Add(new BookingTimeSlot(
+                Id: Guid.NewGuid(),
+                StartUtc: startUtc.Value,
+                EndUtc: endUtc.Value,
+                Label: FormatSlotLabel(start.Value, end.Value),
+                FirstAvailable: firstAvailable));
+        }
+
+        return slots;
+    }
+
+    private static DateTime TenantToday(DateTime? localDate, string? timeZoneCode, DateTime nowUtc)
+    {
+        if (localDate is { } d)
+        {
+            return d.Date;
+        }
+
+        if (string.IsNullOrWhiteSpace(timeZoneCode))
+        {
+            return nowUtc.Date;
+        }
+
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneCode);
+            return TimeZoneInfo.ConvertTimeFromUtc(nowUtc, tz).Date;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return nowUtc.Date;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return nowUtc.Date;
+        }
+    }
+
+    private static string FormatSlotLabel(DateTime start, DateTime end) =>
+        string.Create(CultureInfo.InvariantCulture, $"{start:h:mm tt} - {end:h:mm tt}");
 
     public async Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
     {
