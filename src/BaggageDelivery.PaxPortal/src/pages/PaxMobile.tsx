@@ -19,6 +19,7 @@ import {
   Stack,
   Switch,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
@@ -652,16 +653,18 @@ function SectionCard({
   const trailing =
     action ??
     (onToggleEdit ? (
-      <IconButton
-        size="small"
-        onClick={onToggleEdit}
-        aria-label={editing ? `Save ${title}` : `Edit ${title}`}
-        sx={(theme) => ({
-          color: editing ? theme.palette.primary.main : theme.palette.text.secondary,
-        })}
-      >
-        {editing ? <CheckRoundedIcon fontSize="small" /> : <EditOutlinedIcon fontSize="small" />}
-      </IconButton>
+      <Tooltip title={editing ? `Save ${title}` : `Edit ${title}`}>
+        <IconButton
+          size="small"
+          onClick={onToggleEdit}
+          aria-label={editing ? `Save ${title}` : `Edit ${title}`}
+          sx={(theme) => ({
+            color: editing ? theme.palette.primary.main : theme.palette.text.secondary,
+          })}
+        >
+          {editing ? <CheckRoundedIcon fontSize="small" /> : <EditOutlinedIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
     ) : null)
 
   return (
