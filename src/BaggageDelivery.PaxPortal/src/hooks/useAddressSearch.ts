@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { addressAutocompleteApi } from '../api/addressAutocomplete'
 import type { AddressDetail, AddressSearchResult } from '../types/address'
@@ -13,24 +13,21 @@ export function useAddressSearch(options: UseAddressSearchOptions) {
   const { bookingId, minChars = 3, debounceMs = 300 } = options
   const [inputValue, setInputValue] = useState('')
   const [debouncedValue, setDebouncedValue] = useState('')
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const inputIsLongEnough = inputValue.length >= minChars
+  const isLongEnough = inputValue.length >= minChars
 
   useEffect(() => {
-    if (!inputIsLongEnough) return
-    timerRef.current = setTimeout(() => {
-      setDebouncedValue(inputValue)
-    }, debounceMs)
-    return () => clearTimeout(timerRef.current)
-  }, [inputValue, inputIsLongEnough, debounceMs])
+    if (!isLongEnough) return
+    const handle = setTimeout(() => setDebouncedValue(inputValue), debounceMs)
+    return () => clearTimeout(handle)
+  }, [inputValue, isLongEnough, debounceMs])
 
-  const effectiveDebouncedValue = inputIsLongEnough ? debouncedValue : ''
+  const query = isLongEnough ? debouncedValue : ''
 
   const { data: suggestions = [], isLoading } = useQuery({
-    queryKey: ['pax', 'addressAutocomplete', bookingId, effectiveDebouncedValue],
-    queryFn: () => addressAutocompleteApi.autocomplete(bookingId, effectiveDebouncedValue),
-    enabled: !!bookingId && effectiveDebouncedValue.length >= minChars,
+    queryKey: ['pax', 'addressAutocomplete', bookingId, query],
+    queryFn: () => addressAutocompleteApi.autocomplete(bookingId, query),
+    enabled: !!bookingId && query.length >= minChars,
     staleTime: 30_000,
   })
 
@@ -41,7 +38,7 @@ export function useAddressSearch(options: UseAddressSearchOptions) {
     inputValue,
     setInputValue,
     suggestions,
-    isLoading: isLoading && effectiveDebouncedValue.length >= minChars,
+    isLoading: isLoading && query.length >= minChars,
     getDetails,
   } as const
 }
