@@ -49,13 +49,10 @@ public static class DevStartup
                 return;
             }
 
-            Log.Information(
-                "DevStartup: magic links for TenantId={TenantId} JobId={JobId}{NL}" +
-                "  Pax confirmation: {ConfirmUrl}{NL}" +
-                "  Pax tracking:     {TrackUrl}",
-                tenantId, jobId, Environment.NewLine,
-                $"{paxBase}/c/{token}",
-                $"{paxBase}/t/{token}");
+            Log.Information("DevStartup: magic links for TenantId={TenantId} JobId={JobId}",
+                tenantId, jobId);
+            Log.Information("  Pax confirmation: {ConfirmUrl}", $"{paxBase}/c/{token}");
+            Log.Information("  Pax tracking:     {TrackUrl}", $"{paxBase}/t/{token}");
         }
     }
 }
