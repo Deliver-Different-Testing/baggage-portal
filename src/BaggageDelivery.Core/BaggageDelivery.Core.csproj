@@ -27,10 +27,8 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" />
     <PackageReference Include="Mjml.Net" />
     <PackageReference Include="Polly" />
-    <PackageReference Include="SendGrid" />
     <PackageReference Include="Serilog" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
-    <PackageReference Include="Twilio" />
   </ItemGroup>
 
 </Project>

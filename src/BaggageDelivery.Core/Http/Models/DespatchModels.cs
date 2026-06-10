@@ -22,7 +22,20 @@ public sealed class SendOnHoldBookingRequest
     public int BookingID { get; set; }
 }
 
+// NEW endpoint (handoff to api repo) - PATCH api/Jobs/{jobId}/status
+// Used on booking link mint to flip tucJob.UcjbStatus and write a
+// JobDeliveryJourney audit row in the same transaction. tucJob is read-only
+// from BaggageDelivery's SQL user — all tucJob writes route through the api.
+public sealed class JobStatusUpdateRequest
+{
+    public int Status { get; set; }
+    public string? Comment { get; set; }
+}
+
 // NEW endpoint (handoff to api repo) - PATCH api/Jobs/{jobId}/delivery
+// PassengerName/Phone/Email map onto tucJob.DeliverToContact /
+// DeliverToPhone / ProofOfDeliveryEmail on the api side. Name is required;
+// the pax page forces a value before letting the submission through.
 public sealed class DeliveryUpdateRequest
 {
     public required AddressUpdateDto Address { get; init; }
@@ -30,7 +43,9 @@ public sealed class DeliveryUpdateRequest
     public required DateTime TimeSlotEndUtc { get; init; }
     public required string AtlOption { get; init; }
     public string? AccessNotes { get; init; }
-    public string? PhoneOverride { get; init; }
+    public required string PassengerName { get; init; }
+    public string? PassengerPhone { get; init; }
+    public string? PassengerEmail { get; init; }
 }
 
 public sealed class AddressUpdateDto

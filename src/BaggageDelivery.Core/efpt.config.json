@@ -1,5 +1,5 @@
 ﻿{
-   "CodeGenerationMode": 4,
+   "CodeGenerationMode": 6,
    "ContextClassName": "BaggageDeliveryContext",
    "ContextNamespace": null,
    "FilterSchemas": false,
@@ -19,15 +19,27 @@
    "T4TemplatePath": null,
    "Tables": [
       {
-         "Name": "[dbo].[BagDelBooking]",
+         "Name": "[dbo].[JobDeliveryJourney]",
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[BagDelConfirmationOutbox]",
+         "Name": "[dbo].[tblEcoSetting]",
          "ObjectType": 0
       },
       {
-         "Name": "[dbo].[BagDelNotificationLog]",
+         "Name": "[dbo].[tblJobLeaveNotHome]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucClient]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJob]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucManualMessage]",
          "ObjectType": 0
       }
    ],

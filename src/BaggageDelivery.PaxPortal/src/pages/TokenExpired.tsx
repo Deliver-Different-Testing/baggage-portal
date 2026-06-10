@@ -1,24 +1,13 @@
-import { Box, Container, Stack, Typography } from '@mui/material'
+import LinkOffRoundedIcon from '@mui/icons-material/LinkOffRounded'
+import { FullPageMessage } from '../components/FullPageMessage'
 
 export function TokenExpired() {
   return (
-    <Container maxWidth="sm" sx={{ pt: 8 }}>
-      <Stack spacing={2} sx={{ alignItems: 'center', textAlign: 'center' }}>
-        <Box
-          sx={{
-            width: 56, height: 56, borderRadius: '50%',
-            bgcolor: 'warning.main', color: 'common.white',
-            display: 'grid', placeItems: 'center', fontSize: 28,
-          }}
-        >
-          !
-        </Box>
-        <Typography variant="h2">Booking not found</Typography>
-        <Typography color="text.secondary">
-          We could not find a baggage delivery booking for this link. If you still need
-          to confirm your delivery, please contact our team — we will send you a new link.
-        </Typography>
-      </Stack>
-    </Container>
+    <FullPageMessage
+      icon={<LinkOffRoundedIcon sx={{ fontSize: 36, color: 'warning.dark' }} />}
+      iconColor="#FF9800"
+      title="Booking not found"
+      description="We could not find a baggage delivery booking for this link. If you still need to confirm your delivery, please contact our team — we will send you a new link."
+    />
   )
 }

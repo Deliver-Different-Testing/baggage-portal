@@ -2,7 +2,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading.RateLimiting;
 using BaggageDelivery.Api.Auth;
-using BaggageDelivery.Api.Services;
+using BaggageDelivery.Api.Dev;
 using BaggageDelivery.Core;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -32,14 +32,8 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddAppAuthentication(builder.Configuration);
 
-builder.Services.AddHostedService<DespatchJobReleaseWorker>();
-builder.Services.AddHostedService<BookingLinkDispatchWorker>();
-
 builder.Services.AddControllers(options => { options.MaxModelBindingCollectionSize = 100; });
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.Limits.MaxRequestBodySize = 4 * 1024 * 1024;
-});
+builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestBodySize = 4 * 1024 * 1024; });
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -166,16 +160,10 @@ if (Directory.Exists(app.Environment.WebRootPath))
         FileProvider = fileProvider,
         OnPrepareResponse = ctx =>
         {
-            // Service worker MUST never be cached - browsers fetch a fresh copy on every update.
-            // Same for index.html. Everything else is hash-named and immutable.
-            if (ctx.File.Name is "index.html" or "sw.js" or "registerSW.js" or "manifest.webmanifest")
-            {
-                ctx.Context.Response.Headers.CacheControl = "no-cache, no-store";
-            }
-            else
-            {
-                ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-            }
+            ctx.Context.Response.Headers.CacheControl =
+                ctx.File.Name is "index.html" or "sw.js" or "registerSW.js" or "manifest.webmanifest"
+                    ? "no-cache, no-store"
+                    : "public, max-age=31536000, immutable";
         }
     });
 }
@@ -200,9 +188,6 @@ if (Directory.Exists(app.Environment.WebRootPath))
     app.MapFallbackToFile("index.html").AllowAnonymous();
 }
 
-app.Run();
+app.LogTestMagicLinks();
 
-namespace BaggageDelivery.Api
-{
-    public partial class Program;
-}
+app.Run();

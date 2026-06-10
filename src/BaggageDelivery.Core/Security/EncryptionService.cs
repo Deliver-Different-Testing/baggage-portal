@@ -21,7 +21,22 @@ public sealed class EncryptionService : IEncryptionService
         _iv = Convert.FromBase64String(opts.IV);
     }
 
-    public string EncryptId(int id)
+    public string EncryptId(int id) => EncryptString(id.ToString(CultureInfo.InvariantCulture));
+
+    public int? DecryptId(string? encryptedId)
+    {
+        var plaintext = DecryptToString(encryptedId);
+        if (plaintext is null)
+        {
+            return null;
+        }
+
+        return int.TryParse(plaintext, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+            ? id
+            : null;
+    }
+
+    private string EncryptString(string plain)
     {
         try
         {
@@ -36,7 +51,7 @@ public sealed class EncryptionService : IEncryptionService
             using (var csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
             using (var swEncrypt = new StreamWriter(csEncrypt))
             {
-                swEncrypt.Write(id.ToString(CultureInfo.InvariantCulture));
+                swEncrypt.Write(plain);
             }
 
             return Convert.ToBase64String(msEncrypt.ToArray())
@@ -46,28 +61,28 @@ public sealed class EncryptionService : IEncryptionService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error encrypting ID: {Id}", id);
-            throw new InvalidOperationException("Failed to encrypt ID", ex);
+            Log.Error(ex, "Error encrypting token");
+            throw new InvalidOperationException("Failed to encrypt token", ex);
         }
     }
 
-    public int? DecryptId(string? encryptedId)
+    private string? DecryptToString(string? encrypted)
     {
-        if (string.IsNullOrEmpty(encryptedId))
+        if (string.IsNullOrEmpty(encrypted))
         {
             return null;
         }
 
         try
         {
-            var base64 = encryptedId.Replace('-', '+').Replace('_', '/');
+            var base64 = encrypted.Replace('-', '+').Replace('_', '/');
             switch (base64.Length % 4)
             {
                 case 2: base64 += "=="; break;
                 case 3: base64 += "="; break;
             }
 
-            var encrypted = Convert.FromBase64String(base64);
+            var bytes = Convert.FromBase64String(base64);
 
             using var aes = Aes.Create();
             aes.Key = _key;
@@ -76,18 +91,15 @@ public sealed class EncryptionService : IEncryptionService
             aes.Padding = PaddingMode.PKCS7;
 
             using var decryptor = aes.CreateDecryptor();
-            using var msDecrypt = new MemoryStream(encrypted);
+            using var msDecrypt = new MemoryStream(bytes);
             using var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
             using var srDecrypt = new StreamReader(csDecrypt);
 
-            var decryptedString = srDecrypt.ReadToEnd();
-            return int.TryParse(decryptedString, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
-                ? id
-                : null;
+            return srDecrypt.ReadToEnd();
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Failed to decrypt ID: {EncryptedId}", encryptedId);
+            Log.Debug(ex, "Failed to decrypt token: {EncryptedToken}", encrypted);
             return null;
         }
     }

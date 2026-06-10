@@ -17,29 +17,30 @@ public sealed class PaxBookingController(
     [HttpGet("")]
     public async Task<ActionResult<BookingSummaryDto>> GetBooking(string id, CancellationToken ct)
     {
-        var bookingId = encryption.DecryptId(id);
-        if (bookingId is null) return NotFound();
+        var jobId = encryption.DecryptId(id);
+        if (jobId is null)
+        {
+            return NotFound();
+        }
 
-        var summary = await paxBooking.GetSummaryAsync(bookingId.Value, ct);
+        var summary = await paxBooking.GetSummaryAsync(jobId.Value, ct);
         return summary is null ? NotFound() : Ok(MapSummary(summary));
     }
 
     [HttpGet("timeslots")]
-    public ActionResult<TimeSlotDto[]> GetTimeslots(string id, [FromQuery] DateTime? date)
+    public async Task<ActionResult<TimeSlotDto[]>> GetTimeslots(
+        string id, [FromQuery] DateTime? date, CancellationToken ct)
     {
-        if (encryption.DecryptId(id) is null) return NotFound();
-
-        // v1: server generates slot windows in UTC. Real implementation should pull
-        // available runs from Despatch once GET api/Jobs/{id}/slots ships.
-        var anchor = (date ?? DateTime.UtcNow).Date;
-        var slots = new[]
+        var jobId = encryption.DecryptId(id);
+        if (jobId is null)
         {
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddHours(9), anchor.AddHours(12), "9:00 AM - 12:00 PM", FirstAvailable: true),
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddHours(14), anchor.AddHours(17), "2:00 PM - 5:00 PM", FirstAvailable: false),
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddDays(1).AddHours(9), anchor.AddDays(1).AddHours(12), "Tomorrow 9 AM - 12 PM", FirstAvailable: false),
-            new TimeSlotDto(Guid.NewGuid(), anchor.AddDays(1).AddHours(14), anchor.AddDays(1).AddHours(17), "Tomorrow 2 PM - 5 PM", FirstAvailable: false)
-        };
-        return Ok(slots);
+            return NotFound();
+        }
+
+        var slots = await paxBooking.GetTimeslotsAsync(jobId.Value, date, ct);
+        return Ok(slots
+            .Select(s => new TimeSlotDto(s.Id, s.StartUtc, s.EndUtc, s.Label, s.FirstAvailable))
+            .ToArray());
     }
 
     [HttpPost("confirm")]
@@ -49,44 +50,37 @@ public sealed class PaxBookingController(
         [FromBody] ConfirmBookingRequest body,
         CancellationToken ct)
     {
-        var bookingId = encryption.DecryptId(id);
-        if (bookingId is null) return NotFound();
-
-        try
-        {
-            await paxBooking.ConfirmAsync(new ConfirmBookingInput(
-                BookingId: bookingId.Value,
-                Address: new AddressUpdateDto
-                {
-                    Line1 = body.Address.Line1,
-                    Line2 = body.Address.Line2,
-                    Suburb = body.Address.Suburb,
-                    City = body.Address.City,
-                    PostCode = body.Address.PostCode,
-                    Country = body.Address.Country,
-                    Latitude = body.Address.Latitude,
-                    Longitude = body.Address.Longitude
-                },
-                TimeSlotStartUtc: body.TimeSlotStartUtc,
-                TimeSlotEndUtc: body.TimeSlotEndUtc,
-                AtlOption: body.AtlOption,
-                AccessNotes: body.AccessNotes,
-                PhoneOverride: body.PhoneOverride), ct);
-
-            return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
-        }
-        catch (BookingNotFoundException)
+        var jobId = encryption.DecryptId(id);
+        if (jobId is null)
         {
             return NotFound();
         }
-        catch (ConfirmationAlreadyExistsException)
-        {
-            return Conflict(new { reason = "already_confirmed" });
-        }
+
+        await paxBooking.ConfirmAsync(new ConfirmBookingInput(
+            JobId: jobId.Value,
+            Address: new AddressUpdateDto
+            {
+                Line1 = body.Address.Line1,
+                Line2 = body.Address.Line2,
+                Suburb = body.Address.Suburb,
+                City = body.Address.City,
+                PostCode = body.Address.PostCode,
+                Country = body.Address.Country,
+                Latitude = body.Address.Latitude,
+                Longitude = body.Address.Longitude
+            },
+            TimeSlotStartUtc: body.TimeSlotStartUtc,
+            TimeSlotEndUtc: body.TimeSlotEndUtc,
+            AtlOption: body.AtlOption,
+            AccessNotes: body.AccessNotes,
+            PassengerName: body.PassengerName,
+            PassengerPhone: body.PassengerPhone,
+            PassengerEmail: body.PassengerEmail), ct);
+
+        return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
     }
 
     private static BookingSummaryDto MapSummary(BookingSummary s) => new(
-        BookingId: s.BookingId,
         JobId: s.JobId,
         Reference: s.Reference,
         AirlineLabel: s.AirlineLabel,
@@ -103,5 +97,6 @@ public sealed class PaxBookingController(
             s.DeliveryAddress.Latitude,
             s.DeliveryAddress.Longitude),
         EarliestSlotUtc: s.EarliestSlotUtc,
-        LatestSlotUtc: s.LatestSlotUtc);
+        LatestSlotUtc: s.LatestSlotUtc,
+        AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))]);
 }

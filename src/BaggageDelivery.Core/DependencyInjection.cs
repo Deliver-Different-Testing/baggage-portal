@@ -1,15 +1,14 @@
 using System.Net;
 using Amazon.SecretsManager;
+using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
-using BaggageDelivery.Core.MultiTenant;
 using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Secrets;
 using BaggageDelivery.Core.Security;
 using BaggageDelivery.Core.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -29,27 +28,20 @@ public static class DependencyInjection
             services.AddSingleton<IEncryptionService, EncryptionService>();
             services.AddScoped<IPaxBookingService, PaxBookingService>();
             services.AddScoped<IPaxTrackingService, PaxTrackingService>();
-            services.AddScoped<IDespatchJobReleaseService, DespatchJobReleaseService>();
-            services.AddScoped<IBookingLinkDispatchService, BookingLinkDispatchService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
-            services.AddScoped<INotificationService, NotificationService>();
-            services.AddScoped<ISmsSender, TwilioSmsSender>();
-            services.AddScoped<IEmailSender, SendGridEmailSender>();
-            services.AddScoped<ConfigTenantResolver>();
-            services.AddScoped<ITenantResolver>(sp => new CachingTenantResolver(
-                sp.GetRequiredService<ConfigTenantResolver>(),
-                sp.GetRequiredService<IMemoryCache>()));
+            services.AddScoped<INotificationService, TucManualMessageSender>();
         }
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)
         {
             services.AddDatabase(configuration);
             services.AddAwsServices(isDevelopment);
-            services.AddNotifications(configuration);
             services.AddEncryption(configuration);
             services.AddBookingLinks(configuration);
             services.AddDespatchClient(configuration);
+            services.AddTrackingPageClient(configuration);
+            services.AddAddressLookup(configuration);
         }
 
         private void AddDatabase(IConfiguration configuration)
@@ -78,23 +70,6 @@ public static class DependencyInjection
                 services.AddAWSService<IAmazonSecretsManager>();
                 services.AddScoped<ISecretsService, AwsSecretsService>();
             }
-        }
-
-        private void AddNotifications(IConfiguration configuration)
-        {
-            services.Configure<TwilioOptions>(configuration.GetSection(TwilioOptions.SectionName));
-            services.PostConfigure<TwilioOptions>(opts =>
-            {
-                opts.AccountSid = Environment.GetEnvironmentVariable("TwilioAccountSid") ?? opts.AccountSid;
-                opts.AuthToken = Environment.GetEnvironmentVariable("TwilioAuthToken") ?? opts.AuthToken;
-                opts.FromNumber = Environment.GetEnvironmentVariable("TwilioFromNumber") ?? opts.FromNumber;
-            });
-
-            services.Configure<SendGridOptions>(configuration.GetSection(SendGridOptions.SectionName));
-            services.PostConfigure<SendGridOptions>(opts =>
-            {
-                opts.ApiKey = Environment.GetEnvironmentVariable("SendGridApiKey") ?? opts.ApiKey;
-            });
         }
 
         private void AddEncryption(IConfiguration configuration)
@@ -134,6 +109,8 @@ public static class DependencyInjection
                 }
             });
 
+            services.Configure<DespatchOptions>(configuration.GetSection(DespatchOptions.SectionName));
+
             var retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()
                 .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
@@ -152,6 +129,57 @@ public static class DependencyInjection
                 {
                     AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
                 });
+        }
+
+        private void AddTrackingPageClient(IConfiguration configuration)
+        {
+            services.Configure<TrackingPageUrlsOptions>(configuration.GetSection(TrackingPageUrlsOptions.SectionName));
+            services.PostConfigure<TrackingPageUrlsOptions>(opts =>
+            {
+                var trackingUrl = Environment.GetEnvironmentVariable("TrackingPageUrl")
+                                  ?? configuration["TrackingPageUrl"];
+                if (!string.IsNullOrEmpty(trackingUrl))
+                {
+                    opts.BaseUrl = new Uri(trackingUrl.TrimEnd('/') + "/");
+                }
+            });
+
+            // Same resilience profile as DespatchApiClient — short retries
+            // for transient blips, breaker to shield trackingpage from a
+            // reconciler runaway. trackingpage itself is anonymous so no
+            // token plumbing.
+            var retryPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+            var circuitBreakerPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
+
+            services.AddHttpClient<ITrackingPageClient, TrackingPageClient>(client =>
+                {
+                    client.Timeout = TimeSpan.FromSeconds(15);
+                })
+                .AddPolicyHandler(retryPolicy)
+                .AddPolicyHandler(circuitBreakerPolicy)
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+                });
+        }
+
+        private void AddAddressLookup(IConfiguration configuration)
+        {
+            services.Configure<HereMapsOptions>(configuration.GetSection(HereMapsOptions.SectionName));
+            services.AddScoped<IAddressLookupService, AddressLookupService>();
+
+            var retryPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+            services.AddHttpClient("HereMaps")
+                .AddPolicyHandler(retryPolicy)
+                .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
         }
     }
 }

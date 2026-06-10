@@ -3,7 +3,6 @@ using BaggageDelivery.Core.Http.Models;
 namespace BaggageDelivery.Core.Services;
 
 public sealed record BookingSummary(
-    int BookingId,
     int JobId,
     string Reference,
     string AirlineLabel,
@@ -12,4 +11,5 @@ public sealed record BookingSummary(
     string? PassengerEmail,
     AddressUpdateDto DeliveryAddress,
     DateTime EarliestSlotUtc,
-    DateTime LatestSlotUtc);
+    DateTime LatestSlotUtc,
+    IReadOnlyList<AtlOptionDto> AtlOptions);

@@ -1,7 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Security;
@@ -10,20 +8,21 @@ using Serilog;
 
 namespace BaggageDelivery.Core.Http;
 
-public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUrlsOptions> urlOptions)
-    : IDespatchApiClient
+public sealed class DespatchApiClient(
+    HttpClient httpClient,
+    IOptions<DespatchUrlsOptions> urlOptions,
+    IOptions<DespatchOptions> despatchOptions) : IDespatchApiClient
 {
     private const string TokenName = "BaggageDelivery";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
-    public async Task<bool> ReleaseBaggageJobAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, BookingReleaseRequest request, CancellationToken ct)
+    public async Task<bool> ReleaseBaggageJobAsync(BookingReleaseRequest request, CancellationToken ct)
     {
-        using var response = await SendAsync(HttpMethod.Post, "api/Baggage/release",
-            tenantId, connection, timeZone, clientId, contactId, request, ct);
+        using var response = await SendAsync(HttpMethod.Post, "api/Baggage/release", request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Baggage/release failed for {JobId}: {StatusCode} {Body}",
@@ -31,13 +30,14 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         return false;
     }
 
-    public async Task<bool> CancelBaggageJobAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, BookingCancelRequest request, CancellationToken ct)
+    public async Task<bool> CancelBaggageJobAsync(BookingCancelRequest request, CancellationToken ct)
     {
-        using var response = await SendAsync(HttpMethod.Post, "api/Baggage/cancel",
-            tenantId, connection, timeZone, clientId, contactId, request, ct);
+        using var response = await SendAsync(HttpMethod.Post, "api/Baggage/cancel", request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Baggage/cancel failed for {JobId}: {StatusCode} {Body}",
@@ -45,13 +45,14 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         return false;
     }
 
-    public async Task<bool> SendOnHoldAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, SendOnHoldBookingRequest request, CancellationToken ct)
+    public async Task<bool> SendOnHoldAsync(SendOnHoldBookingRequest request, CancellationToken ct)
     {
-        using var response = await SendAsync(HttpMethod.Post, "api/Baggage/send-on-hold",
-            tenantId, connection, timeZone, clientId, contactId, request, ct);
+        using var response = await SendAsync(HttpMethod.Post, "api/Baggage/send-on-hold", request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Baggage/send-on-hold failed for {JobId}: {StatusCode} {Body}",
@@ -59,13 +60,14 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         return false;
     }
 
-    public async Task<bool> UpdateJobDeliveryAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, int jobId, DeliveryUpdateRequest request, CancellationToken ct)
+    public async Task<bool> UpdateJobDeliveryAsync(int jobId, DeliveryUpdateRequest request, CancellationToken ct)
     {
-        using var response = await SendAsync(HttpMethod.Patch, $"api/Jobs/{jobId}/delivery",
-            tenantId, connection, timeZone, clientId, contactId, request, ct);
+        using var response = await SendAsync(HttpMethod.Patch, $"api/Jobs/{jobId}/delivery", request, ct);
 
-        if (response.IsSuccessStatusCode) return true;
+        if (response.IsSuccessStatusCode)
+        {
+            return true;
+        }
 
         var body = await response.Content.ReadAsStringAsync(ct);
         Log.Warning("api Jobs/{JobId}/delivery PATCH failed: {StatusCode} {Body}",
@@ -73,40 +75,42 @@ public sealed class DespatchApiClient(HttpClient httpClient, IOptions<DespatchUr
         return false;
     }
 
-    public async Task<TrackingDto?> GetJobTrackingAsync(int tenantId, string connection, string timeZone,
-        int? clientId, int contactId, int jobId, CancellationToken ct)
+    public async Task<bool> UpdateJobStatusAsync(int jobId, JobStatusUpdateRequest request, CancellationToken ct)
     {
-        using var response = await SendAsync<object?>(HttpMethod.Get, $"api/Jobs/{jobId}/tracking",
-            tenantId, connection, timeZone, clientId, contactId, body: null, ct);
-
-        if (response.StatusCode == HttpStatusCode.NotFound) return null;
-
-        var body = await response.Content.ReadAsStringAsync(ct);
+        using var response = await SendAsync(HttpMethod.Patch, $"api/Jobs/{jobId}/status", request, ct);
 
         if (response.IsSuccessStatusCode)
         {
-            return JsonSerializer.Deserialize<TrackingDto>(body, JsonOptions);
+            return true;
         }
 
-        Log.Warning("api Jobs/{JobId}/tracking failed: {StatusCode} {Body}",
+        var body = await response.Content.ReadAsStringAsync(ct);
+        Log.Warning("api Jobs/{JobId}/status PATCH failed: {StatusCode} {Body}",
             jobId, response.StatusCode, body);
-        return null;
+        return false;
     }
 
-    private async Task<HttpResponseMessage> SendAsync<T>(HttpMethod method, string path,
-        int tenantId, string connection, string timeZone, int? clientId, int contactId, T? body, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync<T>(
+        HttpMethod method, string path, T? body, CancellationToken ct)
     {
         var baseUrl = urlOptions.Value.ApiBaseUrl
             ?? throw new InvalidOperationException(
                 "WebAPIUrl is not configured. Set the 'WebAPIUrl' env var (or DespatchUrls:ApiBaseUrl).");
 
+        var opts = despatchOptions.Value;
+        if (opts.TenantId <= 0 || string.IsNullOrWhiteSpace(opts.Connection) || string.IsNullOrWhiteSpace(opts.TimeZone))
+        {
+            throw new InvalidOperationException(
+                "Despatch identity is not configured. Set Despatch__TenantId / Despatch__Connection / Despatch__TimeZone env vars.");
+        }
+
         var token = AuthenticationExtensions.CreateApiToken(
             name: TokenName,
-            tenantId: tenantId,
-            connection: connection,
-            timeZone: timeZone,
-            clientId: clientId,
-            contactId: contactId);
+            tenantId: opts.TenantId,
+            connection: opts.Connection,
+            timeZone: opts.TimeZone,
+            clientId: null,
+            contactId: 0);
 
         var requestToken = new JwtSecurityTokenHandler().WriteToken(token);
 

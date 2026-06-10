@@ -1,8 +1,10 @@
 using BaggageDelivery.Api.DTOs.Admin;
+using BaggageDelivery.Core.Enums;
+using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
+using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Security;
-using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,11 +18,10 @@ namespace BaggageDelivery.Api.Controllers.Admin;
 [Route("api/v1/admin/booking-links")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public sealed class BookingLinksController(
-    BaggageDeliveryContext db,
     IEncryptionService encryption,
-    IBookingLinkDispatchService dispatch,
-    IOptions<BookingLinkOptions> linkOptions,
-    TimeProvider time) : ControllerBase
+    INotificationService notifications,
+    IDespatchApiClient despatchClient,
+    IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
     [HttpPost("")]
     [EnableRateLimiting("admin-mint")]
@@ -34,19 +35,33 @@ public sealed class BookingLinksController(
             return Problem("BookingLinks:PublicBaseUrl is not configured");
         }
 
-        var now = time.GetUtcNow().UtcDateTime;
-        var booking = new BagDelBooking
-        {
-            JobId = body.JobId,
-            TenantId = body.TenantId,
-            CreatedAtUtc = now
-        };
-        db.BagDelBookings.Add(booking);
-        await db.SaveChangesAsync(ct);
+        // No shadow row to upsert — tucJob is the canonical record, JobId
+        // is what the URL encrypts. Idempotent by construction: minting
+        // for the same JobId twice produces the same URL.
+        var token = encryption.EncryptId(body.JobId);
+        var confirmUrl = $"{publicBase}/c/{token}";
+        var trackUrl = $"{publicBase}/t/{token}";
 
-        var encryptedId = encryption.EncryptId(booking.Id);
-        var confirmUrl = $"{publicBase}/c/{encryptedId}";
-        var trackUrl = $"{publicBase}/t/{encryptedId}";
+        // Flip the courier job to JobStatus.New via the api repo — tucJob
+        // is read-only from BaggageDelivery's DB user, all writes route
+        // through the SC-JWT-authed api endpoint which also stamps the
+        // JobDeliveryJourney audit row. Best-effort: any failure is logged
+        // and swallowed so the passenger link still gets minted.
+        var statusOk = await despatchClient.UpdateJobStatusAsync(
+            body.JobId,
+            new JobStatusUpdateRequest
+            {
+                Status = (int)JobStatus.New,
+                Comment = "Pax confirmation link sent"
+            },
+            ct);
+
+        if (!statusOk)
+        {
+            Log.Warning(
+                "Mint: api UpdateJobStatus({JobId}, New) returned false (link still minted)",
+                body.JobId);
+        }
 
         var passengerName = body.PassengerName ?? "there";
         var airline = body.AirlineLabel ?? "Urgent";
@@ -54,20 +69,26 @@ public sealed class BookingLinksController(
 
         if (body.Channel is "sms" or "both" && !string.IsNullOrWhiteSpace(body.Phone))
         {
-            await dispatch.EnqueueAsync(new EnqueueNotificationRequest(
-                booking.Id, NotificationChannel.Sms, body.Phone!, passengerName, airline, reference, confirmUrl), ct);
+            await notifications.SendBookingLinkAsync(
+                body.JobId, body.Phone!,
+                new BookingNotificationContext(
+                    NotificationChannel.Sms, passengerName, airline, reference, confirmUrl),
+                ct);
         }
 
         if (body.Channel is "email" or "both" && !string.IsNullOrWhiteSpace(body.Email))
         {
-            await dispatch.EnqueueAsync(new EnqueueNotificationRequest(
-                booking.Id, NotificationChannel.Email, body.Email!, passengerName, airline, reference, confirmUrl), ct);
+            await notifications.SendBookingLinkAsync(
+                body.JobId, body.Email!,
+                new BookingNotificationContext(
+                    NotificationChannel.Email, passengerName, airline, reference, confirmUrl),
+                ct);
         }
 
         Log.Information(
-            "Minted booking link: BookingId={BookingId} JobId={JobId} TenantId={TenantId} Channel={Channel}",
-            booking.Id, body.JobId, body.TenantId, body.Channel);
+            "Minted booking link: JobId={JobId} Channel={Channel}",
+            body.JobId, body.Channel);
 
-        return Ok(new MintBookingLinkResponse(booking.Id, encryptedId, confirmUrl, trackUrl));
+        return Ok(new MintBookingLinkResponse(token, confirmUrl, trackUrl));
     }
 }

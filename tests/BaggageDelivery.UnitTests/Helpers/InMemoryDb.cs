@@ -6,9 +6,6 @@ namespace BaggageDelivery.UnitTests.Helpers;
 
 internal static class InMemoryDb
 {
-    // SQLite in-memory rather than the EF InMemory provider because the latter
-    // does not support ExecuteUpdateAsync, which MagicLinkService uses for
-    // single-statement mutations.
     public static BaggageDeliveryContext NewContext()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -19,8 +16,21 @@ internal static class InMemoryDb
             .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
             .Options;
 
-        var ctx = new BaggageDeliveryContext(options);
+        var ctx = new TestBaggageDeliveryContext(options);
         ctx.Database.EnsureCreated();
         return ctx;
+    }
+
+    private sealed class TestBaggageDeliveryContext(DbContextOptions<BaggageDeliveryContext> options)
+        : BaggageDeliveryContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Ignore<TucJob>();
+            modelBuilder.Ignore<JobDeliveryJourney>();
+            modelBuilder.Ignore<TblJobLeaveNotHome>();
+        }
     }
 }
