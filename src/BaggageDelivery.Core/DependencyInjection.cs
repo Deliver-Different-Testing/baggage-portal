@@ -2,6 +2,7 @@ using System.Net;
 using Amazon.SecretsManager;
 using Amazon.SimpleEmailV2;
 using Amazon.SimpleNotificationService;
+using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
@@ -47,6 +48,7 @@ public static class DependencyInjection
             services.AddBookingLinks(configuration);
             services.AddDespatchClient(configuration);
             services.AddTrackingPageClient(configuration);
+            services.AddAddressLookup(configuration);
         }
 
         private void AddDatabase(IConfiguration configuration)
@@ -183,6 +185,20 @@ public static class DependencyInjection
                 {
                     AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
                 });
+        }
+
+        private void AddAddressLookup(IConfiguration configuration)
+        {
+            services.Configure<HereMapsOptions>(configuration.GetSection(HereMapsOptions.SectionName));
+            services.AddScoped<IAddressLookupService, AddressLookupService>();
+
+            var retryPolicy = HttpPolicyExtensions
+                .HandleTransientHttpError()
+                .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+            services.AddHttpClient("HereMaps")
+                .AddPolicyHandler(retryPolicy)
+                .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
         }
     }
 }

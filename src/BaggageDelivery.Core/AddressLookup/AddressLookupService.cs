@@ -1,0 +1,150 @@
+using System.Collections.Frozen;
+using System.Net.Http.Json;
+using Microsoft.Extensions.Options;
+using Serilog;
+
+namespace BaggageDelivery.Core.AddressLookup;
+
+public sealed class AddressLookupService(
+    IHttpClientFactory httpClientFactory,
+    IOptions<HereMapsOptions> options)
+    : IAddressLookupService
+{
+    private const string AutosuggestBaseUrl = "https://geocode.search.hereapi.com/v1/autosuggest";
+    private const string LookupBaseUrl = "https://lookup.search.hereapi.com/v1/lookup";
+
+    private static readonly FrozenDictionary<string, string> CountryCodeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["US"] = "USA", ["CA"] = "CAN", ["GB"] = "GBR", ["AU"] = "AUS", ["NZ"] = "NZL",
+        ["MX"] = "MEX", ["DE"] = "DEU", ["FR"] = "FRA", ["IT"] = "ITA", ["ES"] = "ESP"
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenDictionary<string, string> CountryCodeReverseMap =
+        CountryCodeMap.ToFrozenDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenDictionary<string, string> CountryCoordinates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["US"] = "37.09024,-95.712891",
+        ["CA"] = "56.130366,-106.346771",
+        ["GB"] = "55.378051,-3.435973",
+        ["AU"] = "-25.274398,133.775136",
+        ["NZ"] = "-40.900557,174.885971"
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    private const string DefaultCountryCode = "NZ";
+    private const string DefaultCoordinates = "-40.900557,174.885971";
+
+    public async Task<IReadOnlyList<AddressSearchResult>> AutocompleteAsync(string text, string? countryCode, CancellationToken ct = default)
+    {
+        var apiKey = options.Value.ApiKey;
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            Log.Warning("HereMaps API key is not configured");
+            return [];
+        }
+
+        var client = httpClientFactory.CreateClient("HereMaps");
+
+        var country = countryCode ?? DefaultCountryCode;
+        var at = CountryCoordinates.GetValueOrDefault(country, DefaultCoordinates);
+        var iso3 = CountryCodeMap.GetValueOrDefault(country, country);
+
+        var queryParams = new Dictionary<string, string>
+        {
+            ["q"] = text,
+            ["apiKey"] = apiKey,
+            ["at"] = at,
+            ["in"] = $"countryCode:{iso3}",
+            ["limit"] = "10"
+        };
+        var queryString = string.Join("&", queryParams.Select(kvp => $"{kvp.Key}={Uri.EscapeDataString(kvp.Value)}"));
+        var url = $"{AutosuggestBaseUrl}?{queryString}";
+
+        var httpResponse = await client.GetAsync(url, ct);
+        if (!httpResponse.IsSuccessStatusCode)
+        {
+            var body = await httpResponse.Content.ReadAsStringAsync(ct);
+            Log.Warning("HereMaps autosuggest returned {StatusCode}: {Body}", (int)httpResponse.StatusCode, body);
+            return [];
+        }
+
+        var response = await httpResponse.Content.ReadFromJsonAsync<HereMapsAutosuggestResponse>(ct);
+        if (response?.Items is null)
+        {
+            return [];
+        }
+
+        string[] excludedTypes = ["categoryQuery", "chainQuery"];
+        return response.Items
+            .Where(i => i.Address is not null
+                        && !string.IsNullOrWhiteSpace(i.Address.Label)
+                        && !excludedTypes.Contains(i.ResultType))
+            .Select(i =>
+            {
+                var addr = i.Address!;
+                var street = string.IsNullOrEmpty(addr.HouseNumber)
+                    ? addr.Street
+                    : $"{addr.HouseNumber} {addr.Street}";
+
+                return new AddressSearchResult
+                {
+                    Id = i.Id,
+                    Title = i.Title,
+                    Street = street,
+                    Suburb = addr.District,
+                    City = addr.City,
+                    State = addr.State,
+                    PostalCode = addr.PostalCode,
+                    CountryCode = ToIso2(addr.CountryCode)
+                };
+            })
+            .ToList();
+    }
+
+    public async Task<AddressDetail?> LookupAsync(string addressId, CancellationToken ct = default)
+    {
+        var apiKey = options.Value.ApiKey;
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            Log.Warning("HereMaps API key is not configured");
+            return null;
+        }
+
+        var client = httpClientFactory.CreateClient("HereMaps");
+
+        var url = $"{LookupBaseUrl}?id={Uri.EscapeDataString(addressId)}&show=countryInfo,streetInfo&apiKey={apiKey}";
+
+        var httpResponse = await client.GetAsync(url, ct);
+        if (!httpResponse.IsSuccessStatusCode)
+        {
+            var body = await httpResponse.Content.ReadAsStringAsync(ct);
+            Log.Warning("HereMaps lookup returned {StatusCode}: {Body}", (int)httpResponse.StatusCode, body);
+            return null;
+        }
+
+        var response = await httpResponse.Content.ReadFromJsonAsync<HereMapsLookupResponse>(ct);
+        if (response?.Address is null)
+        {
+            return null;
+        }
+
+        var addr = response.Address;
+        var street = string.IsNullOrEmpty(addr.HouseNumber)
+            ? addr.Street
+            : $"{addr.HouseNumber} {addr.Street}";
+
+        return new AddressDetail
+        {
+            Street = street,
+            Suburb = addr.District,
+            City = addr.City,
+            State = addr.State,
+            StateCode = addr.StateCode,
+            PostalCode = addr.PostalCode,
+            CountryCode = ToIso2(addr.CountryCode)
+        };
+    }
+
+    private static string ToIso2(string countryCode) =>
+        CountryCodeReverseMap.GetValueOrDefault(countryCode, countryCode);
+}
