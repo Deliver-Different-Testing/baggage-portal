@@ -141,26 +141,23 @@ function ConfirmForm({
     [summary.atlOptions],
   )
 
-  const fieldErrors = useMemo(() => {
-    const errors: { [key: string]: string } = {}
-    if (!passengerName.trim()) errors.passengerName = 'Please enter your full name.'
-    if (!passengerPhone.trim()) {
-      errors.passengerPhone = 'Please enter your phone number.'
-    } else if (passengerPhone.replace(/\D/g, '').length < 7) {
-      errors.passengerPhone = 'Please enter a valid phone number.'
-    }
-    if (!passengerEmail.trim()) {
-      errors.passengerEmail = 'Please enter your email address.'
-    } else if (!passengerEmail.includes('@')) {
-      errors.passengerEmail = 'Please enter a valid email address.'
-    }
-    if (!address.line1.trim()) errors.line1 = 'Please enter your street address.'
-    if (!(address.suburb ?? '').trim()) errors.suburb = 'Please enter your suburb.'
-    if (!address.city.trim()) errors.city = 'Please enter your city.'
-    if (!(address.postCode ?? '').trim()) errors.postCode = 'Please enter your postcode.'
-    if (!selectedSlot) errors.slot = 'Please pick a delivery time slot.'
-    return errors
-  }, [passengerName, passengerPhone, passengerEmail, address, selectedSlot])
+  const fieldErrors: { [key: string]: string } = {}
+  if (!passengerName.trim()) fieldErrors.passengerName = 'Please enter your full name.'
+  if (!passengerPhone.trim()) {
+    fieldErrors.passengerPhone = 'Please enter your phone number.'
+  } else if (passengerPhone.replace(/\D/g, '').length < 7) {
+    fieldErrors.passengerPhone = 'Please enter a valid phone number.'
+  }
+  if (!passengerEmail.trim()) {
+    fieldErrors.passengerEmail = 'Please enter your email address.'
+  } else if (!passengerEmail.includes('@')) {
+    fieldErrors.passengerEmail = 'Please enter a valid email address.'
+  }
+  if (!address.line1.trim()) fieldErrors.line1 = 'Please enter your street address.'
+  if (!(address.suburb ?? '').trim()) fieldErrors.suburb = 'Please enter your suburb.'
+  if (!address.city.trim()) fieldErrors.city = 'Please enter your city.'
+  if (!(address.postCode ?? '').trim()) fieldErrors.postCode = 'Please enter your postcode.'
+  if (!selectedSlot) fieldErrors.slot = 'Please pick a delivery time slot.'
 
   const showFieldError = (key: string) =>
     submitAttempted ? fieldErrors[key] : undefined
