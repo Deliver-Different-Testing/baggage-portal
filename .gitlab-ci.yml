@@ -1,0 +1,126 @@
+include:
+  - project: 'urgent-couriers/ci-templates'
+    file: 'ci-template.yml'
+    ref: 'main'
+
+variables:
+  DOTNET_VERSION: "10.0"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_NOLOGO: "true"
+
+# Override the template's default herokuish test job — this project
+# uses its own dotnet/node test jobs defined below.
+test:
+  stage: templating
+  script:
+    - echo "Skipped — see test:unit, test:integration, test:frontend"
+  rules:
+    - when: never
+
+# Test jobs - run only when merging into master (target branch pipelines)
+test:unit:
+  stage: templating
+  image: mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}
+  allow_failure: false
+  script:
+    - dotnet restore
+    - dotnet test tests/BaggageDelivery.UnitTests/BaggageDelivery.UnitTests.csproj
+        --verbosity normal
+        --no-restore
+        --logger "junit;LogFilePath=$CI_PROJECT_DIR/test-results/unit-tests.xml"
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    reports:
+      junit: test-results/unit-tests.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_MERGE_REQUEST_IID && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+    - if: $CI_COMMIT_BRANCH == "master"
+
+# Integration tests are run locally only — they use a SQLite in-memory
+# WebApplicationFactory but are kept out of CI to match the stack convention.
+test:integration:
+  stage: templating
+  script:
+    - echo "Skipped — integration tests are run locally"
+  rules:
+    - when: never
+
+test:frontend:
+  stage: templating
+  image: node:22-alpine
+  variables:
+    NODE_OPTIONS: "--max-old-space-size=512"
+  allow_failure: false
+  script:
+    - cd src/BaggageDelivery.PaxPortal
+    - npm ci
+    - npx vitest run --pool=forks --reporter=junit --outputFile=$CI_PROJECT_DIR/test-results/frontend-tests.xml
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    reports:
+      junit: test-results/frontend-tests.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_MERGE_REQUEST_IID && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master"
+    - if: $CI_COMMIT_BRANCH == "master"
+
+# Security scanning jobs
+security:secret-detection:
+  stage: templating
+  image: zricethezav/gitleaks:latest
+  allow_failure: false
+  script:
+    - mkdir -p $CI_PROJECT_DIR/test-results
+    - gitleaks detect --source . --verbose --report-format junit --report-path $CI_PROJECT_DIR/test-results/gitleaks.xml
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    reports:
+      junit: test-results/gitleaks.xml
+    expire_in: 1 week
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == "staging"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+security:sast:
+  stage: templating
+  image: mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}
+  allow_failure: true
+  script:
+    - dotnet tool install --global security-scan || true
+    - export PATH="$PATH:$HOME/.dotnet/tools"
+    - security-scan BaggageDelivery.slnx --export=$CI_PROJECT_DIR/test-results/sast-report.sarif || true
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 1 week
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == "staging"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+security:npm-audit:
+  stage: templating
+  image: node:22-alpine
+  allow_failure: true
+  script:
+    - cd src/BaggageDelivery.PaxPortal
+    - npm ci
+    - npm audit --audit-level=high --json > $CI_PROJECT_DIR/test-results/npm-audit.json || true
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 1 week
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == "staging"
+    - if: $CI_COMMIT_BRANCH == "main"
