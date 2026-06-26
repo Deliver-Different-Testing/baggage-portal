@@ -6,6 +6,7 @@ import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { alpha } from '@mui/material/styles'
+import { PoweredByFooter } from './PoweredByFooter'
 
 interface FullPageMessageProps {
   icon: ReactNode
@@ -32,14 +33,21 @@ export function FullPageMessage({
     <Box
       sx={(theme) => ({
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        flexDirection: 'column',
         minHeight: '100vh',
         bgcolor: alpha(theme.palette.primary.main, 0.06),
-        p: 3,
       })}
     >
-      <Container maxWidth="xs">
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          p: 3,
+        }}
+      >
+        <Container maxWidth="xs">
         <Paper
           elevation={6}
           sx={(theme) => ({
@@ -88,7 +96,10 @@ export function FullPageMessage({
             </>
           )}
         </Paper>
-      </Container>
+        </Container>
+      </Box>
+
+      <PoweredByFooter />
     </Box>
   )
 }

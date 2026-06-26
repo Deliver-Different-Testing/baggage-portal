@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -38,6 +38,7 @@ import {
 import type { AddressDto, BookingSummary, TimeSlot } from '../api/client'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
+import { PoweredByFooter } from '../components/PoweredByFooter'
 import { createAppTheme } from '../styles/theme'
 import { getAirlineBrand } from '../styles/airlineBranding'
 
@@ -51,6 +52,14 @@ export function PaxMobile() {
     queryFn: () => getBooking(id ?? ''),
     enabled: !!id,
     retry: false,
+  })
+
+  // Timeslots depend only on the URL id, not the booking response — fetch them
+  // in parallel with the booking instead of waiting for ConfirmForm to mount.
+  const slots = useQuery({
+    queryKey: ['pax', 'timeslots', id],
+    queryFn: () => getTimeslots(id ?? ''),
+    enabled: !!id,
   })
 
   useEffect(() => {
@@ -90,7 +99,7 @@ export function PaxMobile() {
     )
   }
 
-  return <BrandedConfirmForm bookingId={id} summary={booking.data} online={online} />
+  return <BrandedConfirmForm bookingId={id} summary={booking.data} online={online} slots={slots} />
 }
 
 // Re-theme the passenger flow from the airline code on the booking. The root
@@ -100,10 +109,12 @@ function BrandedConfirmForm({
   bookingId,
   summary,
   online,
+  slots,
 }: {
   bookingId: string
   summary: BookingSummary
   online: boolean
+  slots: UseQueryResult<TimeSlot[]>
 }) {
   const airlineTheme = useMemo(
     () => createAppTheme(true, getAirlineBrand(summary.airlineCode)),
@@ -112,7 +123,7 @@ function BrandedConfirmForm({
 
   return (
     <ThemeProvider theme={airlineTheme}>
-      <ConfirmForm bookingId={bookingId} summary={summary} online={online} />
+      <ConfirmForm bookingId={bookingId} summary={summary} online={online} slots={slots} />
     </ThemeProvider>
   )
 }
@@ -121,10 +132,12 @@ function ConfirmForm({
   bookingId,
   summary,
   online,
+  slots,
 }: {
   bookingId: string
   summary: BookingSummary
   online: boolean
+  slots: UseQueryResult<TimeSlot[]>
 }) {
   const [address, setAddress] = useState<AddressDto>(summary.deliveryAddress)
   const [editingAddress, setEditingAddress] = useState(false)
@@ -138,11 +151,6 @@ function ConfirmForm({
   const [error, setError] = useState<string | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
-
-  const slots = useQuery({
-    queryKey: ['pax', 'timeslots', bookingId],
-    queryFn: () => getTimeslots(bookingId),
-  })
 
   const defaultSlotId = useMemo(
     () =>
@@ -370,21 +378,21 @@ function ConfirmForm({
                 <AddressAutocomplete
                   bookingId={bookingId}
                   onAddressSelect={(detail) =>
-                    setAddress({
-                      ...address,
+                    setAddress((a) => ({
+                      ...a,
                       line1: detail.street,
                       suburb: detail.suburb || null,
                       city: detail.city,
                       postCode: detail.postalCode || null,
-                      country: detail.countryCode || address.country,
-                    })
+                      country: detail.countryCode || a.country,
+                    }))
                   }
                 />
               )}
               <TextField
                 label="Street address"
                 value={address.line1}
-                onChange={(e) => setAddress({ ...address, line1: e.target.value })}
+                onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value }))}
                 required
                 fullWidth
                 size="small"
@@ -395,7 +403,7 @@ function ConfirmForm({
               <TextField
                 label="Suburb"
                 value={address.suburb ?? ''}
-                onChange={(e) => setAddress({ ...address, suburb: e.target.value })}
+                onChange={(e) => setAddress((a) => ({ ...a, suburb: e.target.value }))}
                 required
                 fullWidth
                 size="small"
@@ -407,7 +415,7 @@ function ConfirmForm({
                 <TextField
                   label="City"
                   value={address.city}
-                  onChange={(e) => setAddress({ ...address, city: e.target.value })}
+                  onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
                   required
                   fullWidth
                   size="small"
@@ -418,7 +426,7 @@ function ConfirmForm({
                 <TextField
                   label="Postcode"
                   value={address.postCode ?? ''}
-                  onChange={(e) => setAddress({ ...address, postCode: e.target.value })}
+                  onChange={(e) => setAddress((a) => ({ ...a, postCode: e.target.value }))}
                   required
                   size="small"
                   sx={{ width: 132 }}
@@ -518,6 +526,8 @@ function ConfirmForm({
             </Alert>
           )}
         </Stack>
+
+        <PoweredByFooter />
       </Container>
 
       <Box
@@ -933,6 +943,8 @@ export function ConfirmedScreen({
           </Card>
         </Stack>
       </Container>
+
+      <PoweredByFooter />
     </Box>
   )
 }

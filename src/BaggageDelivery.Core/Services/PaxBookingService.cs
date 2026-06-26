@@ -5,6 +5,7 @@ using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -13,8 +14,16 @@ namespace BaggageDelivery.Core.Services;
 internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
     IOptions<DespatchOptions> despatchOptions,
+    IMemoryCache cache,
     TimeProvider time) : IPaxBookingService
 {
+    // Static tenant reference data — the Despatch connection is single-tenant per
+    // deployment, so a process-wide cache key is safe. TTL trades a stale window
+    // for not re-querying on every pax page load.
+    private const string AtlOptionsCacheKey = "pax:atl-options";
+    private const string EcoRunsCacheKey = "pax:eco-runs";
+    private static readonly TimeSpan ReferenceDataTtl = TimeSpan.FromMinutes(30);
+
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
     {
         var job = await db.TucJobs
@@ -26,20 +35,22 @@ internal sealed class PaxBookingService(
                 j.DeliverToContact,
                 j.DeliverToPhone,
                 j.ProofOfDeliveryEmail,
-                j.DeliveryAddressLine1,
-                j.DeliveryAddressLine2,
                 j.DeliveryAddressLine3,
                 j.DeliveryAddressLine4,
                 j.DeliveryAddressLine5,
                 j.DeliveryAddressLine6,
+                j.DeliveryAddressLine7,
+                j.DeliveryAddressLine8,
                 j.DeliveryLatitude,
                 j.DeliveryLongitude,
                 ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null,
-                // Branding key — prefer the code denormalised onto the job, fall
-                // back to the client's own code. Display name is never used for branding.
-                AirlineCode = string.IsNullOrWhiteSpace(j.UcjbClientCode)
-                    ? (j.UcjbClient != null ? j.UcjbClient.UcclCode : null)
-                    : j.UcjbClientCode
+                // Branding inputs — resolved in memory below. The airline code is
+                // extracted from the WorldTracer file reference in ucjbClientRefa
+                // (station+airline+sequence); the denormalised job code and the
+                // client's own code are kept only as fallbacks.
+                ClientRefa = j.UcjbClientRefa,
+                JobClientCode = j.UcjbClientCode,
+                ClientCode = j.UcjbClient != null ? j.UcjbClient.UcclCode : null
             })
             .FirstOrDefaultAsync(ct);
 
@@ -48,13 +59,20 @@ internal sealed class PaxBookingService(
             Log.Warning("GetSummary: tucJob {JobId} not found", jobId);
             return null;
         }
-
-        var atlOptions = await db.TblJobLeaveNotHomes
-            .AsNoTracking()
-            .Where(l => l.Category == "All")
-            .OrderBy(l => l.Sequence).ThenBy(l => l.Name)
-            .Select(l => new AtlOptionDto(l.LeaveNotHomeId, l.Name))
-            .ToListAsync(ct);
+        
+        var airlineCode = ExtractAirlineFromWorldTracerRef(job.ClientRefa)
+            ?? (string.IsNullOrWhiteSpace(job.JobClientCode) ? job.ClientCode : job.JobClientCode);
+        
+        var atlOptions = await cache.GetOrCreateAsync(AtlOptionsCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
+            return (IReadOnlyList<AtlOptionDto>)await db.TblJobLeaveNotHomes
+                .AsNoTracking()
+                .Where(l => l.Category == "All,")
+                .OrderBy(l => l.Sequence).ThenBy(l => l.Name)
+                .Select(l => new AtlOptionDto(l.LeaveNotHomeId, l.Name))
+                .ToListAsync(ct);
+        }) ?? [];
 
         var now = time.GetUtcNow().UtcDateTime;
         var etaUtc = TenantLocalToUtc(job.DeliverByTime, despatchOptions.Value.TimeZone);
@@ -65,29 +83,80 @@ internal sealed class PaxBookingService(
             JobId: jobId,
             Reference: jobId.ToString(),
             AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
-            AirlineCode: string.IsNullOrWhiteSpace(job.AirlineCode) ? null : job.AirlineCode.Trim(),
+            AirlineCode: string.IsNullOrWhiteSpace(airlineCode) ? null : airlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
             PassengerEmail: job.ProofOfDeliveryEmail,
-            // Inverse of the ConfirmAsync column mapping — show the customer the
-            // delivery address already stored on the job (set by DespatchWeb or a
-            // prior pax confirmation) rather than a blank form.
-            DeliveryAddress: new AddressUpdateDto
-            {
-                Line1 = job.DeliveryAddressLine1 ?? string.Empty,
-                Line2 = job.DeliveryAddressLine2,
-                Suburb = job.DeliveryAddressLine3,
-                City = job.DeliveryAddressLine4 ?? string.Empty,
-                PostCode = job.DeliveryAddressLine5,
-                Country = string.IsNullOrWhiteSpace(job.DeliveryAddressLine6)
-                    ? defaultCountry
-                    : job.DeliveryAddressLine6,
-                Latitude = job.DeliveryLatitude,
-                Longitude = job.DeliveryLongitude
-            },
+            DeliveryAddress: BuildAddressDto(job.DeliveryAddressLine3, job.DeliveryAddressLine4,
+                job.DeliveryAddressLine5, job.DeliveryAddressLine6, job.DeliveryAddressLine7,
+                job.DeliveryAddressLine8, job.DeliveryLatitude, job.DeliveryLongitude, defaultCountry),
             EarliestSlotUtc: etaUtc ?? now,
             LatestSlotUtc: etaUtc ?? now.AddDays(2),
             AtlOptions: atlOptions);
+    }
+    
+    private static AddressUpdateDto BuildAddressDto(
+        string? line3, string? line4, string? line5, string? line6, string? line7, string? line8,
+        decimal? latitude, decimal? longitude, string defaultCountry)
+    {
+        var isUs = IsUsCountry(line8);
+        return new AddressUpdateDto
+        {
+            Line1 = CombineStreet(line3, line4),
+            Line2 = null,
+            Suburb = isUs ? null : line5,
+            City = (isUs ? line5 : line6) ?? string.Empty,
+            PostCode = line7,
+            Country = string.IsNullOrWhiteSpace(line8) ? defaultCountry : line8,
+            Latitude = latitude,
+            Longitude = longitude
+        };
+    }
+
+    // Extracts the 2-letter IATA airline code from a WorldTracer file reference
+    // (ucjbClientRefa). Format is 3-letter station + 2-letter airline + sequence,
+    // e.g. "AKLNZ12345" -> "NZ". Returns null if the value isn't a WT ref (too
+    // short, or no two-letter airline at positions 4-5) so the caller falls back
+    // to the client-code chain.
+    private static string? ExtractAirlineFromWorldTracerRef(string? refa)
+    {
+        if (string.IsNullOrWhiteSpace(refa))
+        {
+            return null;
+        }
+
+        var trimmed = refa.Trim();
+        if (trimmed.Length < 5)
+        {
+            return null;
+        }
+
+        var code = trimmed.Substring(3, 2);
+        return char.IsLetter(code[0]) && char.IsLetter(code[1])
+            ? code.ToUpperInvariant()
+            : null;
+    }
+
+    // Joins the street-number (L3) and street-name (L4) halves of a Despatch
+    // address into a single line, trimming and skipping empty parts.
+    private static string CombineStreet(string? numberPart, string? streetPart)
+    {
+        var a = (numberPart ?? string.Empty).Trim();
+        var b = (streetPart ?? string.Empty).Trim();
+        if (a.Length == 0)
+        {
+            return b;
+        }
+
+        return b.Length == 0 ? a : $"{a} {b}";
+    }
+
+    private static bool IsUsCountry(string? country)
+    {
+        var c = (country ?? string.Empty).Trim();
+        return c.Equals("US", StringComparison.OrdinalIgnoreCase)
+            || c.Equals("USA", StringComparison.OrdinalIgnoreCase)
+            || c.Equals("United States", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DateTime? TenantLocalToUtc(DateTime? local, string? timeZoneCode)
@@ -118,33 +187,30 @@ internal sealed class PaxBookingService(
     public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId, DateTime? localDate,
         CancellationToken ct)
     {
-        var setting = await db.TblEcoSettings
-            .AsNoTracking()
-            .OrderBy(s => s.SettingId)
-            .Select(s => new
-            {
-                s.EconomyRun1,
-                s.EconomyRun2,
-                s.EconomyRun3,
-                s.EconomyRun4,
-                s.EconomyRun5
-            })
-            .FirstOrDefaultAsync(ct);
+        var runs = await cache.GetOrCreateAsync(EcoRunsCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
+            var setting = await db.TblEcoSettings
+                .AsNoTracking()
+                .OrderBy(s => s.SettingId)
+                .Select(s => new[]
+                {
+                    s.EconomyRun1,
+                    s.EconomyRun2,
+                    s.EconomyRun3,
+                    s.EconomyRun4,
+                    s.EconomyRun5
+                })
+                .FirstOrDefaultAsync(ct);
+            // Empty array (not null) is a valid cached "no config" result.
+            return setting ?? [];
+        }) ?? [];
 
-        if (setting is null)
+        if (runs.Length == 0)
         {
             Log.Warning("GetTimeslots: tblEcoSetting has no rows — returning empty slot list");
             return [];
         }
-
-        var runs = new[]
-        {
-            setting.EconomyRun1,
-            setting.EconomyRun2,
-            setting.EconomyRun3,
-            setting.EconomyRun4,
-            setting.EconomyRun5
-        };
 
         var timeZone = despatchOptions.Value.TimeZone;
         var now = time.GetUtcNow().UtcDateTime;
@@ -221,7 +287,17 @@ internal sealed class PaxBookingService(
 
         var leaveId = input.AtlOptionId;
         var deliverByLocal = UtcToTenantLocal(input.TimeSlotEndUtc, despatchOptions.Value.TimeZone);
-        
+
+        // Write back using the canonical Despatch DeliveryAddressLine convention
+        // (see BuildAddressDto). The pax form captures a single combined street, so
+        // it goes in L4 (street name) with L3 (number) cleared — CombineStreet on
+        // read reproduces it. L1 (company) / L2 (building) are deliberately left
+        // untouched so a pax edit can't clobber them. For US, L5=city; otherwise
+        // L5=suburb, L6=city.
+        var isUs = IsUsCountry(input.Address.Country);
+        var line5 = isUs ? input.Address.City : input.Address.Suburb;
+        var line6 = isUs ? null : input.Address.City;
+
         var rows = await db.TucJobs
             .Where(j => j.UcjbId == input.JobId)
             .ExecuteUpdateAsync(s => s
@@ -230,12 +306,12 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.ProofOfDeliveryEmail, input.PassengerEmail)
                     .SetProperty(j => j.DeliverToLeaveId, leaveId)
                     .SetProperty(j => j.UcjbToSpecial, input.AccessNotes)
-                    .SetProperty(j => j.DeliveryAddressLine1, input.Address.Line1)
-                    .SetProperty(j => j.DeliveryAddressLine2, input.Address.Line2)
-                    .SetProperty(j => j.DeliveryAddressLine3, input.Address.Suburb)
-                    .SetProperty(j => j.DeliveryAddressLine4, input.Address.City)
-                    .SetProperty(j => j.DeliveryAddressLine5, input.Address.PostCode)
-                    .SetProperty(j => j.DeliveryAddressLine6, input.Address.Country)
+                    .SetProperty(j => j.DeliveryAddressLine3, (string?)null)
+                    .SetProperty(j => j.DeliveryAddressLine4, input.Address.Line1)
+                    .SetProperty(j => j.DeliveryAddressLine5, line5)
+                    .SetProperty(j => j.DeliveryAddressLine6, line6)
+                    .SetProperty(j => j.DeliveryAddressLine7, input.Address.PostCode)
+                    .SetProperty(j => j.DeliveryAddressLine8, input.Address.Country)
                     .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
                     .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)
                     .SetProperty(j => j.DeliverByTime, deliverByLocal)
