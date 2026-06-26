@@ -28,7 +28,7 @@ export function PoweredByFooter({ sx }: PoweredByFooterProps) {
           component="img"
           src="/dfrnt-logo.png"
           alt="Deliver DFRNT"
-          sx={{ height: 22, width: 'auto', display: 'block' }}
+          sx={{ height: 40, width: 'auto', display: 'block' }}
         />
       </Stack>
     </Box>

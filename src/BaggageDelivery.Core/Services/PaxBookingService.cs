@@ -68,8 +68,8 @@ internal sealed class PaxBookingService(
             entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
             return (IReadOnlyList<AtlOptionDto>)await db.TblJobLeaveNotHomes
                 .AsNoTracking()
-                .Where(l => l.Category == "All,")
-                .OrderBy(l => l.Sequence).ThenBy(l => l.Name)
+                .Where(l => l.Category == "All," && l.AllowLeave)
+                .OrderByDescending(l => l.Sequence).ThenBy(l => l.Name)
                 .Select(l => new AtlOptionDto(l.LeaveNotHomeId, l.Name))
                 .ToListAsync(ct);
         }) ?? [];
