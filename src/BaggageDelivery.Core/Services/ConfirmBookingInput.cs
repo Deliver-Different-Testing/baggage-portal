@@ -7,7 +7,7 @@ public sealed record ConfirmBookingInput(
     AddressUpdateDto Address,
     DateTime TimeSlotStartUtc,
     DateTime TimeSlotEndUtc,
-    string AtlOption,
+    int? AtlOptionId,
     string? AccessNotes,
     string PassengerName,
     string? PassengerPhone,

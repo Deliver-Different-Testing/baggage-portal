@@ -1,6 +1,7 @@
 import { alpha, createTheme } from '@mui/material/styles'
 import type { Theme } from '@mui/material/styles'
 import Grow from '@mui/material/Grow'
+import type { AirlineBrand } from './airlineBranding'
 
 declare module '@mui/material/styles' {
   interface Theme {
@@ -137,19 +138,32 @@ const sharedColors = {
 
 const APP_BG_SURFACE = accentPalette[50]
 
-export function createAppTheme(isUsCustomer: boolean): Theme {
+// When `brand` is supplied (airline-code-driven branding) it overrides the
+// tenant primary palette; otherwise the US/blue or non-US/amber default applies.
+export function createAppTheme(isUsCustomer: boolean, brand?: AirlineBrand): Theme {
   const primaryPalette = isUsCustomer ? dfrntPrimaryPalette : urgentPrimaryPalette
   const primaryContrastText = isUsCustomer ? '#FFFFFF' : 'rgba(0, 0, 0, 0.87)'
 
+  const primary = brand
+    ? {
+        main: brand.primary,
+        light: brand.primaryLight,
+        dark: brand.primaryDark,
+        darker: brand.primaryDark,
+        lighter: brand.primaryLight,
+        contrast: brand.contrastText,
+      }
+    : {
+        main: primaryPalette[500],
+        light: primaryPalette[300],
+        dark: primaryPalette[700],
+        darker: primaryPalette[900],
+        lighter: primaryPalette[50],
+        contrast: primaryContrastText,
+      }
+
   const colors = {
-    primary: {
-      main: primaryPalette[500],
-      light: primaryPalette[300],
-      dark: primaryPalette[700],
-      darker: primaryPalette[900],
-      lighter: primaryPalette[50],
-      contrast: primaryContrastText,
-    },
+    primary,
     secondary: {
       main: accentPalette[500],
       light: accentPalette[300],

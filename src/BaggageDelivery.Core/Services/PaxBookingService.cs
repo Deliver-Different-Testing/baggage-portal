@@ -34,7 +34,12 @@ internal sealed class PaxBookingService(
                 j.DeliveryAddressLine6,
                 j.DeliveryLatitude,
                 j.DeliveryLongitude,
-                ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null
+                ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null,
+                // Branding key — prefer the code denormalised onto the job, fall
+                // back to the client's own code. Display name is never used for branding.
+                AirlineCode = string.IsNullOrWhiteSpace(j.UcjbClientCode)
+                    ? (j.UcjbClient != null ? j.UcjbClient.UcclCode : null)
+                    : j.UcjbClientCode
             })
             .FirstOrDefaultAsync(ct);
 
@@ -60,6 +65,7 @@ internal sealed class PaxBookingService(
             JobId: jobId,
             Reference: jobId.ToString(),
             AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
+            AirlineCode: string.IsNullOrWhiteSpace(job.AirlineCode) ? null : job.AirlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
             PassengerEmail: job.ProofOfDeliveryEmail,
@@ -213,7 +219,7 @@ internal sealed class PaxBookingService(
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var leaveId = int.TryParse(input.AtlOption, out var parsed) ? parsed : (int?)null;
+        var leaveId = input.AtlOptionId;
         var deliverByLocal = UtcToTenantLocal(input.TimeSlotEndUtc, despatchOptions.Value.TimeZone);
         
         var rows = await db.TucJobs
