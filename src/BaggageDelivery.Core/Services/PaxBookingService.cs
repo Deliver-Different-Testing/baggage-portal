@@ -26,6 +26,14 @@ internal sealed class PaxBookingService(
                 j.DeliverToContact,
                 j.DeliverToPhone,
                 j.ProofOfDeliveryEmail,
+                j.DeliveryAddressLine1,
+                j.DeliveryAddressLine2,
+                j.DeliveryAddressLine3,
+                j.DeliveryAddressLine4,
+                j.DeliveryAddressLine5,
+                j.DeliveryAddressLine6,
+                j.DeliveryLatitude,
+                j.DeliveryLongitude,
                 ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null
             })
             .FirstOrDefaultAsync(ct);
@@ -38,13 +46,15 @@ internal sealed class PaxBookingService(
 
         var atlOptions = await db.TblJobLeaveNotHomes
             .AsNoTracking()
-            .Where(l => l.AllowLeave)
+            .Where(l => l.Category == "All")
             .OrderBy(l => l.Sequence).ThenBy(l => l.Name)
             .Select(l => new AtlOptionDto(l.LeaveNotHomeId, l.Name))
             .ToListAsync(ct);
 
         var now = time.GetUtcNow().UtcDateTime;
         var etaUtc = TenantLocalToUtc(job.DeliverByTime, despatchOptions.Value.TimeZone);
+
+        var defaultCountry = despatchOptions.Value.Countries is { Length: > 0 } cs ? cs[0] : "NZ";
 
         return new BookingSummary(
             JobId: jobId,
@@ -53,11 +63,21 @@ internal sealed class PaxBookingService(
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
             PassengerEmail: job.ProofOfDeliveryEmail,
+            // Inverse of the ConfirmAsync column mapping — show the customer the
+            // delivery address already stored on the job (set by DespatchWeb or a
+            // prior pax confirmation) rather than a blank form.
             DeliveryAddress: new AddressUpdateDto
             {
-                Line1 = string.Empty,
-                City = string.Empty,
-                Country = despatchOptions.Value.Countries is { Length: > 0 } cs ? cs[0] : "NZ"
+                Line1 = job.DeliveryAddressLine1 ?? string.Empty,
+                Line2 = job.DeliveryAddressLine2,
+                Suburb = job.DeliveryAddressLine3,
+                City = job.DeliveryAddressLine4 ?? string.Empty,
+                PostCode = job.DeliveryAddressLine5,
+                Country = string.IsNullOrWhiteSpace(job.DeliveryAddressLine6)
+                    ? defaultCountry
+                    : job.DeliveryAddressLine6,
+                Latitude = job.DeliveryLatitude,
+                Longitude = job.DeliveryLongitude
             },
             EarliestSlotUtc: etaUtc ?? now,
             LatestSlotUtc: etaUtc ?? now.AddDays(2),
