@@ -281,7 +281,7 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
-    public async Task GetSummary_returns_only_category_all_atl_options_ordered_by_sequence_then_name()
+    public async Task GetSummary_returns_only_category_all_allow_leave_atl_options_ordered_by_sequence_desc_then_name()
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
@@ -293,7 +293,8 @@ public class PaxBookingServiceTests
         db.TblJobLeaveNotHomes.AddRange(
             new TblJobLeaveNotHome { LeaveNotHomeId = 1, Name = "Front porch", Smsname = "porch", Category = "All,", AllowLeave = true, Sequence = 2, CreatedBy = "test", LastModifiedBy = "test" },
             new TblJobLeaveNotHome { LeaveNotHomeId = 2, Name = "Back door", Smsname = "door", Category = "All,", AllowLeave = false, Sequence = 1, CreatedBy = "test", LastModifiedBy = "test" },
-            new TblJobLeaveNotHome { LeaveNotHomeId = 3, Name = "With neighbour", Smsname = "neighbour", Category = "Commercial", AllowLeave = true, Sequence = 0, CreatedBy = "test", LastModifiedBy = "test" });
+            new TblJobLeaveNotHome { LeaveNotHomeId = 3, Name = "With neighbour", Smsname = "neighbour", Category = "Commercial", AllowLeave = true, Sequence = 0, CreatedBy = "test", LastModifiedBy = "test" },
+            new TblJobLeaveNotHome { LeaveNotHomeId = 4, Name = "Garage", Smsname = "garage", Category = "All,", AllowLeave = true, Sequence = 5, CreatedBy = "test", LastModifiedBy = "test" });
         await db.SaveChangesAsync(ct);
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
@@ -301,8 +302,10 @@ public class PaxBookingServiceTests
         var summary = await svc.GetSummaryAsync(7, ct);
 
         Assert.NotNull(summary);
-        Assert.Equal(["Back door", "Front porch"], summary.AtlOptions.Select(o => o.Name));
-        Assert.Equal([2, 1], summary.AtlOptions.Select(o => o.Id));
+        // Highest sequence first; "Back door" excluded (AllowLeave false),
+        // "With neighbour" excluded (wrong category).
+        Assert.Equal(["Garage", "Front porch"], summary.AtlOptions.Select(o => o.Name));
+        Assert.Equal([4, 1], summary.AtlOptions.Select(o => o.Id));
     }
 
     [Fact]

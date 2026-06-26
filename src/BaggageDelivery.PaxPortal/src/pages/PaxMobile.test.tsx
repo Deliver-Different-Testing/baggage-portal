@@ -76,6 +76,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
   const atlOptions = [
     { id: 5, name: 'Front door' },
     { id: 6, name: 'Back door' },
+    { id: 7, name: 'Safe Place' },
   ]
 
   let lastConfirmBody: ConfirmBookingRequest | null = null
@@ -129,6 +130,45 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() => expect(lastConfirmBody).not.toBeNull())
     expect(lastConfirmBody!.atlOptionId).toBe(6)
     expect(typeof lastConfirmBody!.atlOptionId).toBe('number')
+  })
+
+  it('blocks submit and requires additional details when Safe Place is selected', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+
+    await user.click(screen.getByRole('switch'))
+    await user.click(await screen.findByRole('radio', { name: 'Safe Place' }))
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    expect(
+      await screen.findByText(/please describe the safe place/i),
+    ).toBeInTheDocument()
+    expect(lastConfirmBody).toBeNull()
+  })
+
+  it('submits once additional details are provided for Safe Place', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+
+    await user.click(screen.getByRole('switch'))
+    await user.click(await screen.findByRole('radio', { name: 'Safe Place' }))
+    await user.type(
+      screen.getByRole('textbox', { name: /additional details/i }),
+      'Behind the garden shed',
+    )
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.atlOptionId).toBe(7)
+    expect(lastConfirmBody!.accessNotes).toBe('Behind the garden shed')
   })
 
   it('posts null when Authority to Leave stays off', async () => {

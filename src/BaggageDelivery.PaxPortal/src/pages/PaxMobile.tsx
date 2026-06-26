@@ -166,7 +166,7 @@ function ConfirmForm({
     [slots.data, effectiveSlotId],
   )
 
-  // Preserve the backend ordering (Sequence, then Name) — matches the booking app.
+  // Preserve the backend ordering (Sequence descending, then Name).
   const atlOptions = summary.atlOptions
 
   const fieldErrors: { [key: string]: string } = {}
@@ -186,6 +186,13 @@ function ConfirmForm({
   if (!address.city.trim()) fieldErrors.city = 'Please enter your city.'
   if (!(address.postCode ?? '').trim()) fieldErrors.postCode = 'Please enter your postcode.'
   if (!selectedSlot) fieldErrors.slot = 'Please pick a delivery time slot.'
+
+  const selectedAtlOption = atlOptions.find((o) => o.id === atlOptionId)
+  const atlNotesRequired =
+    selectedAtlOption?.name.trim().toLowerCase() === 'safe place'
+  if (atlNotesRequired && !accessNotes.trim()) {
+    fieldErrors.accessNotes = 'Please describe the safe place to leave your baggage.'
+  }
 
   const showFieldError = (key: string) =>
     submitAttempted ? fieldErrors[key] : undefined
@@ -507,9 +514,16 @@ function ConfirmForm({
                   ))}
                 </RadioGroup>
                 <TextField
-                  label="Additional details (optional)"
+                  label={
+                    atlNotesRequired
+                      ? 'Additional details'
+                      : 'Additional details (optional)'
+                  }
+                  required={atlNotesRequired}
                   value={accessNotes}
                   onChange={(e) => setAccessNotes(e.target.value)}
+                  error={!!showFieldError('accessNotes')}
+                  helperText={showFieldError('accessNotes')}
                   fullWidth
                   multiline
                   minRows={2}
