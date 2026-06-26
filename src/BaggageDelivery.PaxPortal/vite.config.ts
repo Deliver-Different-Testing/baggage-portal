@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Baggage Delivery - Deliver DFRNT',
         short_name: 'Baggage',
         description: 'Confirm delivery details and track your baggage',
-        theme_color: '#1a3ff5',
-        background_color: '#1a3ff5',
+        theme_color: '#5B3FE0',
+        background_color: '#5B3FE0',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/?source=pwa',
@@ -29,7 +29,8 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/pax/booking'),
+            // /api/v1/pax/{id}/booking — the {id} segment precedes "booking".
+            urlPattern: /\/api\/v1\/pax\/[^/]+\/booking/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'pax-booking',
@@ -38,7 +39,7 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/pax/tracking'),
+            urlPattern: /\/api\/v1\/pax\/[^/]+\/tracking/,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'pax-tracking',
@@ -56,6 +57,11 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
               return 'vendor-react'
+            }
+            // @mui/lab (Timeline) is only used by the Tracking route — keep it
+            // out of the shared vendor-mui chunk so /c/:id doesn't download it.
+            if (/[\\/]node_modules[\\/]@mui[\\/]lab[\\/]/.test(id)) {
+              return 'vendor-mui-lab'
             }
             if (/[\\/]node_modules[\\/](@mui|@emotion)[\\/]/.test(id)) {
               return 'vendor-mui'

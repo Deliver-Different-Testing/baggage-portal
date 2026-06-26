@@ -63,6 +63,13 @@ describe('ConfirmedScreen', () => {
       screen.getByText(/we'll also text you when our driver is on the way/i),
     ).toBeInTheDocument()
   })
+
+  it('shows the Powered by Deliver DFRNT footer', () => {
+    renderConfirmed('token-abc-123')
+
+    expect(screen.getByText(/powered by/i)).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /deliver dfrnt/i })).toBeInTheDocument()
+  })
 })
 
 describe('PaxMobile — Authority to Leave submit', () => {

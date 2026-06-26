@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import Avatar from '@mui/material/Avatar'
@@ -26,6 +26,7 @@ import AccessTimeRoundedIcon from '@mui/icons-material/AccessTimeRounded'
 import LuggageRoundedIcon from '@mui/icons-material/LuggageRounded'
 import { getTracking } from '../api/pax'
 import type { TrackingTimeline } from '../api/client'
+import { PoweredByFooter } from '../components/PoweredByFooter'
 
 const pulse = keyframes`
   0% { box-shadow: 0 0 0 0 currentColor; opacity: 0.6; }
@@ -220,6 +221,8 @@ export function Tracking() {
           </Grid>
         </Grid>
       </Container>
+
+      <PoweredByFooter />
     </Box>
   )
 }
@@ -321,7 +324,10 @@ function DriverCard({ name, vehicle }: { name: string; vehicle?: string | null }
 }
 
 function TimelineList({ data, nowMs }: { data: TrackingTimeline; nowMs: number }) {
-  const events = [...data.events].sort((a, b) => +new Date(b.atUtc) - +new Date(a.atUtc))
+  const events = useMemo(
+    () => [...data.events].sort((a, b) => +new Date(b.atUtc) - +new Date(a.atUtc)),
+    [data.events],
+  )
   return (
     <Timeline
       sx={{
