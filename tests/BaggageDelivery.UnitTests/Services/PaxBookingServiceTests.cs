@@ -190,6 +190,90 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
+    public async Task GetSummary_returns_only_category_all_atl_options_ordered_by_sequence_then_name()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
+        db.TblJobLeaveNotHomes.AddRange(
+            new TblJobLeaveNotHome { LeaveNotHomeId = 1, Name = "Front porch", Smsname = "porch", Category = "All", AllowLeave = true, Sequence = 2, CreatedBy = "test", LastModifiedBy = "test" },
+            new TblJobLeaveNotHome { LeaveNotHomeId = 2, Name = "Back door", Smsname = "door", Category = "All", AllowLeave = false, Sequence = 1, CreatedBy = "test", LastModifiedBy = "test" },
+            new TblJobLeaveNotHome { LeaveNotHomeId = 3, Name = "With neighbour", Smsname = "neighbour", Category = "Commercial", AllowLeave = true, Sequence = 0, CreatedBy = "test", LastModifiedBy = "test" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal(["Back door", "Front porch"], summary!.AtlOptions.Select(o => o.Name));
+        Assert.Equal([2, 1], summary.AtlOptions.Select(o => o.Id));
+    }
+
+    [Fact]
+    public async Task GetSummary_populates_delivery_address_from_stored_address_lines()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7,
+            UcjbNumber = "JOB-7",
+            DeliveryAddressLine1 = "12 Queen St",
+            DeliveryAddressLine2 = "Apt 4",
+            DeliveryAddressLine3 = "CBD",
+            DeliveryAddressLine4 = "Auckland",
+            DeliveryAddressLine5 = "1010",
+            DeliveryAddressLine6 = "NZ",
+            DeliveryLatitude = -36.8485m,
+            DeliveryLongitude = 174.7633m
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        var addr = summary!.DeliveryAddress;
+        Assert.Equal("12 Queen St", addr.Line1);
+        Assert.Equal("Apt 4", addr.Line2);
+        Assert.Equal("CBD", addr.Suburb);
+        Assert.Equal("Auckland", addr.City);
+        Assert.Equal("1010", addr.PostCode);
+        Assert.Equal("NZ", addr.Country);
+        Assert.Equal(-36.8485m, addr.Latitude);
+        Assert.Equal(174.7633m, addr.Longitude);
+    }
+
+    [Fact]
+    public async Task GetSummary_falls_back_to_default_country_when_no_address_lines_stored()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        var addr = summary!.DeliveryAddress;
+        Assert.Equal(string.Empty, addr.Line1);
+        Assert.Equal(string.Empty, addr.City);
+        Assert.Equal("NZ", addr.Country);
+        Assert.Null(addr.Latitude);
+        Assert.Null(addr.Longitude);
+    }
+
+    [Fact]
     public async Task GetTimeslots_marks_first_slot_whose_end_is_future_as_first_available()
     {
         await using var db = InMemoryDb.NewContext();
