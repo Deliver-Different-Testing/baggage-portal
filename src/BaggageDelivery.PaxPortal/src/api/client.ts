@@ -60,6 +60,7 @@ export type BookingSummary = {
   jobId: number
   reference: string
   airlineLabel: string
+  airlineCode?: string | null
   passengerName: string
   passengerPhone?: string | null
   passengerEmail?: string | null
@@ -86,7 +87,7 @@ export type ConfirmBookingRequest = {
   address: AddressDto
   timeSlotStartUtc: string
   timeSlotEndUtc: string
-  atlOption: string
+  atlOptionId: number | null
   accessNotes?: string | null
   passengerName: string
   passengerPhone?: string | null

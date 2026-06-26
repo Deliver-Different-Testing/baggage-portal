@@ -6,6 +6,7 @@ public sealed record BookingSummary(
     int JobId,
     string Reference,
     string AirlineLabel,
+    string? AirlineCode,
     string PassengerName,
     string? PassengerPhone,
     string? PassengerEmail,

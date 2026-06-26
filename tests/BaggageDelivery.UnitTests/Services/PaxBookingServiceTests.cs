@@ -129,6 +129,11 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
+        db.TblJobLeaveNotHomes.Add(new TblJobLeaveNotHome
+        {
+            LeaveNotHomeId = 5, Name = "Front door", Smsname = "door", Category = "All",
+            AllowLeave = true, Sequence = 1, CreatedBy = "test", LastModifiedBy = "test"
+        });
         db.TucJobs.Add(new TucJob
         {
             UcjbId = 4242,
@@ -150,7 +155,7 @@ public class PaxBookingServiceTests
             },
             TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
             TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
-            AtlOption: null!,
+            AtlOptionId: 5,
             AccessNotes: "Buzzer 3",
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
@@ -159,12 +164,51 @@ public class PaxBookingServiceTests
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("Jane Pax", job.DeliverToContact);
         Assert.Equal((int)JobStatus.New, job.UcjbStatus);
+        Assert.Equal(5, job.DeliverToLeaveId);
 
         var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4242, ct);
         Assert.Equal(nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking), journey.ChangeType);
         Assert.Equal(nameof(DeliveryJourneyUpdatedByType.System), journey.UpdatedByType);
         Assert.Equal(time.GetUtcNow().UtcDateTime, journey.UpdatedAt);
         Assert.Contains("self-service", journey.Comments);
+    }
+
+    [Fact]
+    public async Task Confirm_persists_null_leave_id_when_atl_option_is_off()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TblJobLeaveNotHomes.Add(new TblJobLeaveNotHome
+        {
+            LeaveNotHomeId = 9, Name = "Front door", Smsname = "door", Category = "All",
+            AllowLeave = true, Sequence = 1, CreatedBy = "test", LastModifiedBy = "test"
+        });
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4243,
+            UcjbNumber = "TEST-4243",
+            DeliverToLeaveId = 9,
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4243,
+            Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
+            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+64 21 000",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4243, ct);
+        Assert.Null(job.DeliverToLeaveId);
     }
 
     [Fact]
@@ -180,7 +224,7 @@ public class PaxBookingServiceTests
             Address: new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
             TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
             TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
-            AtlOption: null!,
+            AtlOptionId: null,
             AccessNotes: null,
             PassengerName: "X",
             PassengerPhone: null,
@@ -248,6 +292,48 @@ public class PaxBookingServiceTests
         Assert.Equal("NZ", addr.Country);
         Assert.Equal(-36.8485m, addr.Latitude);
         Assert.Equal(174.7633m, addr.Longitude);
+    }
+
+    [Fact]
+    public async Task GetSummary_surfaces_airline_code_from_job_client_code()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientCode = "QF" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal("QF", summary!.AirlineCode);
+    }
+
+    [Fact]
+    public async Task GetSummary_falls_back_to_client_code_when_job_client_code_blank()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucClients.Add(new TucClient
+        {
+            UcclId = 3, UcclCode = "NZ", UcclName = "Air New Zealand",
+            UcclLegalName = "Air New Zealand Ltd", Smsname = "AirNZ",
+            CreatedBy = "test", LastModifiedBy = "test"
+        });
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientId = 3 });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal("NZ", summary!.AirlineCode);
     }
 
     [Fact]

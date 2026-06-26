@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles'
-import { ConfirmedScreen } from './PaxMobile'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { setupServer } from 'msw/node'
+import { http, HttpResponse } from 'msw'
+import { ConfirmedScreen, PaxMobile } from './PaxMobile'
 import { theme } from '../styles/theme'
-import type { BookingSummary, TimeSlot } from '../api/client'
+import type { BookingSummary, ConfirmBookingRequest, TimeSlot } from '../api/client'
 
 const summary: BookingSummary = {
   bookingId: 1,
@@ -58,5 +62,78 @@ describe('ConfirmedScreen', () => {
     expect(
       screen.getByText(/we'll also text you when our driver is on the way/i),
     ).toBeInTheDocument()
+  })
+})
+
+describe('PaxMobile — Authority to Leave submit', () => {
+  const atlOptions = [
+    { id: 5, name: 'Front door' },
+    { id: 6, name: 'Back door' },
+  ]
+
+  let lastConfirmBody: ConfirmBookingRequest | null = null
+
+  const server = setupServer(
+    http.get('*/pax/:id/booking', () =>
+      HttpResponse.json({ ...summary, atlOptions }),
+    ),
+    http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])),
+    http.post('*/pax/:id/booking/confirm', async ({ request }) => {
+      lastConfirmBody = (await request.json()) as ConfirmBookingRequest
+      return HttpResponse.json({ status: 'Released', releasedAtUtc: '2026-06-10T00:00:00Z' })
+    }),
+  )
+
+  beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
+  afterEach(() => {
+    server.resetHandlers()
+    lastConfirmBody = null
+  })
+  afterAll(() => server.close())
+
+  function renderForm() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
+      <MemoryRouter initialEntries={['/c/token-xyz']}>
+        <ThemeProvider theme={theme}>
+          <QueryClientProvider client={queryClient}>
+            <Routes>
+              <Route path="/c/:id" element={<PaxMobile />} />
+            </Routes>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it('posts the selected ATL option id as a number', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+
+    // Turn ATL on (auto-selects the first option), then pick the second.
+    await user.click(screen.getByRole('switch'))
+    await user.click(await screen.findByRole('radio', { name: 'Back door' }))
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.atlOptionId).toBe(6)
+    expect(typeof lastConfirmBody!.atlOptionId).toBe('number')
+  })
+
+  it('posts null when Authority to Leave stays off', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm delivery/i })).toBeEnabled())
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.atlOptionId).toBeNull()
   })
 })

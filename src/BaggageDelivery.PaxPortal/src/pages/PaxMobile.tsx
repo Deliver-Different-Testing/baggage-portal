@@ -20,7 +20,7 @@ import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { alpha } from '@mui/material/styles'
+import { alpha, ThemeProvider } from '@mui/material/styles'
 import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded'
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
 import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded'
@@ -38,8 +38,8 @@ import {
 import type { AddressDto, BookingSummary, TimeSlot } from '../api/client'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
-
-const ATL_OFF = 'None'
+import { createAppTheme } from '../styles/theme'
+import { getAirlineBrand } from '../styles/airlineBranding'
 
 export function PaxMobile() {
   const { id } = useParams<{ id: string }>()
@@ -90,7 +90,31 @@ export function PaxMobile() {
     )
   }
 
-  return <ConfirmForm bookingId={id} summary={booking.data} online={online} />
+  return <BrandedConfirmForm bookingId={id} summary={booking.data} online={online} />
+}
+
+// Re-theme the passenger flow from the airline code on the booking. The root
+// ThemeProvider (main.tsx) stays the default for loading/expired states; this
+// nested provider only applies once booking data is available.
+function BrandedConfirmForm({
+  bookingId,
+  summary,
+  online,
+}: {
+  bookingId: string
+  summary: BookingSummary
+  online: boolean
+}) {
+  const airlineTheme = useMemo(
+    () => createAppTheme(true, getAirlineBrand(summary.airlineCode)),
+    [summary.airlineCode],
+  )
+
+  return (
+    <ThemeProvider theme={airlineTheme}>
+      <ConfirmForm bookingId={bookingId} summary={summary} online={online} />
+    </ThemeProvider>
+  )
 }
 
 function ConfirmForm({
@@ -109,7 +133,7 @@ function ConfirmForm({
   const [passengerPhone, setPassengerPhone] = useState(summary.passengerPhone ?? '')
   const [passengerEmail, setPassengerEmail] = useState(summary.passengerEmail ?? '')
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
-  const [atlOptionName, setAtlOptionName] = useState<string>(ATL_OFF)
+  const [atlOptionId, setAtlOptionId] = useState<number | null>(null)
   const [accessNotes, setAccessNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [confirmed, setConfirmed] = useState(false)
@@ -134,10 +158,8 @@ function ConfirmForm({
     [slots.data, effectiveSlotId],
   )
 
-  const sortedAtlOptions = useMemo(
-    () => [...summary.atlOptions].sort((a, b) => a.id - b.id),
-    [summary.atlOptions],
-  )
+  // Preserve the backend ordering (Sequence, then Name) — matches the booking app.
+  const atlOptions = summary.atlOptions
 
   const fieldErrors: { [key: string]: string } = {}
   if (!passengerName.trim()) fieldErrors.passengerName = 'Please enter your full name.'
@@ -187,7 +209,7 @@ function ConfirmForm({
       address,
       timeSlotStartUtc: selectedSlot!.startUtc,
       timeSlotEndUtc: selectedSlot!.endUtc,
-      atlOption: atlOptionName,
+      atlOptionId,
       accessNotes: accessNotes || null,
       passengerName: passengerName.trim(),
       passengerPhone: passengerPhone.trim(),
@@ -445,29 +467,29 @@ function ConfirmForm({
             subtitle="Leave baggage unattended if you're not home"
             action={
               <Switch
-                checked={atlOptionName !== ATL_OFF}
-                disabled={sortedAtlOptions.length === 0}
+                checked={atlOptionId !== null}
+                disabled={atlOptions.length === 0}
                 onChange={(_, on) =>
-                  setAtlOptionName(on ? sortedAtlOptions[0]?.name ?? ATL_OFF : ATL_OFF)
+                  setAtlOptionId(on ? atlOptions[0]?.id ?? null : null)
                 }
               />
             }
           >
-            <Collapse in={atlOptionName !== ATL_OFF} unmountOnExit>
+            <Collapse in={atlOptionId !== null} unmountOnExit>
               <Box sx={{ pt: 1 }}>
                 <RadioGroup
-                  value={atlOptionName}
-                  onChange={(e) => setAtlOptionName(e.target.value)}
+                  value={atlOptionId === null ? '' : String(atlOptionId)}
+                  onChange={(e) => setAtlOptionId(Number(e.target.value))}
                   sx={
-                    sortedAtlOptions.length > 6
+                    atlOptions.length > 6
                       ? { maxHeight: 260, overflowY: 'auto', pr: 1 }
                       : undefined
                   }
                 >
-                  {sortedAtlOptions.map((opt) => (
+                  {atlOptions.map((opt) => (
                     <FormControlLabel
                       key={opt.id}
-                      value={opt.name}
+                      value={String(opt.id)}
                       control={<Radio size="small" />}
                       label={
                         <Typography variant="body2">{opt.name}</Typography>
