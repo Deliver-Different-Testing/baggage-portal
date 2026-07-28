@@ -1,36 +1,31 @@
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import type { SxProps, Theme } from '@mui/material/styles'
+import type { CSSProperties } from 'react'
+import { Box, Group, Text } from '@mantine/core'
+import { useColorMode } from '../hooks/colorModeContext'
 
 interface PoweredByFooterProps {
-  sx?: SxProps<Theme>
+  style?: CSSProperties
 }
 
-export function PoweredByFooter({ sx }: PoweredByFooterProps) {
+export function PoweredByFooter({ style }: PoweredByFooterProps) {
+  const { mode } = useColorMode()
+  const logoSrc = mode === 'dark' ? '/dfrnt-logo-dark.png' : '/dfrnt-logo-light.png'
+
   return (
-    <Box
-      component="footer"
-      sx={[{ width: '100%', py: 3, px: 2 }, ...(Array.isArray(sx) ? sx : [sx])]}
-    >
-      <Stack
-        direction="row"
-        spacing={0.75}
-        sx={{ alignItems: 'center', justifyContent: 'center' }}
-      >
-        <Typography
-          variant="caption"
-          sx={{ color: 'text.secondary', fontSize: 11.5, letterSpacing: '0.04em' }}
-        >
+    <Box component="footer" style={{ width: '100%', ...style }} py="lg" px="md">
+      <Group gap={9} justify="center" align="center">
+        <Text c="dimmed" style={{ fontSize: 16, letterSpacing: '0.04em' }}>
           Powered by
-        </Typography>
-        <Box
-          component="img"
-          src="/dfrnt-logo.png"
+        </Text>
+        <img
+          src={logoSrc}
           alt="Deliver DFRNT"
-          sx={{ height: 40, width: 'auto', display: 'block' }}
+          // Intrinsic 2334×792 (≈2.95:1); attributes let the browser reserve the
+          // rendered 165×56 box so the logo swap doesn't shift layout.
+          width={165}
+          height={56}
+          style={{ height: 56, width: 'auto', display: 'block' }}
         />
-      </Stack>
+      </Group>
     </Box>
   )
 }

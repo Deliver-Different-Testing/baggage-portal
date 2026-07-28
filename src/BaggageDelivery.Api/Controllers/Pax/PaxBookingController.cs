@@ -37,7 +37,7 @@ public sealed class PaxBookingController(
             return NotFound();
         }
 
-        var slots = await paxBooking.GetTimeslotsAsync(jobId.Value, date, ct);
+        var slots = await paxBooking.GetTimeslotsAsync(date, ct);
         return Ok(slots
             .Select(s => new TimeSlotDto(s.Id, s.StartUtc, s.EndUtc, s.Label, s.FirstAvailable))
             .ToArray());

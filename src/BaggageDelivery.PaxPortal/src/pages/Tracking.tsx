@@ -1,63 +1,63 @@
-import { useEffect, useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useMemo, type ReactElement } from 'react'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import Avatar from '@mui/material/Avatar'
-import Box from '@mui/material/Box'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Chip from '@mui/material/Chip'
-import CircularProgress from '@mui/material/CircularProgress'
-import Container from '@mui/material/Container'
-import Grid from '@mui/material/Grid'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import { alpha, keyframes } from '@mui/material/styles'
-import Timeline from '@mui/lab/Timeline'
-import TimelineConnector from '@mui/lab/TimelineConnector'
-import TimelineContent from '@mui/lab/TimelineContent'
-import TimelineDot from '@mui/lab/TimelineDot'
-import TimelineItem from '@mui/lab/TimelineItem'
-import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
-import TimelineSeparator from '@mui/lab/TimelineSeparator'
-import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
-import HourglassEmptyRoundedIcon from '@mui/icons-material/HourglassEmptyRounded'
-import AccessTimeRoundedIcon from '@mui/icons-material/AccessTimeRounded'
-import LuggageRoundedIcon from '@mui/icons-material/LuggageRounded'
+import {
+  alpha,
+  Avatar,
+  Badge,
+  Box,
+  Card,
+  Center,
+  Container,
+  Grid,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Timeline,
+  Title,
+} from '@mantine/core'
+import {
+  CheckCircleIcon,
+  ClockIcon,
+  HourglassIcon,
+  LuggageIcon,
+  TruckIcon,
+} from '../components/Icon'
 import { getTracking } from '../api/pax'
 import type { TrackingTimeline } from '../api/client'
 import { PoweredByFooter } from '../components/PoweredByFooter'
+import { useRedirectOnNotFound } from '../hooks/useRedirectOnNotFound'
 
-const pulse = keyframes`
-  0% { box-shadow: 0 0 0 0 currentColor; opacity: 0.6; }
-  70% { box-shadow: 0 0 0 8px transparent; opacity: 0; }
-  100% { box-shadow: 0 0 0 0 transparent; opacity: 0; }
-`
+// White-on-Ink hero scrim (white alphas, not brand hex) — reads on the Ink-Blue hero.
+const SCRIM_HERO = 'var(--mantine-color-ink-9)'
+const SCRIM_FILL = 'rgba(255,255,255,0.18)'
+const SCRIM_FILL_STRONG = 'rgba(255,255,255,0.2)'
+const SCRIM_BODY = 'rgba(255,255,255,0.85)'
 
 const STATUS_INFO = {
   Delivered: {
-    icon: <CheckCircleRoundedIcon sx={{ fontSize: 16 }} />,
+    icon: <CheckCircleIcon size={16} color="#fff" />,
     label: 'Delivered',
     headline: 'Your bag has arrived',
-    description: "Thanks for using our delivery service. We hope it arrived safely.",
+    description: 'Thanks for using our delivery service. We hope it arrived safely.',
   },
   OutForDelivery: {
-    icon: <LocalShippingRoundedIcon sx={{ fontSize: 16 }} />,
+    icon: <TruckIcon size={16} color="#fff" />,
     label: 'On the way',
     headline: 'Your bag is on the way',
-    description: "Our driver is heading to your delivery address now.",
+    description: 'Our driver is heading to your delivery address now.',
   },
 } as const
 
 const PENDING_STATUS = {
-  icon: <HourglassEmptyRoundedIcon sx={{ fontSize: 16 }} />,
+  icon: <HourglassIcon size={16} color="#fff" />,
   headline: 'Preparing your delivery',
   description: "We'll keep this page updated as your bag moves through our network.",
 }
 
 export function Tracking() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
 
   const tracking = useQuery({
     queryKey: ['pax', 'tracking', id],
@@ -68,24 +68,20 @@ export function Tracking() {
     retry: false,
   })
 
-  useEffect(() => {
-    if (tracking.error && (tracking.error as { normalisedKind?: string })?.normalisedKind === 'not_found') {
-      navigate('/expired', { replace: true })
-    }
-  }, [tracking.error, navigate])
+  useRedirectOnNotFound(tracking.error)
 
   if (!id) return null
 
   if (tracking.isLoading) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <Stack spacing={2} sx={{ alignItems: 'center' }}>
-          <CircularProgress size={32} />
-          <Typography variant="body2" color="text.secondary">
+      <Center mih="100vh">
+        <Stack gap="md" align="center">
+          <Loader size="lg" />
+          <Text size="sm" c="dimmed">
             Loading tracking…
-          </Typography>
+          </Text>
         </Stack>
-      </Box>
+      </Center>
     )
   }
 
@@ -93,103 +89,88 @@ export function Tracking() {
   const statusInfo = getStatusInfo(status)
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box mih="100vh">
       <Box
-        sx={(theme) => ({
-          backgroundColor: theme.palette.primary.main,
-          color: theme.palette.primary.contrastText,
-          px: { xs: 2.5, sm: 4 },
-          pt: { xs: 4, sm: 5 },
-          pb: { xs: 6, sm: 7 },
-        })}
+        px={{ base: 20, sm: 32 }}
+        pt={{ base: 32, sm: 40 }}
+        pb={{ base: 48, sm: 56 }}
+        style={{ backgroundColor: SCRIM_HERO, color: '#fff' }}
       >
-        <Container maxWidth="lg" sx={{ mx: 'auto', px: '0 !important', position: 'relative' }}>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 3 }}>
-            <Box
-              sx={{
-                width: 36,
-                height: 36,
-                borderRadius: '12px',
-                bgcolor: 'rgba(255,255,255,0.18)',
-                display: 'grid',
-                placeItems: 'center',
-                flexShrink: 0,
-              }}
+        <Container size="lg" px={0} style={{ position: 'relative' }}>
+          <Group gap="sm" align="center" mb="lg" wrap="nowrap">
+            <Center
+              w={36}
+              h={36}
+              style={{ borderRadius: 12, backgroundColor: SCRIM_FILL, flexShrink: 0 }}
             >
-              <LuggageRoundedIcon sx={{ fontSize: 20 }} />
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography
-                variant="caption"
-                sx={{
+              <LuggageIcon size={20} color="#fff" />
+            </Center>
+            <Box style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{
                   opacity: 0.8,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   fontWeight: 600,
                   fontSize: 10.5,
-                  display: 'block',
                   lineHeight: 1.2,
                 }}
               >
                 Baggage tracking
-              </Typography>
-              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', mt: 0.25 }}>
+              </Text>
+              <Group gap={6} align="center" mt={2} wrap="nowrap">
                 <Box
-                  sx={(theme) => ({
+                  className="pax-pulse"
+                  style={{
                     width: 6,
                     height: 6,
                     borderRadius: '50%',
-                    bgcolor: theme.palette.success.light,
-                    animation: `${pulse} 2s ease-out infinite`,
-                  })}
+                    backgroundColor: 'var(--mantine-color-green-4)',
+                    color: 'var(--mantine-color-green-4)',
+                  }}
                 />
-                <Typography variant="caption" sx={{ opacity: 0.85, fontWeight: 600, fontSize: 12 }}>
+                <Text style={{ opacity: 0.85, fontWeight: 600, fontSize: 12 }}>
                   Live · updates every 30s
-                </Typography>
-              </Stack>
+                </Text>
+              </Group>
             </Box>
-          </Stack>
+          </Group>
 
-          <Chip
-            icon={statusInfo.icon}
-            label={statusInfo.label}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.2)',
-              color: 'inherit',
+          <Badge
+            variant="transparent"
+            mb="sm"
+            leftSection={statusInfo.icon}
+            style={{
+              backgroundColor: SCRIM_FILL_STRONG,
+              color: '#fff',
               fontWeight: 700,
               letterSpacing: '0.04em',
-              borderRadius: 999,
-              mb: 2,
-              '& .MuiChip-icon': { color: 'inherit' },
             }}
-          />
+          >
+            {statusInfo.label}
+          </Badge>
 
-          <Typography
-            variant="h1"
-            sx={{
-              fontSize: { xs: 32, sm: 42 },
+          <Title
+            order={1}
+            mb="xs"
+            style={{
+              fontSize: 'clamp(32px, 8vw, 42px)',
               lineHeight: 1.05,
               color: 'inherit',
               fontWeight: 700,
               letterSpacing: '-0.03em',
-              mb: 1,
             }}
           >
             {statusInfo.headline}
-          </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.85, maxWidth: 480 }}>
-            {statusInfo.description}
-          </Typography>
+          </Title>
+          <Text style={{ color: SCRIM_BODY, maxWidth: 480 }}>{statusInfo.description}</Text>
         </Container>
       </Box>
 
-      <Container
-        maxWidth="lg"
-        sx={{ mx: 'auto', mt: { xs: -3.5, sm: -4 }, position: 'relative', pb: 6 }}
-      >
-        <Grid container spacing={{ xs: 2, md: 3 }}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Stack spacing={{ xs: 2, md: 3 }}>
+      <Container size="lg" px={{ base: 12, sm: 16 }} mt={{ base: -28, sm: -32 }} pb={48} style={{ position: 'relative' }}>
+        <Grid gutter={{ base: 'md', md: 'lg' }}>
+          <Grid.Col span={{ base: 12, md: 4 }}>
+            <Stack gap="lg">
               <EtaCard
                 startUtc={tracking.data?.etaWindowStartUtc}
                 endUtc={tracking.data?.etaWindowEndUtc}
@@ -201,24 +182,22 @@ export function Tracking() {
                 />
               )}
             </Stack>
-          </Grid>
-          <Grid size={{ xs: 12, md: 8 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h3" sx={{ mb: 0.5 }}>
-                  Delivery timeline
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-                  Most recent updates first
-                </Typography>
-                {tracking.data ? (
-                  <TimelineList data={tracking.data} nowMs={tracking.dataUpdatedAt} />
-                ) : (
-                  <Typography color="text.secondary">No updates yet.</Typography>
-                )}
-              </CardContent>
+          </Grid.Col>
+          <Grid.Col span={{ base: 12, md: 8 }}>
+            <Card p="lg">
+              <Title order={3} mb={4}>
+                Delivery timeline
+              </Title>
+              <Text size="sm" c="dimmed" mb="lg">
+                Most recent updates first
+              </Text>
+              {tracking.data ? (
+                <TimelineList data={tracking.data} nowMs={tracking.dataUpdatedAt} />
+              ) : (
+                <Text c="dimmed">No updates yet.</Text>
+              )}
             </Card>
-          </Grid>
+          </Grid.Col>
         </Grid>
       </Container>
 
@@ -228,7 +207,7 @@ export function Tracking() {
 }
 
 function getStatusInfo(status: string): {
-  icon: React.ReactElement
+  icon: ReactElement
   label: string
   headline: string
   description: string
@@ -248,77 +227,60 @@ function EtaCard({
 }) {
   const hasEta = !!startUtc && !!endUtc
   return (
-    <Card>
-      <CardContent>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
-          <Box
-            sx={(theme) => ({
-              width: 36,
-              height: 36,
-              borderRadius: theme.tokens.radius.sm,
-              bgcolor: alpha(theme.palette.primary.main, 0.1),
-              color: 'primary.main',
-              display: 'grid',
-              placeItems: 'center',
-            })}
-          >
-            <AccessTimeRoundedIcon fontSize="small" />
-          </Box>
-          <Typography variant="h6" sx={{ flex: 1 }}>Estimated arrival</Typography>
-        </Stack>
-        {hasEta ? (
-          <Box>
-            <Typography
-              variant="h2"
-              sx={{ fontSize: { xs: 24, sm: 28 }, lineHeight: 1.15, mb: 0.5 }}
-            >
-              {formatTimeRange(startUtc!, endUtc!)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {formatDateOnly(startUtc!)}
-            </Typography>
-          </Box>
-        ) : (
-          <Typography color="text.secondary" variant="body2">
-            Pending — we'll update this as soon as a driver is assigned.
-          </Typography>
-        )}
-      </CardContent>
+    <Card p="lg">
+      <Group gap="sm" align="center" mb="md" wrap="nowrap">
+        <Center
+          w={36}
+          h={36}
+          style={{
+            borderRadius: 'var(--mantine-radius-sm)',
+            backgroundColor: 'var(--mantine-color-brand-light)',
+            color: 'var(--mantine-color-brand-light-color)',
+          }}
+        >
+          <ClockIcon size={18} />
+        </Center>
+        <Text tt="uppercase" size="xs" fw={600} c="dimmed" style={{ flex: 1, letterSpacing: '0.06em' }}>
+          Estimated arrival
+        </Text>
+      </Group>
+      {hasEta ? (
+        <Box>
+          <Text fw={700} mb={4} style={{ fontSize: 'clamp(24px, 6vw, 28px)', lineHeight: 1.15 }}>
+            {formatTimeRange(startUtc!, endUtc!)}
+          </Text>
+          <Text size="sm" c="dimmed">
+            {formatDateOnly(startUtc!)}
+          </Text>
+        </Box>
+      ) : (
+        <Text c="dimmed" size="sm">
+          Pending — we'll update this as soon as a driver is assigned.
+        </Text>
+      )}
     </Card>
   )
 }
 
 function DriverCard({ name, vehicle }: { name: string; vehicle?: string | null }) {
   return (
-    <Card>
-      <CardContent>
-        <Typography variant="h6" sx={{ mb: 1.5 }}>
-          Your driver
-        </Typography>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Avatar
-            sx={(theme) => ({
-              bgcolor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
-              width: 48,
-              height: 48,
-              fontWeight: 600,
-            })}
-          >
-            {name.charAt(0)}
-          </Avatar>
-          <Box>
-            <Typography variant="body1" sx={{ fontWeight: 600 }}>
-              {name}
-            </Typography>
-            {vehicle && (
-              <Typography variant="body2" color="text.secondary">
-                {vehicle}
-              </Typography>
-            )}
-          </Box>
-        </Stack>
-      </CardContent>
+    <Card p="lg">
+      <Text tt="uppercase" size="xs" fw={600} c="dimmed" mb="sm" style={{ letterSpacing: '0.06em' }}>
+        Your driver
+      </Text>
+      <Group gap="md" align="center" wrap="nowrap">
+        <Avatar variant="filled" color="brand" radius={100} size={48} style={{ fontWeight: 600 }}>
+          {name.charAt(0)}
+        </Avatar>
+        <Box>
+          <Text fw={600}>{name}</Text>
+          {vehicle && (
+            <Text size="sm" c="dimmed">
+              {vehicle}
+            </Text>
+          )}
+        </Box>
+      </Group>
     </Card>
   )
 }
@@ -329,65 +291,46 @@ function TimelineList({ data, nowMs }: { data: TrackingTimeline; nowMs: number }
     [data.events],
   )
   return (
-    <Timeline
-      sx={{
-        p: 0,
-        m: 0,
-        '& .MuiTimelineItem-root::before': { flex: 0, padding: 0 },
-      }}
-    >
+    <Timeline active={0} bulletSize={18} lineWidth={2} color="brand">
       {events.map((event, idx) => {
         const isCurrent = idx === 0
         return (
-          <TimelineItem key={`${event.status}-${event.atUtc}`}>
-            <TimelineOppositeContent
-              sx={{
-                flex: '0 0 110px',
-                color: 'text.secondary',
-                fontSize: 12,
-                pt: 1.25,
-              }}
-            >
-              {formatRelativeTime(event.atUtc, nowMs)}
-            </TimelineOppositeContent>
-            <TimelineSeparator>
-              <TimelineDot
-                sx={(theme) => ({
-                  bgcolor: isCurrent ? theme.palette.primary.main : alpha(theme.palette.primary.main, 0.3),
-                  boxShadow: 'none',
-                  margin: 1,
-                  ...(isCurrent && {
-                    animation: `${pulse} 2s ease-out infinite`,
-                    color: alpha(theme.palette.primary.main, 0.35),
-                  }),
-                })}
+          <Timeline.Item
+            key={`${event.status}-${event.atUtc}`}
+            bullet={
+              <Box
+                className={isCurrent ? 'pax-pulse' : undefined}
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  backgroundColor: isCurrent
+                    ? 'var(--mantine-color-brand-filled)'
+                    : alpha('var(--mantine-color-brand-6)', 0.3),
+                  color: alpha('var(--mantine-color-brand-6)', 0.35),
+                }}
               />
-              {idx < events.length - 1 && (
-                <TimelineConnector
-                  sx={(theme) => ({ bgcolor: alpha(theme.palette.divider, 0.5) })}
-                />
-              )}
-            </TimelineSeparator>
-            <TimelineContent sx={{ pt: 1, pb: 2.5 }}>
-              <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+            }
+            title={
+              <Text fw={600} size="sm" style={{ lineHeight: 1.3 }}>
                 {formatStatus(event.status)}
-              </Typography>
-              {event.description && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-                  {event.description}
-                </Typography>
-              )}
-              {event.locationLabel && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', mt: 0.5, letterSpacing: '0.02em' }}
-                >
-                  {event.locationLabel}
-                </Typography>
-              )}
-            </TimelineContent>
-          </TimelineItem>
+              </Text>
+            }
+          >
+            <Text size="xs" c="dimmed">
+              {formatRelativeTime(event.atUtc, nowMs)}
+            </Text>
+            {event.description && (
+              <Text size="sm" c="dimmed" mt={2}>
+                {event.description}
+              </Text>
+            )}
+            {event.locationLabel && (
+              <Text size="xs" c="dimmed" mt={4} style={{ letterSpacing: '0.02em' }}>
+                {event.locationLabel}
+              </Text>
+            )}
+          </Timeline.Item>
         )
       })}
     </Timeline>

@@ -17,7 +17,7 @@ public class PaxBookingServiceTests
         Options.Create(new DespatchOptions { TimeZone = "Pacific/Auckland" });
 
     // Fresh cache per service so reference-data caching can't leak between tests.
-    private static IMemoryCache NewCache() => new MemoryCache(new MemoryCacheOptions());
+    private static MemoryCache NewCache() => new(new MemoryCacheOptions());
 
     [Fact]
     public async Task GetTimeslots_builds_consecutive_run_pairs_from_first_eco_setting()
@@ -38,9 +38,7 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
 
-        var slots = await svc.GetTimeslotsAsync(
-            jobId: 42,
-            localDate: new DateTime(2026, 6, 10),
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
             CancellationToken.None);
 
         Assert.Equal(4, slots.Count);
@@ -72,9 +70,7 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
 
-        var slots = await svc.GetTimeslotsAsync(
-            jobId: 42,
-            localDate: new DateTime(2026, 6, 10),
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
             CancellationToken.None);
 
         Assert.Single(slots);
@@ -97,13 +93,13 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
 
-        var first = await svc.GetTimeslotsAsync(42, new DateTime(2026, 6, 10), CancellationToken.None);
+        var first = await svc.GetTimeslotsAsync(new DateTime(2026, 6, 10), CancellationToken.None);
         Assert.Single(first);
 
         // Wipe the backing table — a cached read must not hit the DB again.
         await db.TblEcoSettings.ExecuteDeleteAsync(CancellationToken.None);
 
-        var second = await svc.GetTimeslotsAsync(42, new DateTime(2026, 6, 10), CancellationToken.None);
+        var second = await svc.GetTimeslotsAsync(new DateTime(2026, 6, 10), CancellationToken.None);
         Assert.Single(second);
         Assert.Equal("9:00 AM - 12:00 PM", second[0].Label);
     }
@@ -127,9 +123,7 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
 
-        var slots = await svc.GetTimeslotsAsync(
-            jobId: 42,
-            localDate: new DateTime(2026, 6, 10),
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
             CancellationToken.None);
 
         Assert.Equal(2, slots.Count);
@@ -145,9 +139,7 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
 
-        var slots = await svc.GetTimeslotsAsync(
-            jobId: 42,
-            localDate: new DateTime(2026, 6, 10),
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
             CancellationToken.None);
 
         Assert.Empty(slots);
@@ -494,9 +486,7 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
 
-        var slots = await svc.GetTimeslotsAsync(
-            jobId: 42,
-            localDate: new DateTime(2026, 6, 10),
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
             CancellationToken.None);
 
         Assert.False(slots[0].FirstAvailable);

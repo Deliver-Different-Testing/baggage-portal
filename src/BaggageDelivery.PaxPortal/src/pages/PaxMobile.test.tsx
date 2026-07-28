@@ -2,12 +2,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { ThemeProvider } from '@mui/material/styles'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { ConfirmedScreen, PaxMobile } from './PaxMobile'
-import { theme } from '../styles/theme'
+import { MantineTestProvider } from '../test/render'
 import type { BookingSummary, ConfirmBookingRequest, TimeSlot } from '../api/client'
 
 const summary: BookingSummary = {
@@ -41,9 +40,9 @@ const slot: TimeSlot = {
 function renderConfirmed(bookingId: string) {
   return render(
     <MemoryRouter>
-      <ThemeProvider theme={theme}>
+      <MantineTestProvider>
         <ConfirmedScreen summary={summary} slot={slot} bookingId={bookingId} />
-      </ThemeProvider>
+      </MantineTestProvider>
     </MemoryRouter>,
   )
 }
@@ -103,13 +102,13 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return render(
       <MemoryRouter initialEntries={['/c/token-xyz']}>
-        <ThemeProvider theme={theme}>
+        <MantineTestProvider>
           <QueryClientProvider client={queryClient}>
             <Routes>
               <Route path="/c/:id" element={<PaxMobile />} />
             </Routes>
           </QueryClientProvider>
-        </ThemeProvider>
+        </MantineTestProvider>
       </MemoryRouter>,
     )
   }

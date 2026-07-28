@@ -1,50 +1,90 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import { memo, useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { Link as RouterLink, useParams } from 'react-router-dom'
 import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Chip from '@mui/material/Chip'
-import CircularProgress from '@mui/material/CircularProgress'
-import Collapse from '@mui/material/Collapse'
-import Container from '@mui/material/Container'
-import IconButton from '@mui/material/IconButton'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import Radio from '@mui/material/Radio'
-import RadioGroup from '@mui/material/RadioGroup'
-import Snackbar from '@mui/material/Snackbar'
-import Stack from '@mui/material/Stack'
-import Switch from '@mui/material/Switch'
-import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
-import { alpha, ThemeProvider } from '@mui/material/styles'
-import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded'
-import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
-import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded'
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import CheckRoundedIcon from '@mui/icons-material/CheckRounded'
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
-import LuggageRoundedIcon from '@mui/icons-material/LuggageRounded'
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
 import {
-  confirmBooking,
-  getBooking,
-  getTimeslots,
-} from '../api/pax'
+  alpha,
+  Alert,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Center,
+  Collapse,
+  Container,
+  Group,
+  Loader,
+  MantineProvider,
+  Radio,
+  Stack,
+  Switch,
+  Text,
+  Textarea,
+  TextInput,
+  Title,
+  Tooltip,
+  ActionIcon,
+} from '@mantine/core'
+import { notifications } from '@mantine/notifications'
+import {
+  ArrowRightIcon,
+  CheckCircleIcon,
+  CheckIcon,
+  ClockIcon,
+  EditIcon,
+  LockIcon,
+  LuggageIcon,
+  MapPinIcon,
+  UserIcon,
+} from '../components/Icon'
+import { confirmBooking, getBooking, getTimeslots } from '../api/pax'
 import type { AddressDto, BookingSummary, TimeSlot } from '../api/client'
+import type { AddressDetail } from '../types/address'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
+import { useRedirectOnNotFound } from '../hooks/useRedirectOnNotFound'
+import { useColorMode } from '../hooks/colorModeContext'
 import { AddressAutocomplete } from '../components/AddressAutocomplete'
 import { PoweredByFooter } from '../components/PoweredByFooter'
-import { createAppTheme } from '../styles/theme'
+import { dfrntCssVariablesResolver } from '../styles/mantineTheme'
+import { airlineThemeOverride } from '../styles/airlineMantineTheme'
 import { getAirlineBrand } from '../styles/airlineBranding'
+
+// White-on-Ink scrim overlays for the brand hero. These are white alphas (not brand
+// hex), so they read on the fixed Ink-Blue hero regardless of the primary colour.
+const SCRIM_HERO = 'var(--mantine-color-ink-9)'
+const SCRIM_FILL = 'rgba(255,255,255,0.18)'
+const SCRIM_FILL_FAINT = 'rgba(255,255,255,0.22)'
+const SCRIM_BODY = 'rgba(255,255,255,0.85)'
+
+// Static hero styles hoisted out of ConfirmForm's render — it re-renders on every
+// keystroke, so keeping these as module constants avoids reallocating them each time.
+const HERO_BOX_STYLE: CSSProperties = {
+  backgroundColor: SCRIM_HERO,
+  color: '#fff',
+  position: 'relative',
+  overflow: 'hidden',
+}
+const HERO_EYEBROW_STYLE: CSSProperties = {
+  opacity: 0.8,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  fontWeight: 600,
+  fontSize: 10.5,
+  lineHeight: 1.2,
+}
+const HERO_TITLE_STYLE: CSSProperties = {
+  fontSize: 'clamp(32px, 8vw, 40px)',
+  lineHeight: 1.05,
+  color: 'inherit',
+  fontWeight: 700,
+  letterSpacing: '-0.03em',
+}
+
+function showError(message: string) {
+  notifications.show({ color: 'red', message, autoClose: 4000 })
+}
 
 export function PaxMobile() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
   const online = useOnlineStatus()
 
   const booking = useQuery({
@@ -62,37 +102,27 @@ export function PaxMobile() {
     enabled: !!id,
   })
 
-  useEffect(() => {
-    if (booking.error && (booking.error as { normalisedKind?: string })?.normalisedKind === 'not_found') {
-      navigate('/expired', { replace: true })
-    }
-  }, [booking.error, navigate])
+  useRedirectOnNotFound(booking.error)
 
   if (!id) return null
 
   if (booking.isLoading) {
     return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'grid',
-          placeItems: 'center',
-        }}
-      >
-        <Stack spacing={2} sx={{ alignItems: 'center' }}>
-          <CircularProgress size={32} />
-          <Typography variant="body2" color="text.secondary">
+      <Center mih="100vh">
+        <Stack gap="md" align="center">
+          <Loader size="lg" />
+          <Text size="sm" c="dimmed">
             Loading your booking…
-          </Typography>
+          </Text>
         </Stack>
-      </Box>
+      </Center>
     )
   }
 
   if (!booking.data) {
     return (
-      <Container sx={{ pt: 8 }}>
-        <Alert severity="error" variant="outlined">
+      <Container pt={64}>
+        <Alert color="red" variant="light">
           We could not load this booking. Please contact support.
         </Alert>
       </Container>
@@ -103,7 +133,7 @@ export function PaxMobile() {
 }
 
 // Re-theme the passenger flow from the airline code on the booking. The root
-// ThemeProvider (main.tsx) stays the default for loading/expired states; this
+// MantineProvider (main.tsx) stays the default cyan for loading/expired states; this
 // nested provider only applies once booking data is available.
 function BrandedConfirmForm({
   bookingId,
@@ -116,15 +146,21 @@ function BrandedConfirmForm({
   online: boolean
   slots: UseQueryResult<TimeSlot[]>
 }) {
+  const { mode } = useColorMode()
   const airlineTheme = useMemo(
-    () => createAppTheme(true, getAirlineBrand(summary.airlineCode)),
+    () => airlineThemeOverride(getAirlineBrand(summary.airlineCode)),
     [summary.airlineCode],
   )
 
   return (
-    <ThemeProvider theme={airlineTheme}>
+    <MantineProvider
+      theme={airlineTheme}
+      forceColorScheme={mode}
+      cssVariablesResolver={dfrntCssVariablesResolver}
+      withGlobalClasses={false}
+    >
       <ConfirmForm bookingId={bookingId} summary={summary} online={online} slots={slots} />
-    </ThemeProvider>
+    </MantineProvider>
   )
 }
 
@@ -148,7 +184,6 @@ function ConfirmForm({
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [atlOptionId, setAtlOptionId] = useState<number | null>(null)
   const [accessNotes, setAccessNotes] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [confirmed, setConfirmed] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
 
@@ -164,6 +199,23 @@ function ConfirmForm({
   const selectedSlot: TimeSlot | undefined = useMemo(
     () => slots.data?.find((s) => s.id === effectiveSlotId),
     [slots.data, effectiveSlotId],
+  )
+
+  // Stable identity so the memoized SlotOption rows aren't invalidated each render.
+  const handleSelectSlot = useCallback((id: string) => setSelectedSlotId(id), [])
+
+  // Stable identity so the memoized AddressAutocomplete isn't re-rendered on every keystroke.
+  const handleAddressSelect = useCallback(
+    (detail: AddressDetail) =>
+      setAddress((a) => ({
+        ...a,
+        line1: detail.street,
+        suburb: detail.suburb || null,
+        city: detail.city,
+        postCode: detail.postalCode || null,
+        country: detail.countryCode || a.country,
+      })),
+    [],
   )
 
   // Preserve the backend ordering (Sequence descending, then Name).
@@ -188,8 +240,7 @@ function ConfirmForm({
   if (!selectedSlot) fieldErrors.slot = 'Please pick a delivery time slot.'
 
   const selectedAtlOption = atlOptions.find((o) => o.id === atlOptionId)
-  const atlNotesRequired =
-    selectedAtlOption?.name.trim().toLowerCase() === 'safe place'
+  const atlNotesRequired = selectedAtlOption?.name.trim().toLowerCase() === 'safe place'
   if (atlNotesRequired && !accessNotes.trim()) {
     fieldErrors.accessNotes = 'Please describe the safe place to leave your baggage.'
   }
@@ -199,19 +250,22 @@ function ConfirmForm({
 
   const confirm = useMutation({
     mutationFn: (body: Parameters<typeof confirmBooking>[1]) => confirmBooking(bookingId, body),
-    onSuccess: () => setConfirmed(true),
+    onSuccess: () => {
+      setConfirmed(true)
+      // The success screen links straight to /t/:id — warm that route's lazy chunk now.
+      void import('./Tracking')
+    },
     onError: (err) => {
       const responseStatus = (err as { response?: { status?: number } })?.response?.status
-      if (responseStatus === 409) setError('This booking has already been confirmed.')
-      else setError('Could not submit your confirmation. Please try again.')
+      if (responseStatus === 409) showError('This booking has already been confirmed.')
+      else showError('Could not submit your confirmation. Please try again.')
     },
   })
 
   function submit() {
     setSubmitAttempted(true)
-    setError(null)
     if (Object.keys(fieldErrors).length > 0) {
-      setError('Please complete all required fields before confirming.')
+      showError('Please complete all required fields before confirming.')
       if (!editingDetails && (fieldErrors.passengerName || fieldErrors.passengerPhone || fieldErrors.passengerEmail)) {
         setEditingDetails(true)
       }
@@ -235,241 +289,162 @@ function ConfirmForm({
   if (confirmed) return <ConfirmedScreen summary={summary} slot={selectedSlot} bookingId={bookingId} />
 
   return (
-    <Box sx={{ minHeight: '100vh', pb: { xs: 14, sm: 16 } }}>
+    <Box mih="100vh" pb={{ base: 112, sm: 128 }}>
       <Box
-        sx={(theme) => ({
-          backgroundColor: theme.palette.primary.main,
-          color: theme.palette.primary.contrastText,
-          px: { xs: 2.5, sm: 4 },
-          pt: { xs: 4, sm: 5 },
-          pb: { xs: 6, sm: 7 },
-          position: 'relative',
-          overflow: 'hidden',
-        })}
+        px={{ base: 20, sm: 32 }}
+        pt={{ base: 32, sm: 40 }}
+        pb={{ base: 48, sm: 56 }}
+        style={HERO_BOX_STYLE}
       >
-        <Container
-          maxWidth="sm"
-          sx={{ maxWidth: 520, mx: 'auto', px: '0 !important', position: 'relative' }}
-        >
-          <Stack
-            direction="row"
-            spacing={1.5}
-            sx={{ alignItems: 'center', mb: 3 }}
-          >
-            <Box
-              sx={{
-                width: 36,
-                height: 36,
-                borderRadius: '12px',
-                bgcolor: 'rgba(255,255,255,0.18)',
-                display: 'grid',
-                placeItems: 'center',
-                flexShrink: 0,
-              }}
+        <Container size={520} px={0} style={{ position: 'relative' }}>
+          <Group gap="sm" align="center" mb="lg" wrap="nowrap">
+            <Center
+              w={36}
+              h={36}
+              style={{ borderRadius: 12, backgroundColor: SCRIM_FILL, flexShrink: 0 }}
             >
-              <LuggageRoundedIcon sx={{ fontSize: 20 }} />
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  opacity: 0.8,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                  fontSize: 10.5,
-                  display: 'block',
-                  lineHeight: 1.2,
-                }}
-              >
-                {summary.airlineLabel}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontWeight: 700, letterSpacing: '0.04em', fontSize: 13 }}
-              >
+              <LuggageIcon size={20} color="#fff" />
+            </Center>
+            <Box style={{ flex: 1, minWidth: 0 }}>
+              <Text style={HERO_EYEBROW_STYLE}>{summary.airlineLabel}</Text>
+              <Text style={{ fontWeight: 700, letterSpacing: '0.04em', fontSize: 13 }}>
                 REF · {summary.jobId}
-              </Typography>
+              </Text>
             </Box>
-          </Stack>
+          </Group>
 
-          <Typography
-            variant="h1"
-            sx={{
-              fontSize: { xs: 32, sm: 40 },
-              lineHeight: 1.05,
-              mb: 1.5,
-              color: 'inherit',
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-            }}
-          >
+          <Title order={1} mb="sm" style={HERO_TITLE_STYLE}>
             Confirm your
             <br />
             baggage delivery
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{ opacity: 0.85, maxWidth: 400, fontSize: { xs: 14.5, sm: 16 } }}
-          >
-            Review your details below and pick a delivery window. We'll text
-            you when our driver is on the way.
-          </Typography>
+          </Title>
+          <Text style={{ color: SCRIM_BODY, maxWidth: 400, fontSize: 15 }}>
+            Review your details below and pick a delivery window. We'll text you when our
+            driver is on the way.
+          </Text>
 
           <StepProgress current={1} steps={['Confirm', 'In transit', 'Delivered']} />
         </Container>
       </Box>
 
-      <Container
-        maxWidth="sm"
-        sx={{ maxWidth: 520, mx: 'auto', mt: { xs: -3.5, sm: -4 }, position: 'relative', zIndex: 1 }}
-      >
-        <Stack spacing={2}>
-
+      <Container size={520} px={0} mt={{ base: -28, sm: -32 }} style={{ position: 'relative', zIndex: 1 }}>
+        <Stack gap="md" px={{ base: 12, sm: 0 }}>
           <SectionCard
-            icon={<PersonOutlineRoundedIcon fontSize="small" />}
+            icon={<UserIcon size={18} />}
             title="Your details"
             onToggleEdit={() => setEditingDetails((s) => !s)}
             editing={editingDetails}
           >
-            <Stack spacing={1.5}>
-              <TextField
+            <Stack gap="sm">
+              <TextInput
                 label="Full name"
                 value={passengerName}
-                onChange={(e) => setPassengerName(e.target.value)}
+                onChange={(e) => setPassengerName(e.currentTarget.value)}
                 autoComplete="name"
                 required
-                fullWidth
-                size="small"
+                size="sm"
                 disabled={!editingDetails}
-                error={!!showFieldError('passengerName')}
-                helperText={showFieldError('passengerName')}
+                error={showFieldError('passengerName')}
               />
-              <TextField
+              <TextInput
                 label="Phone number"
                 value={passengerPhone}
-                onChange={(e) => setPassengerPhone(e.target.value)}
+                onChange={(e) => setPassengerPhone(e.currentTarget.value)}
                 autoComplete="tel"
                 inputMode="tel"
                 required
-                fullWidth
-                size="small"
+                size="sm"
                 disabled={!editingDetails}
-                error={!!showFieldError('passengerPhone')}
-                helperText={showFieldError('passengerPhone')}
+                error={showFieldError('passengerPhone')}
               />
-              <TextField
+              <TextInput
                 label="Email address"
                 value={passengerEmail}
-                onChange={(e) => setPassengerEmail(e.target.value)}
+                onChange={(e) => setPassengerEmail(e.currentTarget.value)}
                 autoComplete="email"
                 type="email"
                 required
-                fullWidth
-                size="small"
+                size="sm"
                 disabled={!editingDetails}
-                error={!!showFieldError('passengerEmail')}
-                helperText={showFieldError('passengerEmail')}
+                error={showFieldError('passengerEmail')}
               />
             </Stack>
           </SectionCard>
 
           <SectionCard
-            icon={<PlaceOutlinedIcon fontSize="small" />}
+            icon={<MapPinIcon size={18} />}
             title="Delivery address"
             onToggleEdit={() => setEditingAddress((s) => !s)}
             editing={editingAddress}
           >
-            <Stack spacing={1.5}>
+            <Stack gap="sm">
               {editingAddress && (
-                <AddressAutocomplete
-                  bookingId={bookingId}
-                  onAddressSelect={(detail) =>
-                    setAddress((a) => ({
-                      ...a,
-                      line1: detail.street,
-                      suburb: detail.suburb || null,
-                      city: detail.city,
-                      postCode: detail.postalCode || null,
-                      country: detail.countryCode || a.country,
-                    }))
-                  }
-                />
+                <AddressAutocomplete bookingId={bookingId} onAddressSelect={handleAddressSelect} />
               )}
-              <TextField
+              <TextInput
                 label="Street address"
                 value={address.line1}
-                onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value }))}
+                onChange={(e) => setAddress((a) => ({ ...a, line1: e.currentTarget.value }))}
                 required
-                fullWidth
-                size="small"
+                size="sm"
                 disabled={!editingAddress}
-                error={!!showFieldError('line1')}
-                helperText={showFieldError('line1')}
+                error={showFieldError('line1')}
               />
-              <TextField
+              <TextInput
                 label="Suburb"
                 value={address.suburb ?? ''}
-                onChange={(e) => setAddress((a) => ({ ...a, suburb: e.target.value }))}
+                onChange={(e) => setAddress((a) => ({ ...a, suburb: e.currentTarget.value }))}
                 required
-                fullWidth
-                size="small"
+                size="sm"
                 disabled={!editingAddress}
-                error={!!showFieldError('suburb')}
-                helperText={showFieldError('suburb')}
+                error={showFieldError('suburb')}
               />
-              <Stack direction="row" spacing={1}>
-                <TextField
+              <Group gap="sm" align="flex-start" grow wrap="nowrap">
+                <TextInput
                   label="City"
                   value={address.city}
-                  onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))}
+                  onChange={(e) => setAddress((a) => ({ ...a, city: e.currentTarget.value }))}
                   required
-                  fullWidth
-                  size="small"
+                  size="sm"
                   disabled={!editingAddress}
-                  error={!!showFieldError('city')}
-                  helperText={showFieldError('city')}
+                  error={showFieldError('city')}
                 />
-                <TextField
+                <TextInput
                   label="Postcode"
                   value={address.postCode ?? ''}
-                  onChange={(e) => setAddress((a) => ({ ...a, postCode: e.target.value }))}
+                  onChange={(e) => setAddress((a) => ({ ...a, postCode: e.currentTarget.value }))}
                   required
-                  size="small"
-                  sx={{ width: 132 }}
+                  size="sm"
+                  maw={132}
                   disabled={!editingAddress}
-                  error={!!showFieldError('postCode')}
-                  helperText={showFieldError('postCode')}
+                  error={showFieldError('postCode')}
                 />
-              </Stack>
+              </Group>
             </Stack>
           </SectionCard>
 
-          <SectionCard
-            icon={<ScheduleRoundedIcon fontSize="small" />}
-            title="Delivery time"
-          >
+          <SectionCard icon={<ClockIcon size={18} />} title="Delivery time">
             {slots.isLoading && (
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', py: 1 }}>
-                <CircularProgress size={18} />
-                <Typography variant="body2" color="text.secondary">
+              <Group gap="sm" align="center" py="xs">
+                <Loader size={18} />
+                <Text size="sm" c="dimmed">
                   Loading available windows…
-                </Typography>
-              </Stack>
+                </Text>
+              </Group>
             )}
             {showFieldError('slot') && (
-              <Typography variant="body2" color="error" sx={{ mb: 1 }}>
+              <Text size="sm" c="red" mb="xs">
                 {showFieldError('slot')}
-              </Typography>
+              </Text>
             )}
             {slots.data && (
-              <Stack spacing={1}>
+              <Stack gap="xs">
                 {slots.data.map((slot) => (
                   <SlotOption
                     key={slot.id}
                     slot={slot}
                     selected={slot.id === effectiveSlotId}
-                    onSelect={() => setSelectedSlotId(slot.id)}
+                    onSelect={handleSelectSlot}
                   />
                 ))}
               </Stack>
@@ -477,65 +452,55 @@ function ConfirmForm({
           </SectionCard>
 
           <SectionCard
-            icon={<LockOutlinedIcon fontSize="small" />}
+            icon={<LockIcon size={18} />}
             title="Authority to Leave"
             subtitle="Leave baggage unattended if you're not home"
             action={
               <Switch
                 checked={atlOptionId !== null}
                 disabled={atlOptions.length === 0}
-                onChange={(_, on) =>
-                  setAtlOptionId(on ? atlOptions[0]?.id ?? null : null)
+                onChange={(e) =>
+                  setAtlOptionId(e.currentTarget.checked ? atlOptions[0]?.id ?? null : null)
                 }
               />
             }
           >
-            <Collapse in={atlOptionId !== null} unmountOnExit>
-              <Box sx={{ pt: 1 }}>
-                <RadioGroup
+            <Collapse in={atlOptionId !== null}>
+              <Box pt="xs">
+                <Radio.Group
                   value={atlOptionId === null ? '' : String(atlOptionId)}
-                  onChange={(e) => setAtlOptionId(Number(e.target.value))}
-                  sx={
-                    atlOptions.length > 6
-                      ? { maxHeight: 260, overflowY: 'auto', pr: 1 }
-                      : undefined
-                  }
+                  onChange={(v) => setAtlOptionId(Number(v))}
                 >
-                  {atlOptions.map((opt) => (
-                    <FormControlLabel
-                      key={opt.id}
-                      value={String(opt.id)}
-                      control={<Radio size="small" />}
-                      label={
-                        <Typography variant="body2">{opt.name}</Typography>
-                      }
-                      sx={{ ml: -0.5 }}
-                    />
-                  ))}
-                </RadioGroup>
-                <TextField
-                  label={
-                    atlNotesRequired
-                      ? 'Additional details'
-                      : 'Additional details (optional)'
-                  }
+                  <Stack
+                    gap={6}
+                    style={
+                      atlOptions.length > 6
+                        ? { maxHeight: 260, overflowY: 'auto', paddingRight: 8 }
+                        : undefined
+                    }
+                  >
+                    {atlOptions.map((opt) => (
+                      <Radio key={opt.id} value={String(opt.id)} label={opt.name} size="sm" />
+                    ))}
+                  </Stack>
+                </Radio.Group>
+                <Textarea
+                  label={atlNotesRequired ? 'Additional details' : 'Additional details (optional)'}
                   required={atlNotesRequired}
                   value={accessNotes}
-                  onChange={(e) => setAccessNotes(e.target.value)}
-                  error={!!showFieldError('accessNotes')}
-                  helperText={showFieldError('accessNotes')}
-                  fullWidth
-                  multiline
+                  onChange={(e) => setAccessNotes(e.currentTarget.value)}
+                  error={showFieldError('accessNotes')}
+                  autosize
                   minRows={2}
-                  size="small"
-                  sx={{ mt: 1.5 }}
+                  size="sm"
+                  mt="sm"
                 />
               </Box>
             </Collapse>
           </SectionCard>
 
           {!online && (
-            <Alert severity="warning" variant="outlined" sx={{ borderRadius: 2 }}>
+            <Alert color="orange" variant="light" radius="md">
               You appear to be offline. Connect to the internet to submit your confirmation.
             </Alert>
           )}
@@ -545,109 +510,69 @@ function ConfirmForm({
       </Container>
 
       <Box
-        sx={(theme) => ({
+        px="md"
+        style={{
           position: 'fixed',
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: theme.palette.background.paper,
-          borderTop: `1px solid ${theme.palette.divider}`,
-          px: 2,
-          py: 1.75,
-          pb: 'calc(env(safe-area-inset-bottom, 0px) + 14px)',
-          zIndex: theme.zIndex.appBar,
+          backgroundColor: 'var(--dd-surface-container)',
+          borderTop: '1px solid var(--mantine-color-default-border)',
+          paddingTop: 14,
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)',
+          zIndex: 200,
           boxShadow: '0 -4px 16px -4px rgba(0,0,0,0.06)',
-        })}
+        }}
       >
-        <Container maxWidth="sm" sx={{ maxWidth: 520, mx: 'auto', px: 0 }}>
+        <Container size={520} px={0}>
           <Button
-            variant="contained"
-            color="primary"
-            size="large"
+            size="lg"
             fullWidth
-            disabled={!online || confirm.isPending}
+            disabled={!online}
+            loading={confirm.isPending}
             onClick={submit}
-            endIcon={
-              confirm.isPending ? (
-                <CircularProgress size={18} color="inherit" />
-              ) : (
-                <ArrowForwardRoundedIcon />
-              )
-            }
-            sx={{
-              minHeight: 56,
-              fontSize: 16,
-              fontWeight: 700,
-              letterSpacing: '0.01em',
-            }}
+            rightSection={!confirm.isPending ? <ArrowRightIcon size={18} /> : undefined}
+            style={{ minHeight: 56, fontSize: 16, fontWeight: 700, letterSpacing: '0.01em' }}
           >
             {confirm.isPending ? 'Submitting…' : 'Confirm delivery'}
           </Button>
         </Container>
       </Box>
-
-      <Snackbar
-        open={!!error}
-        autoHideDuration={4000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert
-          severity="error"
-          variant="filled"
-          onClose={() => setError(null)}
-          sx={{ width: '100%' }}
-        >
-          {error}
-        </Alert>
-      </Snackbar>
     </Box>
   )
 }
 
-function StepProgress({
-  current,
-  steps,
-}: {
-  current: number
-  steps: string[]
-}) {
+function StepProgress({ current, steps }: { current: number; steps: string[] }) {
   return (
-    <Stack
-      direction="row"
-      spacing={0}
-      sx={{ alignItems: 'center', mt: 3.5, gap: 0.75 }}
-    >
+    <Group gap={6} align="center" mt="xl" wrap="nowrap">
       {steps.map((step, idx) => {
         const isActive = idx === current - 1
         const isDone = idx < current - 1
         const isCurrent = isActive || isDone
         return (
-          <Stack
+          <Group
             key={step}
-            direction="row"
-            spacing={0.75}
-            sx={{ alignItems: 'center', flex: idx === steps.length - 1 ? 'unset' : 1 }}
+            gap={6}
+            align="center"
+            wrap="nowrap"
+            style={{ flex: idx === steps.length - 1 ? 'unset' : 1 }}
           >
-            <Box
-              sx={{
-                width: 22,
-                height: 22,
+            <Center
+              w={22}
+              h={22}
+              style={{
                 borderRadius: '50%',
-                bgcolor: isCurrent ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.22)',
-                color: isCurrent ? 'primary.main' : 'inherit',
-                display: 'grid',
-                placeItems: 'center',
+                backgroundColor: isCurrent ? 'rgba(255,255,255,0.95)' : SCRIM_FILL_FAINT,
+                color: isCurrent ? 'var(--mantine-color-brand-filled)' : 'inherit',
                 fontSize: 11,
                 fontWeight: 700,
                 flexShrink: 0,
               }}
             >
-              {isDone ? <CheckRoundedIcon sx={{ fontSize: 14 }} /> : idx + 1}
-            </Box>
-            <Typography
-              variant="caption"
-              sx={{
+              {isDone ? <CheckIcon size={14} /> : idx + 1}
+            </Center>
+            <Text
+              style={{
                 fontWeight: isActive ? 700 : 500,
                 opacity: isCurrent ? 1 : 0.65,
                 fontSize: 12,
@@ -655,22 +580,22 @@ function StepProgress({
               }}
             >
               {step}
-            </Typography>
+            </Text>
             {idx < steps.length - 1 && (
               <Box
-                sx={{
+                style={{
                   flex: 1,
                   height: 2,
-                  bgcolor: 'rgba(255,255,255,0.22)',
+                  backgroundColor: SCRIM_FILL_FAINT,
                   borderRadius: 999,
-                  ml: 0.75,
+                  marginLeft: 6,
                 }}
               />
             )}
-          </Stack>
+          </Group>
         )
       })}
-    </Stack>
+    </Group>
   )
 }
 
@@ -694,149 +619,126 @@ function SectionCard({
   const trailing =
     action ??
     (onToggleEdit ? (
-      <Tooltip title={editing ? `Save ${title}` : `Edit ${title}`}>
-        <IconButton
-          size="small"
+      <Tooltip label={editing ? `Save ${title}` : `Edit ${title}`}>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
           onClick={onToggleEdit}
           aria-label={editing ? `Save ${title}` : `Edit ${title}`}
-          sx={(theme) => ({
-            color: editing ? theme.palette.primary.main : theme.palette.text.secondary,
-          })}
+          style={{ color: editing ? 'var(--mantine-color-brand-filled)' : undefined }}
         >
-          {editing ? <CheckRoundedIcon fontSize="small" /> : <EditOutlinedIcon fontSize="small" />}
-        </IconButton>
+          {editing ? <CheckIcon size={18} /> : <EditIcon size={18} />}
+        </ActionIcon>
       </Tooltip>
     ) : null)
 
   return (
-    <Card>
-      <CardContent>
-        <Stack
-          direction="row"
-          spacing={1.5}
-          sx={{ alignItems: 'center', mb: 2 }}
+    <Card p="lg">
+      <Group gap="sm" align="center" mb="md" wrap="nowrap">
+        <Center
+          w={32}
+          h={32}
+          style={{
+            borderRadius: 'var(--mantine-radius-sm)',
+            backgroundColor: 'var(--mantine-color-brand-light)',
+            color: 'var(--mantine-color-brand-light-color)',
+            flexShrink: 0,
+          }}
         >
-          <Box
-            sx={(theme) => ({
-              width: 32,
-              height: 32,
-              borderRadius: theme.tokens.radius.sm,
-              bgcolor: alpha(theme.palette.primary.main, 0.1),
-              color: 'primary.main',
-              display: 'grid',
-              placeItems: 'center',
-              flexShrink: 0,
-            })}
-          >
-            {icon}
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h4" sx={{ lineHeight: 1.3 }}>
-              {title}
-            </Typography>
-            {subtitle && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {subtitle}
-              </Typography>
-            )}
-          </Box>
-          {trailing}
-        </Stack>
-        {children}
-      </CardContent>
+          {icon}
+        </Center>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          <Text fw={600} style={{ lineHeight: 1.3 }}>
+            {title}
+          </Text>
+          {subtitle && (
+            <Text size="xs" c="dimmed">
+              {subtitle}
+            </Text>
+          )}
+        </Box>
+        {trailing}
+      </Group>
+      {children}
     </Card>
   )
 }
 
-function SlotOption({
+// Memoized so typing in the form's text fields (which re-renders ConfirmForm on every
+// keystroke) doesn't re-render every slot in the list. `onSelect` takes the slot id so
+// ConfirmForm can pass one stable handler to all rows instead of a per-row closure —
+// without that, the changing prop identity would defeat the memo.
+const SlotOption = memo(function SlotOption({
   slot,
   selected,
   onSelect,
 }: {
   slot: TimeSlot
   selected: boolean
-  onSelect: () => void
+  onSelect: (id: string) => void
 }) {
   return (
     <Box
       role="radio"
       aria-checked={selected}
       tabIndex={0}
-      onClick={onSelect}
+      onClick={() => onSelect(slot.id)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          onSelect()
+          onSelect(slot.id)
         }
       }}
-      sx={(theme) => ({
+      style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
-        px: 1.75,
-        py: 1.5,
-        borderRadius: theme.tokens.radius.md,
-        border: `1px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
-        backgroundColor: selected
-          ? alpha(theme.palette.primary.main, 0.06)
-          : theme.palette.background.paper,
+        gap: 12,
+        padding: '12px 14px',
+        borderRadius: 'var(--mantine-radius-md)',
+        border: `1px solid ${selected ? 'var(--mantine-color-brand-filled)' : 'var(--mantine-color-default-border)'}`,
+        backgroundColor: selected ? 'var(--mantine-color-brand-light)' : 'var(--dd-surface-container)',
         cursor: 'pointer',
-        transition: `all ${theme.tokens.duration.fast}ms ease`,
         outline: 'none',
-        '&:hover': {
-          borderColor: theme.palette.primary.main,
-          backgroundColor: alpha(theme.palette.primary.main, 0.04),
-        },
-        '&:focus-visible': {
-          boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.24)}`,
-        },
-      })}
+      }}
     >
-      <Box
-        sx={(theme) => ({
-          width: 20,
-          height: 20,
+      <Center
+        w={20}
+        h={20}
+        style={{
           borderRadius: '50%',
-          border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
-          display: 'grid',
-          placeItems: 'center',
+          border: `2px solid ${selected ? 'var(--mantine-color-brand-filled)' : 'var(--mantine-color-default-border)'}`,
           flexShrink: 0,
-          transition: `all ${theme.tokens.duration.fast}ms ease`,
-        })}
+        }}
       >
         {selected && (
           <Box
-            sx={(theme) => ({
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
-              backgroundColor: theme.palette.primary.main,
-            })}
+            w={10}
+            h={10}
+            style={{ borderRadius: '50%', backgroundColor: 'var(--mantine-color-brand-filled)' }}
           />
         )}
-      </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+      </Center>
+      <Box style={{ flex: 1, minWidth: 0 }}>
+        <Text size="sm" fw={600}>
           {slot.label}
-        </Typography>
+        </Text>
         {slot.firstAvailable && (
-          <Typography
-            variant="caption"
-            sx={(theme) => ({
-              color: theme.palette.success.dark,
+          <Text
+            style={{
+              color: 'var(--mantine-color-green-light-color)',
               fontWeight: 600,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
               fontSize: 10,
-            })}
+            }}
           >
             First available
-          </Typography>
+          </Text>
         )}
       </Box>
     </Box>
   )
-}
+})
 
 export function ConfirmedScreen({
   summary,
@@ -848,112 +750,92 @@ export function ConfirmedScreen({
   bookingId: string
 }) {
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box mih="100vh">
       <Box
-        sx={(theme) => ({
-          backgroundColor: theme.palette.success.dark,
-          color: theme.palette.success.contrastText,
-          px: { xs: 2.5, sm: 4 },
-          pt: { xs: 6, sm: 8 },
-          pb: { xs: 7, sm: 9 },
-        })}
+        px={{ base: 20, sm: 32 }}
+        pt={{ base: 48, sm: 64 }}
+        pb={{ base: 56, sm: 72 }}
+        style={{ backgroundColor: 'var(--mantine-color-green-8)', color: '#fff' }}
       >
-        <Container maxWidth="sm" sx={{ maxWidth: 520, mx: 'auto', textAlign: 'center', px: '0 !important' }}>
-          <Box
-            sx={{
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              bgcolor: 'rgba(255,255,255,0.16)',
-              display: 'grid',
-              placeItems: 'center',
-              mx: 'auto',
-              mb: 3,
-            }}
+        <Container size={520} px={0} style={{ textAlign: 'center' }}>
+          <Center
+            w={80}
+            h={80}
+            mx="auto"
+            mb="lg"
+            style={{ borderRadius: '50%', backgroundColor: SCRIM_FILL }}
           >
-            <CheckCircleRoundedIcon sx={{ fontSize: 48 }} />
-          </Box>
-          <Chip
-            label="Confirmed"
-            size="small"
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.18)',
-              color: 'inherit',
+            <CheckCircleIcon size={48} color="#fff" />
+          </Center>
+          <Badge
+            variant="transparent"
+            mb="sm"
+            style={{
+              backgroundColor: SCRIM_FILL,
+              color: '#fff',
               fontWeight: 700,
               letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              fontSize: 10.5,
-              mb: 2,
-              borderRadius: 999,
             }}
-          />
-          <Typography
-            variant="h1"
-            sx={{
-              fontSize: { xs: 30, sm: 38 },
+          >
+            Confirmed
+          </Badge>
+          <Title
+            order={1}
+            mb="xs"
+            style={{
+              fontSize: 'clamp(30px, 7vw, 38px)',
               color: 'inherit',
-              mb: 1,
               fontWeight: 700,
               letterSpacing: '-0.03em',
             }}
           >
             You're all set
-          </Typography>
-          <Typography variant="body1" sx={{ opacity: 0.88 }}>
-            REF · {summary.jobId}
-          </Typography>
+          </Title>
+          <Text style={{ color: SCRIM_BODY }}>REF · {summary.jobId}</Text>
         </Container>
       </Box>
 
-      <Container
-        maxWidth="sm"
-        sx={{ maxWidth: 520, mx: 'auto', mt: { xs: -4, sm: -5 }, position: 'relative', pb: 6 }}
-      >
-        <Stack spacing={2}>
+      <Container size={520} px={{ base: 12, sm: 0 }} mt={{ base: -32, sm: -40 }} pb={48} style={{ position: 'relative' }}>
+        <Stack gap="md">
           {slot && (
-            <Card>
-              <CardContent>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1.5 }}>
-                  <Box
-                    sx={(theme) => ({
-                      width: 36,
-                      height: 36,
-                      borderRadius: theme.tokens.radius.sm,
-                      bgcolor: alpha(theme.palette.primary.main, 0.1),
-                      color: 'primary.main',
-                      display: 'grid',
-                      placeItems: 'center',
-                    })}
-                  >
-                    <ScheduleRoundedIcon fontSize="small" />
-                  </Box>
-                  <Typography variant="h6" sx={{ flex: 1 }}>Delivery window</Typography>
-                </Stack>
-                <Typography variant="h2" sx={{ fontSize: { xs: 24, sm: 28 } }}>
-                  {slot.label}
-                </Typography>
-              </CardContent>
+            <Card p="lg">
+              <Group gap="sm" align="center" mb="sm" wrap="nowrap">
+                <Center
+                  w={36}
+                  h={36}
+                  style={{
+                    borderRadius: 'var(--mantine-radius-sm)',
+                    backgroundColor: 'var(--mantine-color-brand-light)',
+                    color: 'var(--mantine-color-brand-light-color)',
+                  }}
+                >
+                  <ClockIcon size={18} />
+                </Center>
+                <Text tt="uppercase" size="xs" fw={600} c="dimmed" style={{ flex: 1, letterSpacing: '0.06em' }}>
+                  Delivery window
+                </Text>
+              </Group>
+              <Text fw={700} style={{ fontSize: 'clamp(24px, 6vw, 28px)' }}>
+                {slot.label}
+              </Text>
             </Card>
           )}
 
           <Button
             component={RouterLink}
             to={`/t/${bookingId}`}
-            variant="contained"
-            size="large"
+            size="lg"
             fullWidth
-            endIcon={<ArrowForwardRoundedIcon />}
-            sx={{ py: 1.5, fontWeight: 600 }}
+            rightSection={<ArrowRightIcon size={18} />}
+            style={{ paddingTop: 12, paddingBottom: 12, fontWeight: 600 }}
           >
             Track your delivery
           </Button>
 
-          <Card sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.06), border: 'none' })}>
-            <CardContent>
-              <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
-                We'll also text you when our driver is on the way.
-              </Typography>
-            </CardContent>
+          <Card p="lg" style={{ backgroundColor: alpha('var(--mantine-color-brand-6)', 0.06) }}>
+            <Text size="sm" fw={500}>
+              We'll also text you when our driver is on the way.
+            </Text>
           </Card>
         </Stack>
       </Container>

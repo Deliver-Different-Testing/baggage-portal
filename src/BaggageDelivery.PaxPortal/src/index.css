@@ -1,0 +1,50 @@
+/* App-level global styles. Mantine's styles.css + dfrntCssVariablesResolver own the
+   colour surfaces (body background = var(--mantine-color-body)); this file only sets
+   the brand typeface and rendering niceties. */
+body {
+  font-family: '"Plus Jakarta Sans Variable"', 'Plus Jakarta Sans', -apple-system,
+    BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* Disabled inputs (e.g. delivery address after the passenger hits Save) are a
+   locked, read-back summary — not an inert placeholder. Mantine fades them to
+   opacity 0.6, and WebKit forces its own washed-out text-fill, which together
+   make the entered value hard to read in dark mode. Restore full contrast while
+   the muted bg + not-allowed cursor keep the field clearly non-editable. The
+   text/bg colours come from the theme resolver's --mantine-color-disabled* vars. */
+input.mantine-Input-input:disabled,
+textarea.mantine-Input-input:disabled,
+input.mantine-Input-input[data-disabled],
+textarea.mantine-Input-input[data-disabled] {
+  opacity: 1;
+  color: var(--mantine-color-disabled-color);
+  -webkit-text-fill-color: var(--mantine-color-disabled-color);
+}
+
+/* Thin, tonal scrollbars that read in both colour schemes. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mantine-color-dimmed) transparent;
+}
+
+/* Live/current-step pulse ring (Tracking header dot + current timeline bullet). */
+@keyframes pax-pulse {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 0.6;
+  }
+  70% {
+    box-shadow: 0 0 0 8px transparent;
+    opacity: 0;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    opacity: 0;
+  }
+}
+.pax-pulse {
+  animation: pax-pulse 2s ease-out infinite;
+}

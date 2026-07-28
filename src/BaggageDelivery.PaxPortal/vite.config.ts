@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Baggage Delivery - Deliver DFRNT',
         short_name: 'Baggage',
         description: 'Confirm delivery details and track your baggage',
-        theme_color: '#5B3FE0',
-        background_color: '#5B3FE0',
+        theme_color: '#0d0c2c',
+        background_color: '#0d0c2c',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/?source=pwa',
@@ -58,13 +58,11 @@ export default defineConfig({
             if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
               return 'vendor-react'
             }
-            // @mui/lab (Timeline) is only used by the Tracking route — keep it
-            // out of the shared vendor-mui chunk so /c/:id doesn't download it.
-            if (/[\\/]node_modules[\\/]@mui[\\/]lab[\\/]/.test(id)) {
-              return 'vendor-mui-lab'
+            if (/[\\/]node_modules[\\/]@mantine[\\/]/.test(id)) {
+              return 'vendor-mantine'
             }
-            if (/[\\/]node_modules[\\/](@mui|@emotion)[\\/]/.test(id)) {
-              return 'vendor-mui'
+            if (/[\\/]node_modules[\\/](@tabler[\\/]icons-react|lucide-react)[\\/]/.test(id)) {
+              return 'vendor-icons'
             }
             if (/[\\/]node_modules[\\/](@tanstack[\\/]react-query|axios)[\\/]/.test(id)) {
               return 'vendor-query'
@@ -96,7 +94,7 @@ export default defineConfig({
     },
     server: {
       deps: {
-        inline: [/@mui\//, 'react-transition-group'],
+        inline: [/@mantine\//],
       },
     },
   },
