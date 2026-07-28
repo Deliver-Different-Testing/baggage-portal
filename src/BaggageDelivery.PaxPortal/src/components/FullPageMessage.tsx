@@ -1,11 +1,5 @@
 import type { ReactNode } from 'react'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Container from '@mui/material/Container'
-import Divider from '@mui/material/Divider'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
-import { alpha } from '@mui/material/styles'
+import { alpha, Box, Button, Container, Divider, Paper, Text, Title } from '@mantine/core'
 import { PoweredByFooter } from './PoweredByFooter'
 
 interface FullPageMessageProps {
@@ -31,71 +25,64 @@ export function FullPageMessage({
 
   return (
     <Box
-      sx={(theme) => ({
+      style={{
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        bgcolor: alpha(theme.palette.primary.main, 0.06),
-      })}
+        background: 'var(--mantine-color-body)',
+      }}
     >
       <Box
-        sx={{
+        style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          p: 3,
+          padding: 'var(--mantine-spacing-lg)',
         }}
       >
-        <Container maxWidth="xs">
-        <Paper
-          elevation={6}
-          sx={(theme) => ({
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            p: { xs: 4, sm: 5 },
-            borderRadius: 3,
-            border: `1px solid ${theme.palette.divider}`,
-          })}
-        >
-          <Box
-            sx={{
-              width: 72,
-              height: 72,
-              borderRadius: '50%',
-              bgcolor: alpha(iconColor, 0.08),
+        <Container size="xs" w="100%">
+          <Paper
+            radius="lg"
+            shadow="md"
+            p={40}
+            style={{
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
-              mb: 3,
-              border: `1px solid ${alpha(iconColor, 0.16)}`,
+              textAlign: 'center',
             }}
           >
-            {icon}
-          </Box>
-          <Typography variant="h5" sx={{ fontWeight: 600 }} gutterBottom>
-            {title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1, maxWidth: 320 }}>
-            {description}
-          </Typography>
-          {hasAction && (
-            <>
-              <Divider sx={{ width: '100%', my: 3 }} />
-              <Button
-                variant="contained"
-                startIcon={actionIcon}
-                onClick={onAction}
-                size="large"
-                sx={{ px: 4 }}
-              >
-                {actionLabel}
-              </Button>
-            </>
-          )}
-        </Paper>
+            <Box
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: '50%',
+                background: alpha(iconColor, 0.08),
+                border: `1px solid ${alpha(iconColor, 0.16)}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 'var(--mantine-spacing-lg)',
+              }}
+            >
+              {icon}
+            </Box>
+            <Title order={3} fw={600} mb="xs">
+              {title}
+            </Title>
+            <Text size="sm" c="dimmed" mb="xs" maw={320}>
+              {description}
+            </Text>
+            {hasAction && (
+              <>
+                <Divider w="100%" my="lg" />
+                <Button leftSection={actionIcon} onClick={onAction} size="md" px={32}>
+                  {actionLabel}
+                </Button>
+              </>
+            )}
+          </Paper>
         </Container>
       </Box>
 

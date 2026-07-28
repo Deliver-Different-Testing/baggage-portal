@@ -27,7 +27,7 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
 
     private RenderedNotification RenderEmail(BookingNotificationContext c)
     {
-        var mjmlTemplate = $$"""
+        var mjmlTemplate = $"""
             <mjml>
               <mj-head>
                 <mj-title>Confirm your baggage delivery</mj-title>
@@ -39,19 +39,19 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                 <mj-section background-color="#001F3D" padding="32px">
                   <mj-column>
                     <mj-text color="#ffffff" font-size="22px" font-weight="700">Your baggage is ready</mj-text>
-                    <mj-text color="#9eb2cf" font-size="13px">Ref: {{c.Reference}} · {{c.AirlineLabel}}</mj-text>
+                    <mj-text color="#9eb2cf" font-size="13px">Ref: {c.Reference} · {c.AirlineLabel}</mj-text>
                   </mj-column>
                 </mj-section>
                 <mj-section background-color="#ffffff" padding="32px">
                   <mj-column>
-                    <mj-text font-size="16px">Hi {{c.PassengerName}},</mj-text>
+                    <mj-text font-size="16px">Hi {c.PassengerName},</mj-text>
                     <mj-text font-size="15px" line-height="1.5">
                       Good news — your baggage has arrived and we're ready to deliver it. Please confirm
                       your delivery address, pick a time slot, and let us know if it's OK to leave the bag
                       unattended.
                     </mj-text>
                     <mj-button background-color="#00B0B9" color="#001F3D" font-weight="700"
-                               border-radius="999px" padding="24px 0" href="{{c.BookingUrl}}">
+                               border-radius="999px" padding="24px 0" href="{c.BookingUrl}">
                       Confirm delivery details
                     </mj-button>
                   </mj-column>

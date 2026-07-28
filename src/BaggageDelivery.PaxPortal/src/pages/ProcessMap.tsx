@@ -1,25 +1,23 @@
-import Box from '@mui/material/Box'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Container from '@mui/material/Container'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
+import { Box, Card, Container, Grid, Group, Stack, Text, Title } from '@mantine/core'
 
 type NodeKind = 'action' | 'system' | 'api' | 'decision'
 
-const LANE_COLOURS: Record<string, string> = {
-  Airport: '#fe811a',
-  WorldTracer: '#00B0B9',
-  Despatch: '#13b964',
-  Passenger: '#824ae0',
-  Post: '#13b964',
+// Categorical lane/node colours drawn from the DFRNT accent ramps (no literal hex;
+// no purple/teal — reflex-blue and stone stand in for the old WorldTracer teal and
+// Passenger/decision purple).
+const NODE_COLOURS: Record<NodeKind, string> = {
+  action: 'var(--mantine-color-orange-6)',
+  system: 'var(--mantine-color-green-6)',
+  api: 'var(--mantine-color-reflex-6)',
+  decision: 'var(--mantine-color-ink-6)',
 }
 
-const NODE_COLOURS: Record<NodeKind, string> = {
-  action: '#fe811a',
-  system: '#13b964',
-  api: '#00B0B9',
-  decision: '#824ae0',
+const LANE_COLOURS: Record<string, string> = {
+  Airport: 'var(--mantine-color-orange-6)',
+  WorldTracer: 'var(--mantine-color-reflex-6)',
+  Despatch: 'var(--mantine-color-green-6)',
+  Passenger: 'var(--mantine-color-brand-6)',
+  Post: 'var(--mantine-color-green-6)',
 }
 
 const LANES: Array<{
@@ -86,79 +84,91 @@ const LANES: Array<{
 
 export function ProcessMap() {
   return (
-    <Container maxWidth="lg" sx={{ py: 6 }}>
+    <Container size="lg" py={48}>
       <Card>
-        <CardContent>
-          <Typography variant="h1" align="center">
-            Lost baggage delivery process
-          </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" sx={{ mt: 0.5, mb: 4 }}>
-            Integration between SITA WorldTracer, Despatch, and the BaggageDelivery PWA
-          </Typography>
+        <Title order={1} ta="center">
+          Lost baggage delivery process
+        </Title>
+        <Text size="sm" ta="center" c="dimmed" mt={4} mb="xl">
+          Integration between SITA WorldTracer, Despatch, and the BaggageDelivery PWA
+        </Text>
 
-          <Stack spacing={3}>
-            {LANES.map((lane) => (
-              <Box
-                key={lane.key}
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: '200px 1fr' },
-                  gap: 2,
-                  alignItems: 'center',
-                  bgcolor: '#f8f7f7',
-                  p: 2,
-                  borderRadius: 1.5,
-                }}
-              >
-                <Box sx={{ borderLeft: 4, borderColor: LANE_COLOURS[lane.key], pl: 1.5 }}>
-                  <Typography sx={{ fontWeight: 700 }}>{lane.title}</Typography>
-                  <Typography variant="caption" color="text.secondary">{lane.subtitle}</Typography>
-                </Box>
-                <Stack
-                  direction={{ xs: 'column', md: 'row' }}
-                  spacing={1.5}
-                  useFlexGap
-                  sx={{ flexWrap: 'wrap' }}
+        <Stack gap="md">
+          {LANES.map((lane) => (
+            <Grid
+              key={lane.key}
+              align="center"
+              gutter="md"
+              p="md"
+              style={{
+                background: 'var(--dd-surface)',
+                borderRadius: 'var(--mantine-radius-md)',
+              }}
+            >
+              <Grid.Col span={{ base: 12, md: 3 }}>
+                <Box
+                  style={{
+                    borderLeft: `4px solid ${LANE_COLOURS[lane.key]}`,
+                    paddingLeft: 12,
+                  }}
                 >
+                  <Text fw={700}>{lane.title}</Text>
+                  <Text size="xs" c="dimmed">
+                    {lane.subtitle}
+                  </Text>
+                </Box>
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, md: 9 }}>
+                <Group gap="sm" wrap="wrap">
                   {lane.nodes.map((node, idx) => (
-                    <Box
-                      key={node.title}
-                      sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                    >
+                    <Group key={node.title} gap={8} wrap="nowrap">
                       <Box
-                        sx={{
+                        style={{
                           minWidth: 140,
-                          px: 1.5,
-                          py: 1,
-                          borderRadius: 1.5,
-                          borderLeft: 4,
-                          borderColor: NODE_COLOURS[node.kind],
-                          bgcolor: 'common.white',
-                          boxShadow: 1,
+                          padding: '8px 12px',
+                          borderRadius: 'var(--mantine-radius-md)',
+                          borderLeft: `4px solid ${NODE_COLOURS[node.kind]}`,
+                          background: 'var(--dd-surface-container)',
+                          boxShadow: 'var(--mantine-shadow-xs)',
                         }}
                       >
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>{node.title}</Typography>
-                        <Typography variant="caption" color="text.secondary">{node.subtitle}</Typography>
+                        <Text size="sm" fw={700}>
+                          {node.title}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {node.subtitle}
+                        </Text>
                       </Box>
                       {idx < lane.nodes.length - 1 && (
-                        <Typography color="primary" sx={{ display: { xs: 'none', md: 'block' } }}>→</Typography>
+                        <Text c="brand" visibleFrom="md">
+                          →
+                        </Text>
                       )}
-                    </Box>
+                    </Group>
                   ))}
-                </Stack>
-              </Box>
-            ))}
-          </Stack>
+                </Group>
+              </Grid.Col>
+            </Grid>
+          ))}
+        </Stack>
 
-          <Stack direction="row" spacing={3} useFlexGap sx={{ mt: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {(['action', 'system', 'api', 'decision'] as const).map((kind) => (
-              <Stack key={kind} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: NODE_COLOURS[kind] }} />
-                <Typography variant="caption" sx={{ textTransform: 'capitalize' }}>{kind}</Typography>
-              </Stack>
-            ))}
-          </Stack>
-        </CardContent>
+        <Group gap="xl" justify="center" wrap="wrap" mt="xl">
+          {(['action', 'system', 'api', 'decision'] as const).map((kind) => (
+            <Group key={kind} gap={8} align="center">
+              <Box
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: NODE_COLOURS[kind],
+                }}
+              />
+              <Text size="xs" tt="capitalize">
+                {kind}
+              </Text>
+            </Group>
+          ))}
+        </Group>
       </Card>
     </Container>
   )

@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes, Navigate } from 'react-router-dom'
-import Box from '@mui/material/Box'
-import CircularProgress from '@mui/material/CircularProgress'
+import { Center, Loader } from '@mantine/core'
 import { TokenExpired } from './pages/TokenExpired'
 
 const PaxMobile = lazy(() =>
@@ -16,9 +15,9 @@ const ProcessMap = lazy(() =>
 
 function RouteFallback() {
   return (
-    <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-      <CircularProgress size={32} />
-    </Box>
+    <Center mih="100vh">
+      <Loader size="lg" />
+    </Center>
   )
 }
 

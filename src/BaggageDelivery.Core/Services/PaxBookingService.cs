@@ -44,10 +44,6 @@ internal sealed class PaxBookingService(
                 j.DeliveryLatitude,
                 j.DeliveryLongitude,
                 ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null,
-                // Branding inputs — resolved in memory below. The airline code is
-                // extracted from the WorldTracer file reference in ucjbClientRefa
-                // (station+airline+sequence); the denormalised job code and the
-                // client's own code are kept only as fallbacks.
                 ClientRefa = j.UcjbClientRefa,
                 JobClientCode = j.UcjbClientCode,
                 ClientCode = j.UcjbClient != null ? j.UcjbClient.UcclCode : null
@@ -184,7 +180,7 @@ internal sealed class PaxBookingService(
         }
     }
 
-    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId, DateTime? localDate,
+    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(DateTime? localDate,
         CancellationToken ct)
     {
         var runs = await cache.GetOrCreateAsync(EcoRunsCacheKey, async entry =>
@@ -323,12 +319,7 @@ internal sealed class PaxBookingService(
             throw new InvalidOperationException(
                 $"tucJob {input.JobId} not found — pax confirmation not persisted");
         }
-
-        // Audit-only: record the pax-confirm on JobDeliveryJourney so the dispatcher's
-        // timeline shows the booking was created via the passenger self-service link.
-        // ChangeType / UpdatedByType are persisted-string contracts shared with
-        // DespatchWeb.Enums — keep the strings in sync if those enums are renamed.
-        // Best-effort: a journey-write failure must not undo the tucJob update.
+        
         try
         {
             await db.JobDeliveryJourneys.AddAsync(new JobDeliveryJourney

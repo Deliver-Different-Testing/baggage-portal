@@ -20,7 +20,7 @@ internal sealed class TucManualMessageSender(
             JobId = jobId,
             UcmmAttempts = 0,
             UcmmSent = false,
-            Read = false,
+            Read = false
         };
 
         switch (context.Channel)
@@ -36,7 +36,7 @@ internal sealed class TucManualMessageSender(
                     $"Unknown channel '{context.Channel}'");
         }
 
-        db.TucManualMessages.Add(entity);
+        await db.TucManualMessages.AddAsync(entity, ct);
         await db.SaveChangesAsync(ct);
     }
 }

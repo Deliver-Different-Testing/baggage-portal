@@ -12,8 +12,7 @@ public interface IPaxBookingService
     // EconomyRun1→EconomyRun2, EconomyRun2→EconomyRun3, etc. The run
     // columns store time-of-day in tenant local time; we anchor to today
     // (or `localDate` if supplied) in the tenant timezone and emit UTC.
-    Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(
-        int jobId, DateTime? localDate, CancellationToken ct);
+    Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(DateTime? localDate, CancellationToken ct);
 
     // Forwards the passenger's submitted delivery details to the api repo:
     // patches tucJob delivery columns, then flips the job through the

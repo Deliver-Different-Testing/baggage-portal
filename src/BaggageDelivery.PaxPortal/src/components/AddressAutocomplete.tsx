@@ -1,11 +1,8 @@
-import { useState } from 'react'
-import Autocomplete from '@mui/material/Autocomplete'
-import CircularProgress from '@mui/material/CircularProgress'
-import InputAdornment from '@mui/material/InputAdornment'
-import TextField from '@mui/material/TextField'
-import LocationOnIcon from '@mui/icons-material/LocationOn'
+import { memo, useState } from 'react'
+import { Autocomplete, Loader } from '@mantine/core'
+import { MapPinIcon } from './Icon'
 import { useAddressSearch } from '../hooks/useAddressSearch'
-import type { AddressDetail, AddressSearchResult } from '../types/address'
+import type { AddressDetail } from '../types/address'
 
 interface AddressAutocompleteProps {
   bookingId: string
@@ -14,7 +11,10 @@ interface AddressAutocompleteProps {
   onAddressSelect: (detail: AddressDetail) => void
 }
 
-export function AddressAutocomplete({
+// Memoized: this sits next to the form's other text inputs, so without memo every
+// keystroke elsewhere in ConfirmForm would re-render it. Relies on a stable
+// `onAddressSelect` from the parent (see handleAddressSelect in PaxMobile).
+export const AddressAutocomplete = memo(function AddressAutocomplete({
   bookingId,
   label = 'Search address',
   placeholder = 'Start typing an address...',
@@ -26,18 +26,17 @@ export function AddressAutocomplete({
   const [isLookingUp, setIsLookingUp] = useState(false)
   const [displayValue, setDisplayValue] = useState('')
 
-  const handleSelect = async (
-    _: unknown,
-    option: AddressSearchResult | string | null,
-  ) => {
-    if (!option || typeof option === 'string') {
-      setDisplayValue(typeof option === 'string' ? option : '')
-      return
-    }
+  const loading = isLoading || isLookingUp
+
+  // Mantine's Autocomplete works on string options; keep our own suggestion list to
+  // recover the PAF id for the selected title and fetch full address details.
+  const handleOptionSubmit = async (title: string) => {
+    const match = suggestions.find((s) => s.title === title)
+    if (!match) return
 
     setIsLookingUp(true)
     try {
-      const detail = await getDetails(option.id)
+      const detail = await getDetails(match.id)
       const fullDisplay = [
         detail.street,
         detail.suburb,
@@ -56,57 +55,20 @@ export function AddressAutocomplete({
 
   return (
     <Autocomplete
-      freeSolo
-      slotProps={{ popper: { placement: 'bottom-start' } }}
-      options={suggestions}
-      getOptionLabel={(option) =>
-        typeof option === 'string' ? option : option.title
-      }
-      filterOptions={(x) => x}
-      inputValue={displayValue}
-      onInputChange={(_, newValue, reason) => {
-        setDisplayValue(newValue)
-        if (reason === 'input') {
-          setInputValue(newValue)
-        }
+      label={label}
+      placeholder={placeholder}
+      value={displayValue}
+      data={suggestions.map((s) => s.title)}
+      // Present suggestions as-is (server already ranked them); don't re-filter locally.
+      filter={({ options }) => options}
+      onChange={(value) => {
+        setDisplayValue(value)
+        setInputValue(value)
       }}
-      onChange={handleSelect}
-      loading={isLoading || isLookingUp}
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          fullWidth
-          label={label}
-          placeholder={placeholder}
-          slotProps={{
-            ...params.slotProps,
-            input: {
-              ...params.slotProps?.input,
-              startAdornment: (
-                <>
-                  <InputAdornment position="start">
-                    <LocationOnIcon sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                  {params.slotProps?.input?.startAdornment}
-                </>
-              ),
-              endAdornment: (
-                <>
-                  {(isLoading || isLookingUp) && (
-                    <CircularProgress color="inherit" size={20} />
-                  )}
-                  {params.slotProps?.input?.endAdornment}
-                </>
-              ),
-            },
-          }}
-        />
-      )}
-      renderOption={(props, option) => (
-        <li {...props} key={option.id}>
-          {option.title}
-        </li>
-      )}
+      onOptionSubmit={handleOptionSubmit}
+      leftSection={<MapPinIcon size={18} />}
+      rightSection={loading ? <Loader size={18} /> : undefined}
+      comboboxProps={{ position: 'bottom-start' }}
     />
   )
-}
+})

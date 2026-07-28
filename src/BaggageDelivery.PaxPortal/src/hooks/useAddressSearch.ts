@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { addressAutocompleteApi } from '../api/addressAutocomplete'
 import type { AddressDetail, AddressSearchResult } from '../types/address'
@@ -31,8 +31,10 @@ export function useAddressSearch(options: UseAddressSearchOptions) {
     staleTime: 30_000,
   })
 
-  const getDetails = async (id: string): Promise<AddressDetail> =>
-    addressAutocompleteApi.lookup(bookingId, id)
+  const getDetails = useCallback(
+    (id: string): Promise<AddressDetail> => addressAutocompleteApi.lookup(bookingId, id),
+    [bookingId],
+  )
 
   return {
     inputValue,

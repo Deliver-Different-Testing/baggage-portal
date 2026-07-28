@@ -81,30 +81,32 @@ public sealed class AddressLookupService(
         }
 
         string[] excludedTypes = ["categoryQuery", "chainQuery"];
-        return response.Items
-            .Where(i => i.Address is not null
-                        && !string.IsNullOrWhiteSpace(i.Address.Label)
-                        && !excludedTypes.Contains(i.ResultType))
-            .Select(i =>
-            {
-                var addr = i.Address!;
-                var street = string.IsNullOrEmpty(addr.HouseNumber)
-                    ? addr.Street
-                    : $"{addr.HouseNumber} {addr.Street}";
-
-                return new AddressSearchResult
+        return
+        [
+            .. response.Items
+                .Where(i => i.Address is not null
+                            && !string.IsNullOrWhiteSpace(i.Address.Label)
+                            && !excludedTypes.Contains(i.ResultType))
+                .Select(i =>
                 {
-                    Id = i.Id,
-                    Title = i.Title,
-                    Street = street,
-                    Suburb = addr.District,
-                    City = addr.City,
-                    State = addr.State,
-                    PostalCode = addr.PostalCode,
-                    CountryCode = ToIso2(addr.CountryCode)
-                };
-            })
-            .ToList();
+                    var addr = i.Address!;
+                    var street = string.IsNullOrEmpty(addr.HouseNumber)
+                        ? addr.Street
+                        : $"{addr.HouseNumber} {addr.Street}";
+
+                    return new AddressSearchResult
+                    {
+                        Id = i.Id,
+                        Title = i.Title,
+                        Street = street,
+                        Suburb = addr.District,
+                        City = addr.City,
+                        State = addr.State,
+                        PostalCode = addr.PostalCode,
+                        CountryCode = ToIso2(addr.CountryCode)
+                    };
+                })
+        ];
     }
 
     public async Task<AddressDetail?> LookupAsync(string addressId, CancellationToken ct = default)
