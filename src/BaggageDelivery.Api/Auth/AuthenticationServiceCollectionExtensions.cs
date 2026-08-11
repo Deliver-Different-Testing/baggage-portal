@@ -6,14 +6,14 @@ namespace BaggageDelivery.Api.Auth;
 
 public static class AuthenticationServiceCollectionExtensions
 {
-    public static void AddAppAuthentication(this IServiceCollection services, IConfiguration configuration)
+    public static void AddAppAuthentication(this IServiceCollection services, IConfiguration configuration,
+        bool isDevelopment = false)
     {
         var jwtSecret = Environment.GetEnvironmentVariable("JWTSecretKey")
                         ?? configuration["Auth:JwtSecretKey"]
                         ?? throw new InvalidOperationException("JWTSecretKey env var or Auth:JwtSecretKey config is required");
         var issuer = Environment.GetEnvironmentVariable("Issuer") ?? configuration["Auth:Issuer"] ?? "DespatchSC";
         var audience = Environment.GetEnvironmentVariable("Audience") ?? configuration["Auth:Audience"] ?? "DespatchSC";
-        var cookieDomain = Environment.GetEnvironmentVariable("Domain");
 
         // Bearer (SC-JWT) is the only registered scheme. Customer-facing pax
         // routes are [AllowAnonymous] and authenticate by holding the encrypted
@@ -37,13 +37,17 @@ public static class AuthenticationServiceCollectionExtensions
 
         services.AddAuthorizationBuilder();
 
-        // Mirrors inboundagent: XSRF cookie shared across the deliverdifferent
-        // app family. SPA reads XSRF-TOKEN and sends it as X-XSRF-TOKEN.
+        // The cookie half of the token keeps its framework defaults: host-only,
+        // HttpOnly, SameSite=Strict. It is deliberately NOT named XSRF-TOKEN and
+        // NOT scoped to the shared Domain — that name is already taken by
+        // inboundagent on the same parent domain, and the SPA must never see this
+        // value. GET /api/v1/antiforgery/token issues the readable companion
+        // cookie carrying the request token (see AntiforgeryController).
         services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = "XSRF-TOKEN";
-            options.Cookie.Domain = cookieDomain;
             options.HeaderName = "X-XSRF-TOKEN";
+            options.Cookie.SecurePolicy =
+                isDevelopment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
         });
     }
 }

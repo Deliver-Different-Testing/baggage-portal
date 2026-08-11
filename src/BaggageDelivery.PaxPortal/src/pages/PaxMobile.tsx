@@ -465,7 +465,7 @@ function ConfirmForm({
               />
             }
           >
-            <Collapse in={atlOptionId !== null}>
+            <Collapse expanded={atlOptionId !== null}>
               <Box pt="xs">
                 <Radio.Group
                   value={atlOptionId === null ? '' : String(atlOptionId)}

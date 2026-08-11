@@ -98,7 +98,7 @@ export function ProcessMap() {
             <Grid
               key={lane.key}
               align="center"
-              gutter="md"
+              gap="md"
               p="md"
               style={{
                 background: 'var(--dd-surface)',

@@ -17,6 +17,18 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
     }) as unknown as MediaQueryList
 }
 
+// Mantine 9's autosizing Textarea re-measures on `document.fonts` "loadingdone";
+// jsdom has no FontFaceSet at all, so the effect throws and takes the tree with it.
+if (typeof document !== 'undefined' && !document.fonts) {
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: {
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    },
+  })
+}
+
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class {
     observe() {}

@@ -81,6 +81,10 @@ describe('PaxMobile — Authority to Leave submit', () => {
   let lastConfirmBody: ConfirmBookingRequest | null = null
 
   const server = setupServer(
+    http.get('*/antiforgery/token', () => {
+      document.cookie = 'XSRF-TOKEN=request-token-abc'
+      return new HttpResponse(null, { status: 204 })
+    }),
     http.get('*/pax/:id/booking', () =>
       HttpResponse.json({ ...summary, atlOptions }),
     ),

@@ -14,6 +14,7 @@
  */
 import {
   createTheme,
+  v8CssVariablesResolver,
   type CSSVariablesResolver,
   type MantineColorsTuple,
 } from '@mantine/core';
@@ -229,13 +230,19 @@ export const dfrntTheme = createTheme({
  * `--mantine-color-body` sets the page/`AppShell.Main` background; the `--dd-surface-*`
  * custom vars back the Card/Paper/Menu/Modal surface defaults declared above, so a single
  * scheme flip repaints page → cards → menus with the intended tones.
+ *
+ * Layered on top of `v8CssVariablesResolver`: Mantine 9 made `variant="light"` fills
+ * solid, and the DFRNT look wants the 8.x translucent tint (flat alpha, per the brand
+ * rules) on light-variant surfaces such as the Alerts in PaxMobile.
  */
-export const dfrntCssVariablesResolver: CSSVariablesResolver = () => {
+export const dfrntCssVariablesResolver: CSSVariablesResolver = (theme) => {
   const light = getMd3Scheme(true, 'light');
   const dk = getMd3Scheme(true, 'dark');
+  const v8 = v8CssVariablesResolver(theme);
   return {
-    variables: {},
+    variables: { ...v8.variables },
     light: {
+      ...v8.light,
       '--mantine-color-body': light.surface, // #f4f2f1 page
       '--dd-surface': light.surface,
       '--dd-surface-container': light.surfaceContainerLowest, // #ffffff cards
@@ -246,6 +253,7 @@ export const dfrntCssVariablesResolver: CSSVariablesResolver = () => {
       '--mantine-color-disabled-color': gray[7], // #57534e — readable locked text
     },
     dark: {
+      ...v8.dark,
       '--mantine-color-body': dk.surface, // #2c2a30 page
       '--dd-surface': dk.surface,
       '--dd-surface-container': dk.surfaceContainer, // #37353c cards

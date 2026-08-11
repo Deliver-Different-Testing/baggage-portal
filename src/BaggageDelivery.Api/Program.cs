@@ -30,9 +30,12 @@ builder.Host.UseSerilog();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.IsDevelopment());
-builder.Services.AddAppAuthentication(builder.Configuration);
+builder.Services.AddAppAuthentication(builder.Configuration, builder.Environment.IsDevelopment());
 
-builder.Services.AddControllers(options => { options.MaxModelBindingCollectionSize = 100; });
+// Must be AddControllersWithViews, not AddControllers: the ViewFeatures services it
+// brings in are what supply ValidateAntiforgeryTokenAuthorizationFilter for
+// [ValidateAntiForgeryToken] on PaxBookingController.
+builder.Services.AddControllersWithViews(options => { options.MaxModelBindingCollectionSize = 100; });
 builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestBodySize = 4 * 1024 * 1024; });
 
 builder.Services.AddRateLimiter(options =>
@@ -191,3 +194,6 @@ if (Directory.Exists(app.Environment.WebRootPath))
 app.LogTestMagicLinks();
 
 app.Run();
+
+// Exposes the top-level-statements entry point to WebApplicationFactory<Program>.
+public partial class Program;
