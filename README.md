@@ -19,7 +19,10 @@ matching inboundagent.
 
 - ASP.NET Core 10 (.NET SDK pinned to `10.0.102`, C# 14)
 - EF Core 10 against existing SQL Server (Despatch DB, read-mostly)
-- React 19 + Vite 8 + MUI v7 + `vite-plugin-pwa`
+- React 19 + Vite 8 + Mantine v9 + `vite-plugin-pwa`
+  - `package.json` pins a `sharp` override (`^0.35.3`): `@vite-pwa/assets-generator`
+    still peers `sharp ^0.33.5`, which carries the libvips advisories in
+    GHSA-f88m-g3jw-g9cj. Drop the override once the generator moves up.
 - Serilog, AWS Secrets Manager, Polly on the trackingpage HTTP client,
   Data Protection keys in AWS SSM (prod) / local file (dev)
 - xUnit.v3 + NSubstitute + `MockQueryable.NSubstitute`; integration tests

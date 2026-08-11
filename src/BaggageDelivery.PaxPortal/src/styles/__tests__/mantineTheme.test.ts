@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { MantineTheme } from '@mantine/core'
+import { DEFAULT_THEME, mergeMantineTheme } from '@mantine/core'
 import { dfrntTheme, dfrntCssVariablesResolver } from '../mantineTheme'
 import { airlineThemeOverride } from '../airlineMantineTheme'
 import { getAirlineBrand } from '../airlineBranding'
@@ -20,7 +20,9 @@ describe('dfrntTheme', () => {
 })
 
 describe('dfrntCssVariablesResolver', () => {
-  const vars = dfrntCssVariablesResolver({} as MantineTheme)
+  // The resolver composes Mantine's v8CssVariablesResolver, so it needs the same
+  // fully merged theme MantineProvider hands it — not a bare stub object.
+  const vars = dfrntCssVariablesResolver(mergeMantineTheme(DEFAULT_THEME, dfrntTheme))
 
   it('maps the page surface per colour scheme (warm grey light, charcoal dark)', () => {
     expect(vars.light['--dd-surface']).toBe('#f4f2f1')
@@ -35,6 +37,13 @@ describe('dfrntCssVariablesResolver', () => {
   it('lifts the dark error colour off Mantine near-invisible red[8] default', () => {
     // red[8] (#6c1823) is unreadable on the charcoal page; we use a light red.
     expect(vars.dark['--mantine-color-error']).toBe('#e97b88')
+  })
+
+  it('keeps light-variant fills translucent (Mantine 9 made them solid)', () => {
+    // The Alerts in PaxMobile use variant="light"; the DFRNT look wants the 8.x
+    // alpha tint, which is why v8CssVariablesResolver is layered underneath.
+    expect(vars.light['--mantine-color-red-light']).toMatch(/^rgba\(/)
+    expect(vars.dark['--mantine-color-orange-light']).toMatch(/^rgba\(/)
   })
 
   it('keeps disabled input text legible in both schemes', () => {

@@ -8,9 +8,11 @@ export const apiClient = axios.create({
   headers: { 'X-Requested-With': 'XMLHttpRequest' },
 })
 
-// Mirror inboundagent: the SPA reads the XSRF-TOKEN cookie set by the API and
-// sends its value back as the X-XSRF-TOKEN header on every state-changing call.
-// AddAntiforgery in the API validates the two match.
+// ASP.NET Core antiforgery is a pair: an HttpOnly cookie token the browser holds
+// and a request token we must echo in a header. GET /antiforgery/token issues both,
+// putting the request token in the readable XSRF-TOKEN cookie.
+export const ANTIFORGERY_TOKEN_PATH = '/antiforgery/token'
+
 function readXsrfCookie(): string | null {
   if (typeof document === 'undefined') return null
   const prefix = 'XSRF-TOKEN='
@@ -23,10 +25,32 @@ function readXsrfCookie(): string | null {
 
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 
-apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+// Fetched lazily rather than on page load so the token can't go stale between
+// mount and submit, and so an evicted cookie recovers on its own. Concurrent
+// mutations share one in-flight request.
+let tokenRequest: Promise<unknown> | null = null
+
+async function ensureXsrfToken(forceRefresh = false): Promise<string | null> {
+  const existing = readXsrfCookie()
+  if (existing && !forceRefresh) return existing
+
+  tokenRequest ??= apiClient.get(ANTIFORGERY_TOKEN_PATH).finally(() => {
+    tokenRequest = null
+  })
+
+  try {
+    await tokenRequest
+  } catch {
+    // Let the mutation proceed and surface the server's own error.
+    return null
+  }
+  return readXsrfCookie()
+}
+
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const method = config.method?.toLowerCase()
   if (method && MUTATING_METHODS.has(method)) {
-    const token = readXsrfCookie()
+    const token = await ensureXsrfToken()
     if (token) {
       config.headers.set('X-XSRF-TOKEN', token)
     }
@@ -34,12 +58,28 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+type RetriableConfig = InternalAxiosRequestConfig & { xsrfRetried?: boolean }
+
 apiClient.interceptors.response.use(
   (r) => r,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 404) {
       return Promise.reject({ ...error, normalisedKind: 'not_found' })
     }
+
+    // A rejected antiforgery token yields a bare 400 with no body; model-validation
+    // failures always carry a ProblemDetails payload. Re-mint once and retry — this
+    // is the recovery path when the server's key ring no longer matches our cookie.
+    const config = error.config as RetriableConfig | undefined
+    if (error.response?.status === 400 && config && !config.xsrfRetried && !error.response.data) {
+      config.xsrfRetried = true
+      const token = await ensureXsrfToken(true)
+      if (token) {
+        config.headers.set('X-XSRF-TOKEN', token)
+        return apiClient.request(config)
+      }
+    }
+
     return Promise.reject(error)
   },
 )

@@ -168,7 +168,7 @@ export function Tracking() {
       </Box>
 
       <Container size="lg" px={{ base: 12, sm: 16 }} mt={{ base: -28, sm: -32 }} pb={48} style={{ position: 'relative' }}>
-        <Grid gutter={{ base: 'md', md: 'lg' }}>
+        <Grid gap={{ base: 'md', md: 'lg' }}>
           <Grid.Col span={{ base: 12, md: 4 }}>
             <Stack gap="lg">
               <EtaCard

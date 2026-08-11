@@ -20,6 +20,9 @@ public sealed class BookingLinksController(
     INotificationService notifications,
     IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
+    private const string DefaultPassenger = "Unknown Passenger";
+    private const string DefaultAirline = "Deliver DFRNT";
+    
     [HttpPost("")]
     [EnableRateLimiting("admin-mint")]
     public async Task<ActionResult<MintBookingLinkResponse>> Mint(
@@ -36,8 +39,8 @@ public sealed class BookingLinksController(
         var confirmUrl = $"{publicBase}/c/{token}";
         var trackUrl = $"{publicBase}/t/{token}";
 
-        var passengerName = body.PassengerName ?? "there";
-        var airline = body.AirlineLabel ?? "Urgent";
+        var passengerName = body.PassengerName ?? DefaultPassenger;
+        var airline = body.AirlineLabel ?? DefaultAirline;
         var reference = body.Reference ?? body.JobId.ToString();
 
         if (body.Channel is "sms" or "both" && !string.IsNullOrWhiteSpace(body.Phone))
