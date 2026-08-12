@@ -186,4 +186,89 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() => expect(lastConfirmBody).not.toBeNull())
     expect(lastConfirmBody!.atlOptionId).toBeNull()
   })
+
+  // The country is server-normalised and has no input of its own — the portal is
+  // a passthrough. This pins that, so client-side mangling can't creep back in.
+  it('posts the country from the booking summary unchanged', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm delivery/i })).toBeEnabled())
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.address.country).toBe('NZ')
+  })
+
+  it('blocks submit and prompts for a country when the stored one is unresolved', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json({
+          ...summary,
+          atlOptions,
+          deliveryAddress: { ...summary.deliveryAddress, country: '' },
+        }),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm delivery/i })).toBeEnabled())
+
+    // The address card opens itself so the country field is editable straight away.
+    expect(screen.getByRole('textbox', { name: /country/i })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    expect(await screen.findByText(/please enter your country/i)).toBeInTheDocument()
+    expect(lastConfirmBody).toBeNull()
+  })
+
+  it('posts a country the passenger typed into the field', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm delivery/i })).toBeEnabled())
+
+    await user.click(screen.getByRole('button', { name: /edit delivery address/i }))
+
+    const country = screen.getByRole('textbox', { name: /country/i })
+    await user.clear(country)
+    await user.type(country, 'Australia')
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.address.country).toBe('Australia')
+  })
+
+  it('shows the server country message on the field when the spelling is unrecognisable', async () => {
+    server.use(
+      http.post('*/pax/:id/booking/confirm', () =>
+        HttpResponse.json(
+          { errors: { 'Address.Country': ["We couldn't recognise the country on your delivery address."] } },
+          { status: 400 },
+        ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your/i)
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm delivery/i })).toBeEnabled())
+
+    await user.click(screen.getByRole('button', { name: /confirm delivery/i }))
+
+    // Correctable: the message lands on the country field, not a generic retry toast.
+    expect(
+      await screen.findByText(/couldn't recognise the country on your delivery address/i),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /country/i })).toBeEnabled()
+  })
 })

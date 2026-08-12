@@ -56,26 +56,37 @@ public sealed class PaxBookingController(
             return NotFound();
         }
 
-        await paxBooking.ConfirmAsync(new ConfirmBookingInput(
-            JobId: jobId.Value,
-            Address: new AddressUpdateDto
-            {
-                Line1 = body.Address.Line1,
-                Line2 = body.Address.Line2,
-                Suburb = body.Address.Suburb,
-                City = body.Address.City,
-                PostCode = body.Address.PostCode,
-                Country = body.Address.Country,
-                Latitude = body.Address.Latitude,
-                Longitude = body.Address.Longitude
-            },
-            TimeSlotStartUtc: body.TimeSlotStartUtc,
-            TimeSlotEndUtc: body.TimeSlotEndUtc,
-            AtlOptionId: body.AtlOptionId,
-            AccessNotes: body.AccessNotes,
-            PassengerName: body.PassengerName,
-            PassengerPhone: body.PassengerPhone,
-            PassengerEmail: body.PassengerEmail), ct);
+        try
+        {
+            await paxBooking.ConfirmAsync(new ConfirmBookingInput(
+                JobId: jobId.Value,
+                Address: new AddressUpdateDto
+                {
+                    Line1 = body.Address.Line1,
+                    Line2 = body.Address.Line2,
+                    Suburb = body.Address.Suburb,
+                    City = body.Address.City,
+                    PostCode = body.Address.PostCode,
+                    Country = body.Address.Country,
+                    Latitude = body.Address.Latitude,
+                    Longitude = body.Address.Longitude
+                },
+                TimeSlotStartUtc: body.TimeSlotStartUtc,
+                TimeSlotEndUtc: body.TimeSlotEndUtc,
+                AtlOptionId: body.AtlOptionId,
+                AccessNotes: body.AccessNotes,
+                PassengerName: body.PassengerName,
+                PassengerPhone: body.PassengerPhone,
+                PassengerEmail: body.PassengerEmail), ct);
+        }
+        catch (PaxAddressValidationException ex)
+        {
+            // Same ModelState key the framework would have used, so the SPA's
+            // existing error handling picks it up — but with a message that tells
+            // the passenger what to actually do about it.
+            ModelState.AddModelError("Address.Country", ex.Message);
+            return ValidationProblem(ModelState);
+        }
 
         return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
     }

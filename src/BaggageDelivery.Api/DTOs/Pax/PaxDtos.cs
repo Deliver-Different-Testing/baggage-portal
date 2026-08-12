@@ -17,13 +17,18 @@ public sealed record BookingSummaryDto(
 
 public sealed record AtlOptionDto(int Id, string Name);
 
+// Asymmetric by design: responses always carry an ISO-3166-1 alpha-2 Country,
+// but requests must tolerate both the legacy free text we used to emit (still
+// served from the 30-minute service-worker cache) and whatever spelling the
+// passenger types into the Country field. CountryCodes is the single enforcement
+// point; a length rule here would reject "New Zealand" before it can be resolved.
 public sealed record AddressDto(
     [Required, MaxLength(200)] string Line1,
     [MaxLength(200)] string? Line2,
     [MaxLength(100)] string? Suburb,
     [Required, MaxLength(100)] string City,
     [MaxLength(20)] string? PostCode,
-    [Required, StringLength(2, MinimumLength = 2)] string Country,
+    [Required, MaxLength(100)] string Country,
     decimal? Latitude,
     decimal? Longitude);
 

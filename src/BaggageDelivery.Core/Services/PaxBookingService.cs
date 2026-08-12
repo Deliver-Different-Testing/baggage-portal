@@ -1,5 +1,6 @@
 using System.Globalization;
 using BaggageDelivery.Core.Enums;
+using BaggageDelivery.Core.Globalization;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
@@ -83,7 +84,7 @@ internal sealed class PaxBookingService(
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
             PassengerEmail: job.ProofOfDeliveryEmail,
-            DeliveryAddress: BuildAddressDto(job.DeliveryAddressLine3, job.DeliveryAddressLine4,
+            DeliveryAddress: BuildAddressDto(jobId, job.DeliveryAddressLine3, job.DeliveryAddressLine4,
                 job.DeliveryAddressLine5, job.DeliveryAddressLine6, job.DeliveryAddressLine7,
                 job.DeliveryAddressLine8, job.DeliveryLatitude, job.DeliveryLongitude, defaultCountry),
             EarliestSlotUtc: etaUtc ?? now,
@@ -92,10 +93,12 @@ internal sealed class PaxBookingService(
     }
     
     private static AddressUpdateDto BuildAddressDto(
+        int jobId,
         string? line3, string? line4, string? line5, string? line6, string? line7, string? line8,
         decimal? latitude, decimal? longitude, string defaultCountry)
     {
-        var isUs = IsUsCountry(line8);
+        var country = ResolveStoredCountry(jobId, line8, defaultCountry);
+        var isUs = country == "US";
         return new AddressUpdateDto
         {
             Line1 = CombineStreet(line3, line4),
@@ -103,10 +106,32 @@ internal sealed class PaxBookingService(
             Suburb = isUs ? null : line5,
             City = (isUs ? line5 : line6) ?? string.Empty,
             PostCode = line7,
-            Country = string.IsNullOrWhiteSpace(line8) ? defaultCountry : line8,
+            Country = country,
             Latitude = latitude,
             Longitude = longitude
         };
+    }
+
+    // DeliveryAddressLine8 is legacy free text ("New Zealand", "USA", "NZL", ...),
+    // but the pax portal round-trips this value straight back into a request that
+    // requires a canonical code. Resolve it here so the common case confirms
+    // without the passenger touching anything. An unresolvable value yields empty,
+    // which the portal surfaces as an empty Country field to fill in — we don't
+    // guess a country on the passenger's behalf.
+    private static string ResolveStoredCountry(int jobId, string? line8, string defaultCountry)
+    {
+        if (string.IsNullOrWhiteSpace(line8))
+        {
+            return CountryCodes.TryToIso2(defaultCountry, out var fallback) ? fallback : string.Empty;
+        }
+
+        if (CountryCodes.TryToIso2(line8, out var iso2))
+        {
+            return iso2;
+        }
+
+        Log.Warning("Job {JobId} has an unrecognised DeliveryAddressLine8 {Country}", jobId, line8);
+        return string.Empty;
     }
 
     // Extracts the 2-letter IATA airline code from a WorldTracer file reference
@@ -145,14 +170,6 @@ internal sealed class PaxBookingService(
         }
 
         return b.Length == 0 ? a : $"{a} {b}";
-    }
-
-    private static bool IsUsCountry(string? country)
-    {
-        var c = (country ?? string.Empty).Trim();
-        return c.Equals("US", StringComparison.OrdinalIgnoreCase)
-            || c.Equals("USA", StringComparison.OrdinalIgnoreCase)
-            || c.Equals("United States", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DateTime? TenantLocalToUtc(DateTime? local, string? timeZoneCode)
@@ -290,7 +307,17 @@ internal sealed class PaxBookingService(
         // read reproduces it. L1 (company) / L2 (building) are deliberately left
         // untouched so a pax edit can't clobber them. For US, L5=city; otherwise
         // L5=suburb, L6=city.
-        var isUs = IsUsCountry(input.Address.Country);
+        // Normalise before deriving the column layout: a stale client (the booking
+        // GET is service-worker cached for 30 minutes) can still post the legacy
+        // free-text country we used to emit.
+        if (!CountryCodes.TryToIso2(input.Address.Country, out var country))
+        {
+            throw new PaxAddressValidationException(
+                "We couldn't recognise the country on your delivery address. "
+                + "Please check it, or use the address search to select your address.");
+        }
+
+        var isUs = country == "US";
         var line5 = isUs ? input.Address.City : input.Address.Suburb;
         var line6 = isUs ? null : input.Address.City;
 
@@ -307,7 +334,7 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.DeliveryAddressLine5, line5)
                     .SetProperty(j => j.DeliveryAddressLine6, line6)
                     .SetProperty(j => j.DeliveryAddressLine7, input.Address.PostCode)
-                    .SetProperty(j => j.DeliveryAddressLine8, input.Address.Country)
+                    .SetProperty(j => j.DeliveryAddressLine8, country)
                     .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
                     .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)
                     .SetProperty(j => j.DeliverByTime, deliverByLocal)
