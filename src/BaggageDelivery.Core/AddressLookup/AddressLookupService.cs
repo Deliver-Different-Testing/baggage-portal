@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Net.Http.Json;
+using BaggageDelivery.Core.Globalization;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -12,15 +13,6 @@ public sealed class AddressLookupService(
 {
     private const string AutosuggestBaseUrl = "https://geocode.search.hereapi.com/v1/autosuggest";
     private const string LookupBaseUrl = "https://lookup.search.hereapi.com/v1/lookup";
-
-    private static readonly FrozenDictionary<string, string> CountryCodeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["US"] = "USA", ["CA"] = "CAN", ["GB"] = "GBR", ["AU"] = "AUS", ["NZ"] = "NZL",
-        ["MX"] = "MEX", ["DE"] = "DEU", ["FR"] = "FRA", ["IT"] = "ITA", ["ES"] = "ESP"
-    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-    private static readonly FrozenDictionary<string, string> CountryCodeReverseMap =
-        CountryCodeMap.ToFrozenDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<string, string> CountryCoordinates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -52,8 +44,12 @@ public sealed class AddressLookupService(
         // `at` is a single bias point — anchor on the first configured country.
         var primary = effectiveCountries[0];
         var at = CountryCoordinates.GetValueOrDefault(primary, DefaultCoordinates);
+        // Drop entries that don't resolve rather than passing them through —
+        // HereMaps rejects a malformed `in` filter outright, which would turn a
+        // config typo into a silently empty autocomplete.
         var iso3List = string.Join(',', effectiveCountries
-            .Select(c => CountryCodeMap.GetValueOrDefault(c, c)));
+            .Select(CountryCodes.ToIso3)
+            .Where(c => c is not null));
 
         var queryParams = new Dictionary<string, string>
         {
@@ -153,6 +149,8 @@ public sealed class AddressLookupService(
         };
     }
 
+    // HereMaps returns ISO-3. Emit ISO-2 or empty — never an unmapped passthrough,
+    // which the pax portal would post back as an unresolvable country.
     private static string ToIso2(string countryCode) =>
-        CountryCodeReverseMap.GetValueOrDefault(countryCode, countryCode);
+        CountryCodes.TryToIso2(countryCode, out var iso2) ? iso2 : string.Empty;
 }

@@ -176,7 +176,10 @@ function ConfirmForm({
   slots: UseQueryResult<TimeSlot[]>
 }) {
   const [address, setAddress] = useState<AddressDto>(summary.deliveryAddress)
-  const [editingAddress, setEditingAddress] = useState(false)
+  // An empty country means the server couldn't resolve the stored one, so the
+  // passenger has to supply it — open the card rather than making them find the
+  // edit pencil to discover a blank required field.
+  const [editingAddress, setEditingAddress] = useState(!summary.deliveryAddress.country)
   const [editingDetails, setEditingDetails] = useState(false)
   const [passengerName, setPassengerName] = useState(summary.passengerName ?? '')
   const [passengerPhone, setPassengerPhone] = useState(summary.passengerPhone ?? '')
@@ -186,6 +189,10 @@ function ConfirmForm({
   const [accessNotes, setAccessNotes] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  // The server resolves the country to an ISO-2 code and is the only thing that
+  // can tell us a spelling is unrecognisable — surface its message on the field
+  // rather than the generic retry toast.
+  const [serverCountryError, setServerCountryError] = useState<string | null>(null)
 
   const defaultSlotId = useMemo(
     () =>
@@ -206,7 +213,8 @@ function ConfirmForm({
 
   // Stable identity so the memoized AddressAutocomplete isn't re-rendered on every keystroke.
   const handleAddressSelect = useCallback(
-    (detail: AddressDetail) =>
+    (detail: AddressDetail) => {
+      setServerCountryError(null)
       setAddress((a) => ({
         ...a,
         line1: detail.street,
@@ -214,7 +222,8 @@ function ConfirmForm({
         city: detail.city,
         postCode: detail.postalCode || null,
         country: detail.countryCode || a.country,
-      })),
+      }))
+    },
     [],
   )
 
@@ -237,6 +246,7 @@ function ConfirmForm({
   if (!(address.suburb ?? '').trim()) fieldErrors.suburb = 'Please enter your suburb.'
   if (!address.city.trim()) fieldErrors.city = 'Please enter your city.'
   if (!(address.postCode ?? '').trim()) fieldErrors.postCode = 'Please enter your postcode.'
+  if (!address.country.trim()) fieldErrors.country = 'Please enter your country.'
   if (!selectedSlot) fieldErrors.slot = 'Please pick a delivery time slot.'
 
   const selectedAtlOption = atlOptions.find((o) => o.id === atlOptionId)
@@ -256,9 +266,24 @@ function ConfirmForm({
       void import('./Tracking')
     },
     onError: (err) => {
-      const responseStatus = (err as { response?: { status?: number } })?.response?.status
-      if (responseStatus === 409) showError('This booking has already been confirmed.')
-      else showError('Could not submit your confirmation. Please try again.')
+      const response = (err as {
+        response?: { status?: number; data?: { errors?: Record<string, string[]> } }
+      })?.response
+
+      if (response?.status === 409) {
+        showError('This booking has already been confirmed.')
+        return
+      }
+
+      const countryError = response?.data?.errors?.['Address.Country']?.[0]
+      if (countryError) {
+        setServerCountryError(countryError)
+        setEditingAddress(true)
+        showError(countryError)
+        return
+      }
+
+      showError('Could not submit your confirmation. Please try again.')
     },
   })
 
@@ -269,7 +294,14 @@ function ConfirmForm({
       if (!editingDetails && (fieldErrors.passengerName || fieldErrors.passengerPhone || fieldErrors.passengerEmail)) {
         setEditingDetails(true)
       }
-      if (!editingAddress && (fieldErrors.line1 || fieldErrors.suburb || fieldErrors.city || fieldErrors.postCode)) {
+      if (
+        !editingAddress &&
+        (fieldErrors.line1 ||
+          fieldErrors.suburb ||
+          fieldErrors.city ||
+          fieldErrors.postCode ||
+          fieldErrors.country)
+      ) {
         setEditingAddress(true)
       }
       return
@@ -420,6 +452,18 @@ function ConfirmForm({
                   error={showFieldError('postCode')}
                 />
               </Group>
+              <TextInput
+                label="Country"
+                value={address.country}
+                onChange={(e) => {
+                  setServerCountryError(null)
+                  setAddress((a) => ({ ...a, country: e.currentTarget.value }))
+                }}
+                required
+                size="sm"
+                disabled={!editingAddress}
+                error={serverCountryError ?? showFieldError('country')}
+              />
             </Stack>
           </SectionCard>
 

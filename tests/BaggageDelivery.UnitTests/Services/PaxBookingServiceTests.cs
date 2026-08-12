@@ -466,6 +466,203 @@ public class PaxBookingServiceTests
         Assert.Null(addr.Longitude);
     }
 
+    [Theory]
+    // DeliveryAddressLine8 is legacy free text, not a validated ISO-2 code.
+    [InlineData("New Zealand", "NZ")]
+    [InlineData("NEW ZEALAND", "NZ")]
+    [InlineData("NZL", "NZ")]
+    [InlineData(" nz ", "NZ")]
+    public async Task GetSummary_normalises_legacy_country_to_iso2(string line8, string expected)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7,
+            UcjbNumber = "JOB-7",
+            DeliveryAddressLine4 = "Queen St",
+            DeliveryAddressLine5 = "CBD",
+            DeliveryAddressLine6 = "Auckland",
+            DeliveryAddressLine8 = line8
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal(expected, summary.DeliveryAddress.Country);
+    }
+
+    [Fact]
+    public async Task GetSummary_returns_empty_country_when_line8_is_unresolvable()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7, UcjbNumber = "JOB-7", DeliveryAddressLine8 = "Wakanda"
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        // Empty is the signal the pax portal uses to force an address re-selection
+        // through the search — we don't silently guess the tenant default here.
+        Assert.NotNull(summary);
+        Assert.Equal(string.Empty, summary.DeliveryAddress.Country);
+    }
+
+    [Fact]
+    public async Task GetSummary_treats_legacy_united_states_spelling_as_us_layout()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7,
+            UcjbNumber = "JOB-7",
+            DeliveryAddressLine4 = "5th Ave",
+            // US convention: L5 is the city, there is no suburb line.
+            DeliveryAddressLine5 = "New York",
+            DeliveryAddressLine8 = "United States of America"
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        var addr = summary.DeliveryAddress;
+        Assert.Equal("US", addr.Country);
+        Assert.Equal("New York", addr.City);
+        Assert.Null(addr.Suburb);
+    }
+
+    [Fact]
+    public async Task Confirm_persists_normalised_iso2_country()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4242,
+            Address: new AddressUpdateDto
+            {
+                Line1 = "1 Test Street",
+                Suburb = "Ponsonby",
+                City = "Auckland",
+                PostCode = "1011",
+                Country = "New Zealand"
+            },
+            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+64 21 000",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("NZ", job.DeliveryAddressLine8);
+    }
+
+    [Fact]
+    public async Task Confirm_uses_us_column_layout_for_legacy_us_spelling()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4242,
+            Address: new AddressUpdateDto
+            {
+                Line1 = "350 5th Ave",
+                Suburb = "Brooklyn",
+                City = "New York",
+                PostCode = "10118",
+                Country = "United States"
+            },
+            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+1 555 0100",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("US", job.DeliveryAddressLine8);
+        Assert.Equal("New York", job.DeliveryAddressLine5);
+        Assert.Null(job.DeliveryAddressLine6);
+    }
+
+    [Fact]
+    public async Task GetSummary_then_Confirm_round_trips_legacy_country()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4242,
+            UcjbNumber = "TEST-4242",
+            DeliveryAddressLine4 = "Queen St",
+            DeliveryAddressLine5 = "CBD",
+            DeliveryAddressLine6 = "Auckland",
+            DeliveryAddressLine7 = "1010",
+            DeliveryAddressLine8 = "New Zealand"
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var summary = await svc.GetSummaryAsync(4242, ct);
+        Assert.NotNull(summary);
+
+        // Exactly what the pax portal posts back when the passenger only picks a
+        // timeslot: the address object it was handed, untouched.
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4242,
+            Address: summary.DeliveryAddress,
+            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+64 21 000",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("NZ", job.DeliveryAddressLine8);
+        Assert.Equal("Queen St", job.DeliveryAddressLine4);
+        Assert.Equal("CBD", job.DeliveryAddressLine5);
+        Assert.Equal("Auckland", job.DeliveryAddressLine6);
+    }
+
     [Fact]
     public async Task GetTimeslots_marks_first_slot_whose_end_is_future_as_first_available()
     {

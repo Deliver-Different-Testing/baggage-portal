@@ -82,6 +82,76 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Theory]
+    // Regression guard for the reported production 400: AddressDto.Country used to
+    // require exactly 2 characters, but the booking GET seeds the pax form from the
+    // legacy free-text tucJob.DeliveryAddressLine8 and the form posts it back
+    // unchanged — with no country field for the passenger to correct.
+    // The SQLite database is shared across the class fixture, so each row seeds a
+    // distinct job.
+    [InlineData("New Zealand", 4244)]
+    [InlineData("NZL", 4246)]
+    [InlineData("NZ", 4247)]
+    public async Task Confirm_accepts_legacy_country_spellings(string country, int jobId)
+    {
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        var tokenResponse = await client.GetAsync("/api/v1/antiforgery/token",
+            TestContext.Current.CancellationToken);
+        tokenResponse.EnsureSuccessStatusCode();
+
+        var requestToken = CookieValue(tokenResponse.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith($"{RequestTokenCookie}=", StringComparison.Ordinal)));
+
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking/confirm")
+        {
+            Content = JsonContent.Create(ConfirmBody(country))
+        };
+        request.Headers.Add("X-XSRF-TOKEN", requestToken);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("Address.Country", body, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Confirm_rejects_an_unrecognisable_country_with_an_actionable_message()
+    {
+        const int jobId = 4245;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        var tokenResponse = await client.GetAsync("/api/v1/antiforgery/token",
+            TestContext.Current.CancellationToken);
+        tokenResponse.EnsureSuccessStatusCode();
+
+        var requestToken = CookieValue(tokenResponse.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith($"{RequestTokenCookie}=", StringComparison.Ordinal)));
+
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking/confirm")
+        {
+            Content = JsonContent.Create(ConfirmBody("Wakanda"))
+        };
+        request.Headers.Add("X-XSRF-TOKEN", requestToken);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // Still keyed on Address.Country so the SPA's handling is unchanged, but the
+        // message now names the remedy instead of restating a length rule.
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Address.Country", body, StringComparison.Ordinal);
+        Assert.Contains("search", body, StringComparison.OrdinalIgnoreCase);
+    }
+
     private string EncryptedId(int jobId)
     {
         using var scope = factory.Services.CreateScope();
@@ -100,7 +170,7 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     });
 
-    private static object ConfirmBody() => new
+    private static object ConfirmBody(string country = "NZ") => new
     {
         address = new
         {
@@ -108,7 +178,7 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
             suburb = "Ponsonby",
             city = "Auckland",
             postCode = "1011",
-            country = "NZ"
+            country
         },
         timeSlotStartUtc = new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
         timeSlotEndUtc = new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
