@@ -98,17 +98,14 @@ So even though the DTO has a `reference` field, the app is not currently using a
 2. Update the frontend header to render that returned reference.
 3. Change the narration text from `REF` to `File Reference`.
 
-### Likely backend fields to inspect
-The EF model already exposes several candidate reference fields on `tucJob`, including:
-- `UcjbClientRefa`
-- `UcjbClientRefb`
-- `UcjbClientRefc`
-- `UcjbOurRef`
-- `TextRef1..4`
-- `ShopRef1..5`
+### Backend source of truth
+Use:
+- `tucJob.ucjbClientRefA`
 
-Jacob should confirm which one is the baggage file reference actually used by this flow, then map that into:
+That is the baggage file reference field for this flow and should be mapped directly into:
 - `BookingSummary.Reference`
+
+Do not leave this as `jobId.ToString()` and do not make Jacob guess among multiple reference fields.
 
 ### Files to update
 - `src/BaggageDelivery.Core/Services/PaxBookingService.cs`
