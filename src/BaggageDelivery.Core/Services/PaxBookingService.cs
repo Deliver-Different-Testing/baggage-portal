@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Globalization;
 using BaggageDelivery.Core.Http;
@@ -16,13 +16,16 @@ internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
     IOptions<DespatchOptions> despatchOptions,
     IMemoryCache cache,
-    TimeProvider time) : IPaxBookingService
+    TimeProvider time,
+    IDespatchCalendar calendar) : IPaxBookingService
 {
     // Static tenant reference data — the Despatch connection is single-tenant per
     // deployment, so a process-wide cache key is safe. TTL trades a stale window
     // for not re-querying on every pax page load.
     private const string AtlOptionsCacheKey = "pax:atl-options";
-    private const string EcoRunsCacheKey = "pax:eco-runs";
+    // Per-client: a process-wide key would serve one airline's runs to another.
+    private const string EcoRunsCacheKeyPrefix = "pax:eco-runs:";
+    private const string BaggageFallbackCacheKey = "pax:baggage-fallback";
     private static readonly TimeSpan ReferenceDataTtl = TimeSpan.FromMinutes(30);
 
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
@@ -197,82 +200,180 @@ internal sealed class PaxBookingService(
         }
     }
 
-    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(DateTime? localDate,
-        CancellationToken ct)
+    public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId,
+        DateTime? localDate, CancellationToken ct)
     {
-        // Window edges, not just runs: the last run is closed by EconomyCutOff.
-        var boundaries = await cache.GetOrCreateAsync(EcoRunsCacheKey, async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
-            var setting = await db.TblEcoSettings
-                .AsNoTracking()
-                .OrderBy(s => s.SettingId)
-                .Select(s => new[]
-                {
-                    s.EconomyRun1,
-                    s.EconomyRun2,
-                    s.EconomyRun3,
-                    s.EconomyRun4,
-                    s.EconomyRun5,
-                    s.EconomyCutOff
-                })
-                .FirstOrDefaultAsync(ct);
-            // Empty array (not null) is a valid cached "no config" result.
-            return setting ?? [];
-        }) ?? [];
+        var client = await db.TucJobs
+            .AsNoTracking()
+            .Where(j => j.UcjbId == jobId && j.UcjbClient != null)
+            .Select(j => new { j.UcjbClient!.UcclId })
+            .FirstOrDefaultAsync(ct);
 
-        if (boundaries.Length == 0)
+        if (client is null)
         {
-            Log.Warning("GetTimeslots: tblEcoSetting has no rows — returning empty slot list");
+            Log.Warning("GetTimeslots: tucJob {JobId} not found or has no client", jobId);
             return [];
         }
 
+        var runs = await LoadClientRunsAsync(client.UcclId, ct);
+
         var timeZone = despatchOptions.Value.TimeZone;
-        var now = time.GetUtcNow().UtcDateTime;
-        var anchor = TenantToday(localDate, timeZone, now);
+        var nowUtc = time.GetUtcNow().UtcDateTime;
+        var anchor = TenantToday(localDate, timeZone, nowUtc);
 
-        var slots = new List<BookingTimeSlot>(capacity: 5);
-        var firstAvailableAssigned = false;
-        for (var i = 0; i < boundaries.Length - 1; i++)
+        return runs.Count == 0
+            ? await BuildFallbackSlotsAsync(client.UcclId, anchor, nowUtc, timeZone, ct)
+            : await BuildRunSlotsAsync(runs, client.UcclId, anchor, nowUtc, timeZone, ct);
+    }
+
+    // Runs are per-client: tucClient.EconomyRun1..8, mirroring
+    // UTL_fncJob_GetNextAvailableEconomyRun_DateTime. An empty list means the
+    // client isn't on run-based delivery and the caller should fall back.
+    private async Task<IReadOnlyList<TimeOnly>> LoadClientRunsAsync(int clientId,
+        CancellationToken ct)
+    {
+        var cached = await cache.GetOrCreateAsync($"{EcoRunsCacheKeyPrefix}{clientId}", async entry =>
         {
-            var start = boundaries[i];
-            var end = boundaries[i + 1];
-            if (start is null || end is null)
+            entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
+
+            var row = await db.TucClients
+                .AsNoTracking()
+                .Where(c => c.UcclId == clientId)
+                .Select(c => new
+                {
+                    c.EconomyRuns,
+                    Runs = new[]
+                    {
+                        c.EconomyRun1, c.EconomyRun2, c.EconomyRun3, c.EconomyRun4,
+                        c.EconomyRun5, c.EconomyRun6, c.EconomyRun7, c.EconomyRun8
+                    }
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (row is null || !row.EconomyRuns)
             {
-                continue;
+                return (IReadOnlyList<TimeOnly>)[];
             }
 
-            var startUtc = TenantLocalToUtc(anchor.Add(start.Value.TimeOfDay), timeZone);
-            var endUtc = TenantLocalToUtc(anchor.Add(end.Value.TimeOfDay), timeZone);
-            if (startUtc is null || endUtc is null)
-            {
-                continue;
-            }
+            var configured = row.Runs
+                .Where(r => r is not null)
+                .Select(r => TimeOnly.FromDateTime(r!.Value))
+                .ToList();
 
-            if (endUtc <= startUtc)
+            var ordered = configured.Distinct().Order().ToList();
+            if (!configured.SequenceEqual(ordered))
             {
                 Log.Warning(
-                    "GetTimeslots: tblEcoSetting boundary {Index} ({Start}) is not before {End} — skipping window",
-                    i + 1, start.Value.TimeOfDay, end.Value.TimeOfDay);
-                continue;
+                    "GetTimeslots: client {ClientId} has EconomyRun columns out of ascending order "
+                    + "({Configured}) — offering them sorted", clientId, configured);
             }
 
-            var firstAvailable = !firstAvailableAssigned && endUtc > now;
-            if (firstAvailable)
+            return ordered;
+        });
+
+        return cached ?? [];
+    }
+
+    private async Task<IReadOnlyList<BookingTimeSlot>> BuildRunSlotsAsync(
+        IReadOnlyList<TimeOnly> runs, int clientId, DateTime anchor, DateTime nowUtc,
+        string? timeZone, CancellationToken ct)
+    {
+        var date = anchor;
+        // A non-business anchor rolls forward with the whole day available — the
+        // SQL resets @TimeBooked to 00:00:00 in the same situation.
+        var honourCurrentTime = true;
+        if (!await calendar.IsBusinessDayAsync(date, clientId, ct))
+        {
+            date = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+            honourCurrentTime = false;
+        }
+
+        var available = runs;
+        if (honourCurrentTime)
+        {
+            var remaining = runs
+                .Where(r => TenantLocalToUtc(date.Add(r.ToTimeSpan()), timeZone) is { } utc && utc >= nowUtc)
+                .ToList();
+
+            if (remaining.Count == 0)
             {
-                firstAvailableAssigned = true;
+                // Today's runs are spent; the passenger's earliest option is the
+                // next business day, in full.
+                date = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+            }
+            else
+            {
+                available = remaining;
+            }
+        }
+
+        var slots = new List<BookingTimeSlot>(available.Count);
+        for (var i = 0; i < available.Count; i++)
+        {
+            var runUtc = TenantLocalToUtc(date.Add(available[i].ToTimeSpan()), timeZone);
+            if (runUtc is null)
+            {
+                continue;
             }
 
             slots.Add(new BookingTimeSlot(
                 Id: Guid.NewGuid(),
-                StartUtc: startUtc.Value,
-                EndUtc: endUtc.Value,
-                Label: FormatSlotLabel(start.Value, end.Value),
-                FirstAvailable: firstAvailable));
+                RunUtc: runUtc.Value,
+                Label: FormatSlotLabel(available[i], isLast: i == available.Count - 1),
+                FirstAvailable: slots.Count == 0));
         }
 
         return slots;
     }
+
+    // Mirrors the speed-38 else-branch of
+    // NET_stpBaggageJobBooking_OnHoldInsertJobAndChildren: clients without runs
+    // fall back to the global BaggageCutOff/BaggageRebook pair.
+    private async Task<IReadOnlyList<BookingTimeSlot>> BuildFallbackSlotsAsync(
+        int clientId, DateTime anchor, DateTime nowUtc, string? timeZone, CancellationToken ct)
+    {
+        var setting = await cache.GetOrCreateAsync(BaggageFallbackCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
+            return await db.TblEcoSettings
+                .AsNoTracking()
+                .OrderBy(s => s.SettingId)
+                .Select(s => new BaggageFallback(s.BaggageCutOff, s.BaggageRebook))
+                .FirstOrDefaultAsync(ct);
+        });
+
+        if (setting?.Rebook is not { } rebook)
+        {
+            Log.Warning(
+                "GetTimeslots: no client runs and no tblEcoSetting BaggageRebook — returning empty slot list");
+            return [];
+        }
+
+        var date = anchor;
+        if (!await calendar.IsBusinessDayAsync(date, clientId, ct) || setting.CutOff is { } cutOff
+            && TenantLocalToUtc(date.Add(cutOff.TimeOfDay), timeZone) is { } cutOffUtc
+            && nowUtc > cutOffUtc)
+        {
+            date = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+        }
+
+        var runUtc = TenantLocalToUtc(date.Add(rebook.TimeOfDay), timeZone);
+        if (runUtc is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            new BookingTimeSlot(
+                Id: Guid.NewGuid(),
+                RunUtc: runUtc.Value,
+                Label: FormatSlotLabel(TimeOnly.FromDateTime(rebook), isLast: true),
+                FirstAvailable: true)
+        ];
+    }
+
+    private sealed record BaggageFallback(DateTime? CutOff, DateTime? Rebook);
 
     private static DateTime TenantToday(DateTime? localDate, string? timeZoneCode, DateTime nowUtc)
     {
@@ -301,15 +402,18 @@ internal sealed class PaxBookingService(
         }
     }
 
-    private static string FormatSlotLabel(DateTime start, DateTime end) =>
-        string.Create(CultureInfo.InvariantCulture, $"{start:h:mm tt} - {end:h:mm tt}");
+    // The final run of the day has no closing edge, so it reads open-ended.
+    private static string FormatSlotLabel(TimeOnly run, bool isLast) =>
+        isLast
+            ? string.Create(CultureInfo.InvariantCulture, $"After {run:h:mm tt}")
+            : string.Create(CultureInfo.InvariantCulture, $"{run:h:mm tt}");
 
     public async Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         var leaveId = input.AtlOptionId;
-        var deliverByLocal = UtcToTenantLocal(input.TimeSlotEndUtc, despatchOptions.Value.TimeZone);
+        var deliverByLocal = UtcToTenantLocal(input.DeliveryTimeUtc, despatchOptions.Value.TimeZone);
 
         // Write back using the canonical Despatch DeliveryAddressLine convention
         // (see BuildAddressDto). The pax form captures a single combined street, so

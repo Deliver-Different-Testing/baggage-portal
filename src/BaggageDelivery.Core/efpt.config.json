@@ -41,6 +41,14 @@
       {
          "Name": "[dbo].[tucManualMessage]",
          "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[UTL_AddBusinessDays]",
+         "ObjectType": 2
+      },
+      {
+         "Name": "[dbo].[UTL_IsBusinessDay]",
+         "ObjectType": 2
       }
    ],
    "UiHint": null,

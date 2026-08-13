@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
@@ -24,6 +24,7 @@ public static class DependencyInjection
         {
             services.AddSingleton(TimeProvider.System);
             services.AddSingleton<IEncryptionService, EncryptionService>();
+            services.AddScoped<IDespatchCalendar, DespatchCalendar>();
             services.AddScoped<IPaxBookingService, PaxBookingService>();
             services.AddScoped<IPaxTrackingService, PaxTrackingService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();

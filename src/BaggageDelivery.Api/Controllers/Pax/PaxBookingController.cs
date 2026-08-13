@@ -1,4 +1,4 @@
-using BaggageDelivery.Api.DTOs.Pax;
+﻿using BaggageDelivery.Api.DTOs.Pax;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Services;
@@ -37,9 +37,9 @@ public sealed class PaxBookingController(
             return NotFound();
         }
 
-        var slots = await paxBooking.GetTimeslotsAsync(date, ct);
+        var slots = await paxBooking.GetTimeslotsAsync(jobId.Value, date, ct);
         return Ok(slots
-            .Select(s => new TimeSlotDto(s.Id, s.StartUtc, s.EndUtc, s.Label, s.FirstAvailable))
+            .Select(s => new TimeSlotDto(s.Id, s.RunUtc, s.Label, s.FirstAvailable))
             .ToArray());
     }
 
@@ -71,8 +71,7 @@ public sealed class PaxBookingController(
                     Latitude = body.Address.Latitude,
                     Longitude = body.Address.Longitude
                 },
-                TimeSlotStartUtc: body.TimeSlotStartUtc,
-                TimeSlotEndUtc: body.TimeSlotEndUtc,
+                DeliveryTimeUtc: body.DeliveryTimeUtc,
                 AtlOptionId: body.AtlOptionId,
                 AccessNotes: body.AccessNotes,
                 PassengerName: body.PassengerName,

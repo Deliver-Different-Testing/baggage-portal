@@ -1,5 +1,6 @@
-using BaggageDelivery.Core.Enums;
+﻿using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Http;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Services;
@@ -19,219 +20,314 @@ public class PaxBookingServiceTests
     // Fresh cache per service so reference-data caching can't leak between tests.
     private static MemoryCache NewCache() => new(new MemoryCacheOptions());
 
-    [Fact]
-    public async Task GetTimeslots_builds_consecutive_run_pairs_from_first_eco_setting()
+    // The real calendar calls UTL_IsBusinessDay / UTL_AddBusinessDays, which
+    // don't exist on SQLite. Weekends are non-business unless stated otherwise.
+    private sealed class FakeCalendar(params DateTime[] extraNonBusinessDays) : IDespatchCalendar
     {
-        await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        private bool IsBusiness(DateTime d) =>
+            d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
+            && !extraNonBusinessDays.Contains(d.Date);
 
-        db.TblEcoSettings.Add(new TblEcoSetting
+        public Task<bool> IsBusinessDayAsync(DateTime localDate, int clientId, CancellationToken ct) =>
+            Task.FromResult(IsBusiness(localDate.Date));
+
+        public Task<DateTime> AddBusinessDaysAsync(int days, DateTime localDate, int clientId,
+            CancellationToken ct)
         {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
-            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
-            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
-            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
-            EconomyCutOff = new DateTime(1900, 1, 1, 21, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
+            var d = localDate.Date;
+            for (var i = 0; i < days; i++)
+            {
+                do
+                {
+                    d = d.AddDays(1);
+                } while (!IsBusiness(d));
+            }
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
-
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
-
-        Assert.Equal(5, slots.Count);
-        Assert.Equal("9:00 AM - 12:00 PM", slots[0].Label);
-        Assert.Equal("12:00 PM - 3:00 PM", slots[1].Label);
-        Assert.Equal("3:00 PM - 5:00 PM", slots[2].Label);
-        Assert.Equal("5:00 PM - 7:00 PM", slots[3].Label);
-        Assert.Equal("7:00 PM - 9:00 PM", slots[4].Label);
+            return Task.FromResult(d);
+        }
     }
 
+    private static FakeCalendar NewCalendar() => new();
+
+    private static TucClient NewClient(int clientId, bool economyRuns, params TimeSpan[] runs)
+    {
+        return new TucClient
+        {
+            UcclId = clientId,
+            UcclName = $"Client {clientId}",
+            UcclLegalName = $"Client {clientId} Ltd",
+            UcclCode = $"C{clientId}",
+            Smsname = $"C{clientId}",
+            CreatedBy = "test",
+            LastModifiedBy = "test",
+            SiteId = 1,
+            EconomyRuns = economyRuns,
+            EconomyRun1 = At(0),
+            EconomyRun2 = At(1),
+            EconomyRun3 = At(2),
+            EconomyRun4 = At(3),
+            EconomyRun5 = At(4),
+            EconomyRun6 = At(5),
+            EconomyRun7 = At(6),
+            EconomyRun8 = At(7)
+        };
+
+        DateTime? At(int i) => i < runs.Length ? new DateTime(1900, 1, 1).Add(runs[i]) : null;
+    }
+
+    private static TucJob NewJob(int jobId, int clientId) =>
+        new() { UcjbId = jobId, UcjbNumber = $"JOB-{jobId}", UcjbClientId = clientId };
+
+    private static readonly TimeSpan[] StandardRuns =
+    [
+        new(9, 0, 0), new(12, 30, 0), new(15, 0, 0), new(17, 0, 0)
+    ];
+
     [Fact]
-    public async Task GetTimeslots_omits_final_window_when_cutoff_is_null()
+    public async Task GetTimeslots_returns_one_option_per_client_run_with_open_ended_last_label()
     {
         await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+        // 2026-06-09 12:00 UTC = 2026-06-10 00:00 Pacific/Auckland (NZST UTC+12),
+        // so every run on the 10th is still ahead of "now".
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
-            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
-            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
-            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
-            EconomyCutOff = null
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
         Assert.Equal(4, slots.Count);
-        Assert.Equal("5:00 PM - 7:00 PM", slots[3].Label);
-    }
-
-    [Theory]
-    [InlineData(18)]
-    [InlineData(19)]
-    public async Task GetTimeslots_omits_final_window_when_cutoff_is_not_after_last_run(int cutOffHour)
-    {
-        await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
-
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
-            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
-            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
-            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
-            EconomyCutOff = new DateTime(1900, 1, 1, cutOffHour, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
-
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
-
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
-
-        Assert.Equal(4, slots.Count);
-        Assert.Equal("5:00 PM - 7:00 PM", slots[3].Label);
-        Assert.DoesNotContain(slots, s => s.EndUtc <= s.StartUtc);
+        Assert.Equal("9:00 AM", slots[0].Label);
+        Assert.Equal("12:30 PM", slots[1].Label);
+        Assert.Equal("3:00 PM", slots[2].Label);
+        // The final run has no closing edge, so it reads open-ended.
+        Assert.Equal("After 5:00 PM", slots[3].Label);
+        Assert.True(slots[0].FirstAvailable);
+        Assert.Equal(new DateTime(2026, 6, 9, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
     }
 
     [Fact]
-    public async Task GetTimeslots_marks_final_window_first_available_after_the_last_run()
+    public async Task GetTimeslots_uses_the_runs_of_the_jobs_own_client()
     {
         await using var db = InMemoryDb.NewContext();
-        // 2026-06-10 08:00 UTC = 2026-06-10 20:00 Pacific/Auckland (NZST UTC+12),
-        // i.e. after Run5 (19:00) but before the 21:00 cutoff.
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 8, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
-            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
-            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
-            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
-            EconomyCutOff = new DateTime(1900, 1, 1, 21, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucClients.Add(NewClient(88, economyRuns: true, new TimeSpan(7, 0, 0), new TimeSpan(19, 0, 0)));
+        db.TucJobs.Add(NewJob(4242, 77));
+        db.TucJobs.Add(NewJob(4243, 88));
+        await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
+        var first = await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct);
+        // Same service instance, so a process-wide run cache would leak client 77
+        // into this call.
+        var second = await svc.GetTimeslotsAsync(4243, new DateTime(2026, 6, 10), ct);
 
-        Assert.Equal(5, slots.Count);
-        Assert.True(slots[4].FirstAvailable);
-        Assert.DoesNotContain(slots.Take(4), s => s.FirstAvailable);
+        Assert.Equal(4, first.Count);
+        Assert.Equal(2, second.Count);
+        Assert.Equal("7:00 AM", second[0].Label);
+        Assert.Equal("After 7:00 PM", second[1].Label);
     }
 
     [Fact]
-    public async Task GetTimeslots_picks_first_record_when_multiple_settings_exist()
+    public async Task GetTimeslots_excludes_runs_that_have_already_passed_today()
     {
         await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+        // 2026-06-10 01:00 UTC = 2026-06-10 13:00 NZ, so 9:00 and 12:30 are gone.
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 1, 0, 0, DateTimeKind.Utc));
 
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 8, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 11, 0, 0)
-        });
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 2,
-            EconomyRun1 = new DateTime(1900, 1, 1, 14, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 18, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
-
-        Assert.Single(slots);
-        Assert.Equal("8:00 AM - 11:00 AM", slots[0].Label);
-    }
-
-    [Fact]
-    public async Task GetTimeslots_caches_eco_runs_across_calls()
-    {
-        await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
-
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
-
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
-
-        var first = await svc.GetTimeslotsAsync(new DateTime(2026, 6, 10), CancellationToken.None);
-        Assert.Single(first);
-
-        // Wipe the backing table — a cached read must not hit the DB again.
-        await db.TblEcoSettings.ExecuteDeleteAsync(CancellationToken.None);
-
-        var second = await svc.GetTimeslotsAsync(new DateTime(2026, 6, 10), CancellationToken.None);
-        Assert.Single(second);
-        Assert.Equal("9:00 AM - 12:00 PM", second[0].Label);
-    }
-
-    [Fact]
-    public async Task GetTimeslots_skips_null_run_columns()
-    {
-        await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
-
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
-            EconomyRun3 = null,
-            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
-            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
-
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
-
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
         Assert.Equal(2, slots.Count);
-        Assert.Equal("9:00 AM - 12:00 PM", slots[0].Label);
-        Assert.Equal("5:00 PM - 7:00 PM", slots[1].Label);
+        Assert.Equal("3:00 PM", slots[0].Label);
+        Assert.Equal("After 5:00 PM", slots[1].Label);
+        Assert.True(slots[0].FirstAvailable);
+        Assert.False(slots[1].FirstAvailable);
     }
 
     [Fact]
-    public async Task GetTimeslots_returns_empty_when_no_eco_setting_rows()
+    public async Task GetTimeslots_rolls_to_next_business_day_when_every_run_has_passed()
     {
         await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+        // 2026-06-10 08:00 UTC = 2026-06-10 20:00 NZ — past the 5pm final run.
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 8, 0, 0, DateTimeKind.Utc));
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
 
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        Assert.Empty(slots);
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        // Thursday the 11th, whole day offered again.
+        Assert.Equal(4, slots.Count);
+        Assert.Equal(new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
+        Assert.True(slots[0].FirstAvailable);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_rolls_forward_when_the_anchor_date_is_not_a_business_day()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 12, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        // 2026-06-13 is a Saturday.
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 13), ct);
+
+        // Monday the 15th, every run available because the roll-forward resets
+        // the time-of-day comparison.
+        Assert.Equal(4, slots.Count);
+        Assert.Equal(new DateTime(2026, 6, 14, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_falls_back_to_baggage_rebook_when_the_client_has_no_runs()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TblEcoSettings.Add(new TblEcoSetting
+        {
+            SettingId = 1,
+            BaggageCutOff = new DateTime(1900, 1, 1, 14, 0, 0),
+            BaggageRebook = new DateTime(1900, 1, 1, 10, 0, 0)
+        });
+        db.TucClients.Add(NewClient(77, economyRuns: true));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        // NZ-local 00:00 is before the 14:00 cutoff, so the rebook time stands today.
+        Assert.Single(slots);
+        Assert.Equal("After 10:00 AM", slots[0].Label);
+        Assert.Equal(new DateTime(2026, 6, 9, 22, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
+        Assert.True(slots[0].FirstAvailable);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_falls_back_to_next_business_day_when_past_the_baggage_cutoff()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        // 2026-06-10 06:00 UTC = 18:00 NZ, past the 14:00 cutoff.
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 6, 0, 0, DateTimeKind.Utc));
+
+        db.TblEcoSettings.Add(new TblEcoSetting
+        {
+            SettingId = 1,
+            BaggageCutOff = new DateTime(1900, 1, 1, 14, 0, 0),
+            BaggageRebook = new DateTime(1900, 1, 1, 10, 0, 0)
+        });
+        db.TucClients.Add(NewClient(77, economyRuns: true));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        Assert.Single(slots);
+        Assert.Equal(new DateTime(2026, 6, 10, 22, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_falls_back_when_the_economy_runs_flag_is_off()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TblEcoSettings.Add(new TblEcoSetting
+        {
+            SettingId = 1,
+            BaggageCutOff = new DateTime(1900, 1, 1, 14, 0, 0),
+            BaggageRebook = new DateTime(1900, 1, 1, 10, 0, 0)
+        });
+        // Runs are configured, but the client isn't opted in to run-based delivery.
+        db.TucClients.Add(NewClient(77, economyRuns: false, StandardRuns));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        Assert.Single(slots);
+        Assert.Equal("After 10:00 AM", slots[0].Label);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_returns_empty_when_the_job_is_unknown()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        Assert.Empty(await svc.GetTimeslotsAsync(9999, new DateTime(2026, 6, 10), ct));
+    }
+
+    [Fact]
+    public async Task GetTimeslots_returns_empty_when_there_are_no_runs_and_no_eco_setting_row()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TucClients.Add(NewClient(77, economyRuns: true));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        Assert.Empty(await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct));
+    }
+
+    [Fact]
+    public async Task GetTimeslots_sorts_runs_that_are_configured_out_of_column_order()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TucClients.Add(NewClient(77, economyRuns: true,
+            new TimeSpan(15, 0, 0), new TimeSpan(9, 0, 0), new TimeSpan(12, 0, 0)));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct);
+
+        Assert.Equal(["9:00 AM", "12:00 PM", "After 3:00 PM"], slots.Select(s => s.Label));
     }
 
     [Fact]
@@ -257,7 +353,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -269,8 +365,7 @@ public class PaxBookingServiceTests
                 PostCode = "1011",
                 Country = "NZ"
             },
-            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: 5,
             AccessNotes: "Buzzer 3",
             PassengerName: "Jane Pax",
@@ -322,13 +417,12 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4243,
             Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
-            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
             PassengerName: "Jane Pax",
@@ -344,14 +438,13 @@ public class PaxBookingServiceTests
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
         var ct = TestContext.Current.CancellationToken;
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 9999,
             Address: new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
-            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
             PassengerName: "X",
@@ -378,7 +471,7 @@ public class PaxBookingServiceTests
             new TblJobLeaveNotHome { LeaveNotHomeId = 4, Name = "Garage", Smsname = "garage", Category = "All,", AllowLeave = true, Sequence = 5, CreatedBy = "test", LastModifiedBy = "test" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -413,7 +506,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -439,7 +532,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientRefa = "AKLNZ12345" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -460,7 +553,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -482,7 +575,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -500,7 +593,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientCode = "QF" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -524,7 +617,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientId = 3 });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -542,7 +635,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -578,7 +671,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -599,7 +692,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -627,7 +720,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -648,7 +741,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -660,8 +753,7 @@ public class PaxBookingServiceTests
                 PostCode = "1011",
                 Country = "New Zealand"
             },
-            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
             PassengerName: "Jane Pax",
@@ -682,7 +774,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -694,8 +786,7 @@ public class PaxBookingServiceTests
                 PostCode = "10118",
                 Country = "United States"
             },
-            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
             PassengerName: "Jane Pax",
@@ -727,7 +818,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(4242, ct);
         Assert.NotNull(summary);
@@ -737,8 +828,7 @@ public class PaxBookingServiceTests
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
             Address: summary.DeliveryAddress,
-            TimeSlotStartUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-            TimeSlotEndUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
             PassengerName: "Jane Pax",
@@ -752,31 +842,4 @@ public class PaxBookingServiceTests
         Assert.Equal("Auckland", job.DeliveryAddressLine6);
     }
 
-    [Fact]
-    public async Task GetTimeslots_marks_first_slot_whose_end_is_future_as_first_available()
-    {
-        await using var db = InMemoryDb.NewContext();
-        // 2026-06-10 03:00 UTC = 2026-06-10 15:00 Pacific/Auckland (NZST UTC+12).
-        // Slots are 9-12 (past), 12-15 (ending at 'now', not future), 15-17 (future).
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
-
-        db.TblEcoSettings.Add(new TblEcoSetting
-        {
-            SettingId = 1,
-            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
-            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
-            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
-            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0)
-        });
-        await db.SaveChangesAsync(CancellationToken.None);
-
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
-
-        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
-            CancellationToken.None);
-
-        Assert.False(slots[0].FirstAvailable);
-        Assert.False(slots[1].FirstAvailable);
-        Assert.True(slots[2].FirstAvailable);
-    }
 }

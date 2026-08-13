@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace BaggageDelivery.Api.DTOs.Pax;
 
@@ -32,12 +32,11 @@ public sealed record AddressDto(
     decimal? Latitude,
     decimal? Longitude);
 
-public sealed record TimeSlotDto(Guid Id, DateTime StartUtc, DateTime EndUtc, string Label, bool FirstAvailable);
+public sealed record TimeSlotDto(Guid Id, DateTime RunUtc, string Label, bool FirstAvailable);
 
 public sealed record ConfirmBookingRequest(
     [Required] AddressDto Address,
-    [Required] DateTime TimeSlotStartUtc,
-    [Required] DateTime TimeSlotEndUtc,
+    [Required] DateTime DeliveryTimeUtc,
     int? AtlOptionId,
     [MaxLength(500)] string? AccessNotes,
     [Required, MaxLength(100)] string PassengerName,

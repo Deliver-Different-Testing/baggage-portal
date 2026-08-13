@@ -170,6 +170,8 @@ public partial class BaggageDeliveryContext : DbContext
 
             entity.Property(e => e.UcclId).HasColumnName("ucclID");
             entity.Property(e => e.AccountProfileId).HasColumnName("AccountProfileID");
+            entity.Property(e => e.AccountingPaymentTermQboId).HasMaxLength(32);
+            entity.Property(e => e.AccountingPaymentTermXeroType).HasMaxLength(40);
             entity.Property(e => e.AccountsContact).HasMaxLength(100);
             entity.Property(e => e.AccountsEmail).HasMaxLength(500);
             entity.Property(e => e.AccountsPhone).HasMaxLength(100);
@@ -316,6 +318,7 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.RateShortRr)
                 .HasDefaultValue(52, "DF_tucClient_RateShortRR")
                 .HasColumnName("RateShortRR");
+            entity.Property(e => e.RecalcRecurringFuel).HasDefaultValue(true);
             entity.Property(e => e.ReferenceAdefineList).HasColumnName("ReferenceADefineList");
             entity.Property(e => e.ReferenceAmandatory).HasColumnName("ReferenceAMandatory");
             entity.Property(e => e.ReferenceAmessage)
@@ -546,6 +549,7 @@ public partial class BaggageDeliveryContext : DbContext
                     tb.HasTrigger("TR_tucJob_PricingBreakdown_Sync");
                     tb.HasTrigger("trg_TucJob_Notes_Update");
                     tb.HasTrigger("trg_tucJob_Update");
+                    tb.HasTrigger("tucJob_AI_StampWindowCols");
                     tb.HasTrigger("tucJob_ChangeAmount");
                     tb.HasTrigger("tucJob_ChangeWeight");
                     tb.HasTrigger("tucJob_InsertJob");
@@ -622,6 +626,8 @@ public partial class BaggageDeliveryContext : DbContext
 
             entity.HasIndex(e => new { e.UcjbStatus, e.UcjbJobDone, e.UcjbVoid }, "IX_tucJob_Archive_Status");
 
+            entity.HasIndex(e => new { e.BookingParentId, e.UcjbDate }, "IX_tucJob_BookingParentID_ucjbDate");
+
             entity.HasIndex(e => new { e.UcjbJobDone, e.UcjbVoid, e.UcjbCourierId }, "IX_tucJob_CourierClearListBuild");
 
             entity.HasIndex(e => e.DeliverToLeaveId, "IX_tucJob_DeliverToLeaveID");
@@ -629,6 +635,8 @@ public partial class BaggageDeliveryContext : DbContext
             entity.HasIndex(e => e.FdcourierId, "IX_tucJob_FDCourierID");
 
             entity.HasIndex(e => e.FromAirportId, "IX_tucJob_FromAirportId");
+
+            entity.HasIndex(e => e.LinehaulRunId, "IX_tucJob_LinehaulRunId");
 
             entity.HasIndex(e => e.NpAgentId, "IX_tucJob_NpAgentId");
 
@@ -732,6 +740,8 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.DeliveryLongitude).HasColumnType("decimal(18, 9)");
             entity.Property(e => e.DeliveryPhoto).HasColumnType("image");
             entity.Property(e => e.DeliverySignature).HasColumnType("image");
+            entity.Property(e => e.DeliveryWindowEnd).HasColumnType("datetime");
+            entity.Property(e => e.DeliveryWindowStart).HasColumnType("datetime");
             entity.Property(e => e.DesiredJobTypeId).HasColumnName("DesiredJobTypeID");
             entity.Property(e => e.Dgclass).HasColumnName("DGClass");
             entity.Property(e => e.Dgdocument).HasColumnName("DGDocument");
@@ -774,6 +784,7 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.ItemNotReadyNotificationNotes).HasMaxLength(4000);
             entity.Property(e => e.JobRelationshipTypeId).HasColumnName("JobRelationshipTypeID");
             entity.Property(e => e.LoggedInContactId).HasColumnName("LoggedInContactID");
+            entity.Property(e => e.MasterSubSettlementMode).HasMaxLength(40);
             entity.Property(e => e.NotifiedJobTypeId).HasColumnName("NotifiedJobTypeID");
             entity.Property(e => e.NpCourierPayment).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Nwamount)
@@ -808,6 +819,8 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasColumnName("PickupGPS");
             entity.Property(e => e.PickupRawAmount).HasColumnType("money");
             entity.Property(e => e.PickupTimeZoneId).HasColumnName("PickupTimeZoneID");
+            entity.Property(e => e.PickupWindowEnd).HasColumnType("datetime");
+            entity.Property(e => e.PickupWindowStart).HasColumnType("datetime");
             entity.Property(e => e.PodnotificationHasBeenSent).HasColumnName("PODNotificationHasBeenSent");
             entity.Property(e => e.Ppdamount)
                 .HasColumnType("money")
@@ -836,8 +849,11 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.StripeChargeId)
                 .HasMaxLength(50)
                 .HasColumnName("StripeChargeID");
+            entity.Property(e => e.SubContractorBonusAmount).HasColumnType("money");
             entity.Property(e => e.SubContractorBonusPercentage).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.SubContractorFuelAmount).HasColumnType("money");
             entity.Property(e => e.SubContractorFuelPercentage).HasColumnType("numeric(5, 4)");
+            entity.Property(e => e.SubContractorPaymentAmount).HasColumnType("money");
             entity.Property(e => e.SubContractorPercentage).HasColumnType("numeric(5, 4)");
             entity.Property(e => e.TextRef1)
                 .HasMaxLength(50)
@@ -1046,6 +1062,7 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasColumnName("ucmmWindowsUser");
         });
 
+        OnModelCreatingGeneratedFunctions(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
     }
 
