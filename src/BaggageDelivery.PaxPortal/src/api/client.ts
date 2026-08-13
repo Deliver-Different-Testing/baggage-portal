@@ -117,16 +117,14 @@ export type AtlOption = {
 
 export type TimeSlot = {
   id: string
-  startUtc: string
-  endUtc: string
+  runUtc: string
   label: string
   firstAvailable: boolean
 }
 
 export type ConfirmBookingRequest = {
   address: AddressDto
-  timeSlotStartUtc: string
-  timeSlotEndUtc: string
+  deliveryTimeUtc: string
   atlOptionId: number | null
   accessNotes?: string | null
   passengerName: string

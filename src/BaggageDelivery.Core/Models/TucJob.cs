@@ -493,6 +493,34 @@ public partial class TucJob
 
     public int? RouteId { get; set; }
 
+    public decimal? SubContractorPaymentAmount { get; set; }
+
+    public decimal? SubContractorFuelAmount { get; set; }
+
+    public decimal? SubContractorBonusAmount { get; set; }
+
+    public string MasterSubSettlementMode { get; set; }
+
+    public int? LinehaulRunId { get; set; }
+
+    public int? PickupWindowMinutesBefore { get; set; }
+
+    public int? PickupWindowMinutesAfter { get; set; }
+
+    public int? DeliveryWindowMinutesBefore { get; set; }
+
+    public int? DeliveryWindowMinutesAfter { get; set; }
+
+    public DateTime? PickupWindowStart { get; set; }
+
+    public DateTime? PickupWindowEnd { get; set; }
+
+    public DateTime? DeliveryWindowStart { get; set; }
+
+    public DateTime? DeliveryWindowEnd { get; set; }
+
+    public bool ContentsUnknownAtPickup { get; set; }
+
     public virtual TblJobLeaveNotHome DeliverToLeave { get; set; }
 
     public virtual ICollection<JobDeliveryJourney> JobDeliveryJourneys { get; set; } = new List<JobDeliveryJourney>();

@@ -308,8 +308,7 @@ function ConfirmForm({
     }
     confirm.mutate({
       address,
-      timeSlotStartUtc: selectedSlot!.startUtc,
-      timeSlotEndUtc: selectedSlot!.endUtc,
+      deliveryTimeUtc: selectedSlot!.runUtc,
       atlOptionId,
       accessNotes: accessNotes || null,
       passengerName: passengerName.trim(),

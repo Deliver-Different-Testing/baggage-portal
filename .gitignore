@@ -69,6 +69,10 @@ node_modules/
 dist/
 .npm/
 
+# Local doc files
+docs/
+logs/
+
 # Frontend build artifacts
 *.tsbuildinfo
 

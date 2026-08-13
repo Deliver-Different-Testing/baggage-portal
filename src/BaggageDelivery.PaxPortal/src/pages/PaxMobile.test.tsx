@@ -31,8 +31,7 @@ const summary: BookingSummary = {
 
 const slot: TimeSlot = {
   id: 'slot-1',
-  startUtc: '2026-06-10T02:00:00Z',
-  endUtc: '2026-06-10T04:00:00Z',
+  runUtc: '2026-06-10T02:00:00Z',
   label: '2pm – 4pm',
   firstAvailable: true,
 }
