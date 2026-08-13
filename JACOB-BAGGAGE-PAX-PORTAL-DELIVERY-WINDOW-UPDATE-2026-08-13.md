@@ -16,8 +16,8 @@ There are **five asks** here:
 
 1. Change the header narration from **`Ref`** to **`File Reference`**.
 2. Change the section heading from **`Delivery time`** to **`Delivery window`**.
-3. Stop showing raw eco-run start times as if they are windows; where only a run start exists, show a **3-hour window** (example: `9:00 AM - 12:00 PM`).
-4. Confirm / implement next-day slot availability when the current day is already exhausted.
+3. Stop showing raw eco-run start times as if they are windows; add an explicit **duration field** to eco-run configuration and use that to build customer-facing windows.
+4. Do **not** restrict slots to today — show the **next 6 available delivery windows**, and include the **date** in each option so tomorrow / later is obvious.
 5. Check Jacob's latest GitLab baggage work to see whether he already added schedule-based delivery-slot logic for jobs not covered by eco runs.
 
 The current GitLab source shows:
@@ -161,8 +161,8 @@ For baggage pax portal delivery options that are currently derived from eco-run 
 - compute the end from a configurable duration rather than assuming the next eco run is the boundary
 - label accordingly
 
-### Preferred implementation option
-If this is easier / cleaner than manufacturing windows in baggage-app code, Jacob should add a **duration field** to the eco-run configuration table and use that to build the passenger-facing delivery window.
+This is now an instruction, not an optional idea:
+- Jacob should add a **duration field** to the eco-run configuration and use that to build the passenger-facing delivery window.
 
 Recommended model:
 - keep `EconomyRun1..5` as the run **start times**
@@ -171,12 +171,18 @@ Recommended model:
   - `windowStart = runStart`
   - `windowEnd = runStart + configuredDuration`
 
-Minimum acceptable first pass if he wants one simple field:
+Minimum acceptable first pass:
 - one shared eco-run duration value for the tenant / eco-setting row
 - example: `180` minutes
 
 Better long-term option if operations need different windows per run:
 - per-run duration fields aligned to each `EconomyRunN`
+
+### Admin Manager requirement
+This config cannot live only in SQL or baggage-app code.
+Jacob also needs to add the duration field to the relevant **client record UI in Admin Manager** so operations can maintain it.
+
+Steve's attached screenshot is the reference prompt for where this needs surfacing in the client configuration UX.
 
 ### Important decision
 Jacob needs to confirm whether the current `EconomyRun1..5` values are:
@@ -210,49 +216,58 @@ while still excluding slots already expired for the relevant date.
 
 ---
 
-## 4) Check next-day availability at end of day
+## 4) Return the next 6 available delivery windows, with date in the label
 
 ### Problem
-Steve wants this checked explicitly:
-- if the current day is effectively over, does the portal show the next day as well?
+Restricting slots to just "today" will not work.
+The passenger needs to see the **next 6 available windows**, even if that spans tomorrow or later, and each option must clearly include the **date**.
 
 ### Current code position
-`GetTimeslotsAsync(int jobId, DateTime? localDate, ...)` supports a supplied `localDate`, and if absent it anchors to tenant **today**.
-
-But the current passenger UI call is simply:
+`GetTimeslotsAsync(int jobId, DateTime? localDate, ...)` currently anchors to one date only and the current UI call is simply:
 - `getTimeslots(bookingId)`
 
-There is no confirmed passenger-side logic here that:
-- retries with tomorrow
-- requests multiple dates
-- or automatically rolls to next day if today's windows have all ended
-
-So based on the current code read, this behaviour is **not proven** and should be treated as an explicit implementation check / likely gap.
+There is no confirmed logic that walks forward across days and composes a rolling list of the next 6 valid windows.
 
 ### Required implementation
-If all today's windows are already expired in tenant local time:
-- the passenger should still be offered valid future windows
-- at minimum, tomorrow's delivery windows should appear automatically
+The API / backend should return:
+- the **next 6 available delivery windows** from "now" forward
+- spanning as many future dates as needed
+- with each label including enough date context that tomorrow / later is obvious
 
-### Recommended implementation options
-#### Option A — backend fallback (recommended)
-If `localDate` is null and today's computed slots are all expired / non-selectable:
-- automatically compute and return tomorrow's slots instead
-
-#### Option B — frontend retry
-If today's API response is empty or fully stale:
-- call the timeslot endpoint again with `date = tomorrow`
+Examples of acceptable labels:
+- `Thu 13 Aug · 9:00 AM - 12:00 PM`
+- `Fri 14 Aug · 9:00 AM - 12:00 PM`
 
 ### Recommendation
-Do this in the **backend** so the passenger app gets valid slots by default without extra client orchestration.
+Do this in the **backend**, not by making the frontend orchestrate repeated date calls.
+
+Suggested behaviour:
+1. Start from tenant local "today".
+2. Build windows for that date.
+3. Exclude windows already expired.
+4. If fewer than 6 remain, continue into the next day.
+5. Keep rolling forward until 6 available windows are collected, or until an agreed safety cap is reached.
+
+### Required code shape
+Instead of returning windows for a single anchor date only, `GetTimeslotsAsync(...)` should build a rolling future list.
+
+That probably means:
+- a helper that builds windows for a supplied local date
+- an outer loop that accumulates future windows across dates until 6 are gathered
+- `FormatSlotLabel(...)` updated so the label includes the date as well as the time window
 
 ### Files to update
 - primary: `src/BaggageDelivery.Core/Services/PaxBookingService.cs`
-- optional if client-assisted: `src/BaggageDelivery.PaxPortal/src/api/pax.ts`, `src/BaggageDelivery.PaxPortal/src/pages/PaxMobile.tsx`
+- likely label contract consumers:
+  - `src/BaggageDelivery.Api/Controllers/Pax/PaxBookingController.cs`
+  - `src/BaggageDelivery.Api/DTOs/Pax/PaxDtos.cs` *(if needed)*
+  - `src/BaggageDelivery.PaxPortal/src/pages/PaxMobile.tsx`
 
 ### Acceptance criteria
-- Late in the day, when today's windows are no longer usable, the portal still shows next-day delivery windows.
-- Passenger does not get stranded with an empty or misleading slot list.
+- The passenger sees the **next 6 available windows**, not just today's windows.
+- If today's windows are exhausted, tomorrow's windows appear automatically.
+- If the list spans multiple days, the date is shown on each option clearly.
+- Passenger does not get stranded with an empty or misleading slot list late in the day.
 
 ---
 
@@ -301,7 +316,7 @@ Then implement fallback rules for jobs not covered by eco runs.
 3. **Change eco-run slot labels to duration-based windows**
    - preferred: add duration to eco-run config and use that
    - fallback: hardcode `+3 hours` only if schema change is not worth it
-4. **Add automatic next-day fallback when today's windows are exhausted**
+4. **Return the next 6 available windows with date in each label**
 5. **Implement / confirm schedule fallback for non-eco deliveries**
 
 ---
@@ -324,8 +339,10 @@ Then implement fallback rules for jobs not covered by eco runs.
 ## Done when
 - Passenger header shows **File Reference** and the real baggage reference value.
 - The slot-picker section says **Delivery window**.
-- Eco-run-driven options display real customer-facing 3-hour windows.
-- The portal can still show a valid next-day option set when today is finished.
+- Eco-run-driven options display real customer-facing duration-based windows.
+- The API / portal returns the **next 6 available windows** from now forward.
+- Each option clearly shows the **date** as well as the time window.
+- Jacob has added duration maintenance to the relevant **Admin Manager client-record UI**.
 - Jacob has either implemented non-eco schedule fallback or explicitly documented that it is still outstanding.
 
 ---
