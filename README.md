@@ -70,13 +70,51 @@ single-use. This mirrors the inboundagent model.
 
 ## Local dev
 
+First-time setup:
+
+1. Add `127.0.0.1 baggagedelivery.local.deliverdifferent.com` to your hosts
+   file (`C:\Windows\System32\drivers\etc\hosts`).
+2. Copy `src/BaggageDelivery.Api/Properties/launchSettings.Template.json` to
+   `launchSettings.json` in the same folder and fill in the placeholders.
+   `launchSettings.json` is gitignored, so this step is per-machine.
+3. `cd src/BaggageDelivery.PaxPortal && npm install`
+
+Then run the API — from your IDE, or:
+
 ```
 dotnet run --project src/BaggageDelivery.Api
-cd src/BaggageDelivery.PaxPortal && npm install && npm run dev
+```
+
+**The app lives on :5173, not :5298.** Port 5298 is the API only: there is no
+`wwwroot` in local dev, so `/` and every SPA route return an empty 404 there
+(`Program.cs` skips static files and the SPA fallback when `wwwroot` is
+absent — the Dockerfile is what populates it for the deployed image).
+
+`Microsoft.AspNetCore.SpaProxy` bridges the two. The
+`ASPNETCORE_HOSTINGSTARTUPASSEMBLIES=Microsoft.AspNetCore.SpaProxy` env var in
+the launch profile is what activates it — without that one variable the API
+starts fine but Vite never launches and :5298 dead-ends on a blank 404. With it
+set, starting the API also runs `npm run dev` (see `SpaProxyServerUrl` /
+`SpaProxyLaunchCommand` in `BaggageDelivery.Api.csproj`) and redirects `:5298/`
+to `:5173/`.
+
+That redirect covers the root only. A pax deep link pasted against :5298
+(`:5298/c/<token>`) still 404s — use :5173 for those, which is what the startup
+log and `/dev/links` already hand you.
+
+To run the dev server by hand instead:
+
+```
+cd src/BaggageDelivery.PaxPortal && npm run dev
 ```
 
 PWA dev server runs on `http://baggagedelivery.local.deliverdifferent.com:5173`
 (also `http://localhost:5173`). The API CORS policy whitelists both.
+
+In Development, `/` serves a landing page listing the magic links for
+`DevTesting:JobId` (default 67), backed by `GET /api/v1/dev/links`. The same
+URLs are logged at startup by `DevStartup.LogTestMagicLinks`. Neither the route
+nor the endpoint exists outside Development, where `/` redirects to `/expired`.
 
 Required env vars (in addition to `appsettings.Development.json`):
 

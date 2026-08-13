@@ -134,6 +134,15 @@ export type ConfirmBookingRequest = {
   passengerEmail?: string | null
 }
 
+// GET /api/v1/dev/links — mapped by the API in Development only. Outside
+// Development the route does not exist, and the 404 is what sends / to /expired.
+export type DevLinks = {
+  jobId: number
+  token: string
+  confirmUrl: string
+  trackUrl: string
+}
+
 export type TrackingEvent = {
   status: string
   atUtc: string

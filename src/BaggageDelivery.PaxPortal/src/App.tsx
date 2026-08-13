@@ -12,6 +12,9 @@ const Tracking = lazy(() =>
 const ProcessMap = lazy(() =>
   import('./pages/ProcessMap').then((m) => ({ default: m.ProcessMap })),
 )
+const DevLanding = lazy(() =>
+  import('./pages/DevLanding').then((m) => ({ default: m.DevLanding })),
+)
 
 function RouteFallback() {
   return (
@@ -25,6 +28,9 @@ export function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
+        {/* Dev-only in practice: /dev/links 404s outside Development, which
+            DevLanding turns into the /expired redirect the catch-all gives. */}
+        <Route path="/" element={<DevLanding />} />
         <Route path="/c/:id" element={<PaxMobile />} />
         <Route path="/t/:id" element={<Tracking />} />
         <Route path="/internal/process-map" element={<ProcessMap />} />

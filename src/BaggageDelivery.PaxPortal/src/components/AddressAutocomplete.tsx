@@ -2,14 +2,7 @@ import { memo, useState } from 'react'
 import { Autocomplete, Loader } from '@mantine/core'
 import { MapPinIcon } from './Icon'
 import { useAddressSearch } from '../hooks/useAddressSearch'
-import type { AddressDetail } from '../types/address'
-
-interface AddressAutocompleteProps {
-  bookingId: string
-  label?: string
-  placeholder?: string
-  onAddressSelect: (detail: AddressDetail) => void
-}
+import type { AddressAutocompleteProps } from './AddressAutocompleteProps'
 
 // Memoized: this sits next to the form's other text inputs, so without memo every
 // keystroke elsewhere in ConfirmForm would re-render it. Relies on a stable

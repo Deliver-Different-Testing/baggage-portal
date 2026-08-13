@@ -17,7 +17,9 @@ namespace BaggageDelivery.Core.Http;
 // existing JobResponse shape. The underlying JobService.Get(int jobId,
 // Guid messageId) overload already exists — only the controller route is
 // missing from JobController.cs.
-public sealed class TrackingPageClient(HttpClient httpClient, IOptions<TrackingPageUrlsOptions> urlOptions)
+public sealed class TrackingPageClient(
+    HttpClient httpClient,
+    IOptions<TrackingPageUrlsOptions> urlOptions)
     : ITrackingPageClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -29,9 +31,9 @@ public sealed class TrackingPageClient(HttpClient httpClient, IOptions<TrackingP
     public async Task<TrackingDto?> GetJobAsync(int jobId, CancellationToken ct)
     {
         var baseUrl = urlOptions.Value.BaseUrl
-            ?? throw new InvalidOperationException(
-                "TrackingPage base URL is not configured. " +
-                "Set the 'TrackingPageUrl' env var (or TrackingPageUrls:BaseUrl).");
+                      ?? throw new InvalidOperationException(
+                          "TrackingPage base URL is not configured. " +
+                          "Set the 'TrackingPageUrl' env var (or TrackingPageUrls:BaseUrl).");
 
         var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseUrl, $"api/Job/byId/{jobId}"));
 
@@ -44,7 +46,7 @@ public sealed class TrackingPageClient(HttpClient httpClient, IOptions<TrackingP
             // trackingpage maps job-not-found to 400 BadRequest with
             // Success=false. 200 + Success=true + Job populated is the
             // only "found" signal; everything else returns null.
-            if (response.IsSuccessStatusCode && parsed?.Success == true && parsed.Job is { } job)
+            if (response.IsSuccessStatusCode && parsed is { Success: true, Job: { } job })
             {
                 return MapToTrackingDto(job);
             }

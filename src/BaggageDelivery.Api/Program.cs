@@ -191,6 +191,7 @@ if (Directory.Exists(app.Environment.WebRootPath))
     app.MapFallbackToFile("index.html").AllowAnonymous();
 }
 
+app.MapDevLinks();
 app.LogTestMagicLinks();
 
 app.Run();
