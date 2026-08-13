@@ -160,28 +160,45 @@ Steve's requested behaviour:
 
 ### Required implementation
 For baggage pax portal delivery options that are currently derived from eco-run starts:
-- treat each available run start as the **start of a 3-hour customer window**
-- compute end = start + 3 hours
+- treat each available run start as the **start of a customer-facing delivery window**
+- compute the end from a configurable duration rather than assuming the next eco run is the boundary
 - label accordingly
+
+### Preferred implementation option
+If this is easier / cleaner than manufacturing windows in baggage-app code, Jacob should add a **duration field** to the eco-run configuration table and use that to build the passenger-facing delivery window.
+
+Recommended model:
+- keep `EconomyRun1..5` as the run **start times**
+- add a duration field representing the window length for each run
+- baggage portal then shows:
+  - `windowStart = runStart`
+  - `windowEnd = runStart + configuredDuration`
+
+Minimum acceptable first pass if he wants one simple field:
+- one shared eco-run duration value for the tenant / eco-setting row
+- example: `180` minutes
+
+Better long-term option if operations need different windows per run:
+- per-run duration fields aligned to each `EconomyRunN`
 
 ### Important decision
 Jacob needs to confirm whether the current `EconomyRun1..5` values are:
 1. actual consecutive window boundaries, or
 2. just run start times
 
-For this baggage flow, Steve's instruction is to treat them as customer-facing windows using **start + 3 hours**.
-
-So unless there is stronger hidden business logic already in the repo, the passenger-facing slot output should move to:
-- `runStart` → `runStart + 3h`
+For this baggage flow, Steve's direction is that these should behave as customer-facing windows, and if easier than coding `+3 hours` on the fly, the configuration should explicitly carry a duration.
 
 ### Required code change
 Current code:
 - builds `Run1 -> Run2`, `Run2 -> Run3`, etc.
 
 Required code for this flow:
-- build `Run1 -> Run1+3h`
-- build `Run2 -> Run2+3h`
-- etc
+- stop assuming the next run start is the passenger window end
+- derive end from duration
+- first acceptable implementation:
+  - `Run1 -> Run1 + duration`
+  - `Run2 -> Run2 + duration`
+  - etc
 
 while still excluding slots already expired for the relevant date.
 
@@ -284,7 +301,9 @@ Then implement fallback rules for jobs not covered by eco runs.
 
 1. **Fix file reference mapping + narration**
 2. **Rename `Delivery time` to `Delivery window` everywhere**
-3. **Change eco-run slot labels to `start + 3 hours` windows**
+3. **Change eco-run slot labels to duration-based windows**
+   - preferred: add duration to eco-run config and use that
+   - fallback: hardcode `+3 hours` only if schema change is not worth it
 4. **Add automatic next-day fallback when today's windows are exhausted**
 5. **Implement / confirm schedule fallback for non-eco deliveries**
 
