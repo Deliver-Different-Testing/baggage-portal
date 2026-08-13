@@ -51,13 +51,10 @@ public class CountryCodesTests
     [InlineData("AU", "AUS")]
     [InlineData("US", "USA")]
     [InlineData("GB", "GBR")]
-    // Beyond the ten countries the old AddressLookupService table covered.
     [InlineData("FJ", "FJI")]
     [InlineData("SG", "SGP")]
-    public void ToIso3_maps_beyond_the_legacy_ten(string iso2, string expected)
-    {
+    public void ToIso3_maps_beyond_the_legacy_ten(string iso2, string expected) =>
         Assert.Equal(expected, CountryCodes.ToIso3(iso2));
-    }
 
     [Fact]
     public void ToIso3_returns_null_for_unrecognised()
@@ -73,10 +70,7 @@ public class CountryCodesTests
     [InlineData("United States")]
     [InlineData("United States of America")]
     [InlineData("U.S.A.")]
-    public void IsUnitedStates_matches_all_spellings(string input)
-    {
-        Assert.True(CountryCodes.IsUnitedStates(input));
-    }
+    public void IsUnitedStates_matches_all_spellings(string input) => Assert.True(CountryCodes.IsUnitedStates(input));
 
     [Theory]
     [InlineData("NZ")]
@@ -84,17 +78,13 @@ public class CountryCodesTests
     [InlineData("AU")]
     [InlineData(null)]
     [InlineData("")]
-    public void IsUnitedStates_is_false_for_everything_else(string? input)
-    {
+    public void IsUnitedStates_is_false_for_everything_else(string? input) =>
         Assert.False(CountryCodes.IsUnitedStates(input));
-    }
 
     // Canary: the ISO-3 tail is derived from RegionInfo, which is empty under
     // InvariantGlobalization or an ICU-less base image. Fail CI, not production.
     [Fact]
-    public void Country_table_is_populated_from_region_info()
-    {
+    public void Country_table_is_populated_from_region_info() =>
         Assert.True(CountryCodes.KnownCountryCount >= 200,
             $"Only {CountryCodes.KnownCountryCount} countries resolved — globalization data is missing.");
-    }
 }

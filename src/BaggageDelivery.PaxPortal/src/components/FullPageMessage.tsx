@@ -1,16 +1,6 @@
-import type { ReactNode } from 'react'
 import { alpha, Box, Button, Container, Divider, Paper, Text, Title } from '@mantine/core'
 import { PoweredByFooter } from './PoweredByFooter'
-
-interface FullPageMessageProps {
-  icon: ReactNode
-  iconColor: string
-  title: string
-  description: string
-  actionLabel?: string
-  onAction?: () => void
-  actionIcon?: ReactNode
-}
+import type { FullPageMessageProps } from './FullPageMessageProps'
 
 export function FullPageMessage({
   icon,

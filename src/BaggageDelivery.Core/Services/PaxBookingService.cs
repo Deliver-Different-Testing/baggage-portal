@@ -200,7 +200,8 @@ internal sealed class PaxBookingService(
     public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(DateTime? localDate,
         CancellationToken ct)
     {
-        var runs = await cache.GetOrCreateAsync(EcoRunsCacheKey, async entry =>
+        // Window edges, not just runs: the last run is closed by EconomyCutOff.
+        var boundaries = await cache.GetOrCreateAsync(EcoRunsCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
             var setting = await db.TblEcoSettings
@@ -212,14 +213,15 @@ internal sealed class PaxBookingService(
                     s.EconomyRun2,
                     s.EconomyRun3,
                     s.EconomyRun4,
-                    s.EconomyRun5
+                    s.EconomyRun5,
+                    s.EconomyCutOff
                 })
                 .FirstOrDefaultAsync(ct);
             // Empty array (not null) is a valid cached "no config" result.
             return setting ?? [];
         }) ?? [];
 
-        if (runs.Length == 0)
+        if (boundaries.Length == 0)
         {
             Log.Warning("GetTimeslots: tblEcoSetting has no rows — returning empty slot list");
             return [];
@@ -229,12 +231,12 @@ internal sealed class PaxBookingService(
         var now = time.GetUtcNow().UtcDateTime;
         var anchor = TenantToday(localDate, timeZone, now);
 
-        var slots = new List<BookingTimeSlot>(capacity: 4);
+        var slots = new List<BookingTimeSlot>(capacity: 5);
         var firstAvailableAssigned = false;
-        for (var i = 0; i < runs.Length - 1; i++)
+        for (var i = 0; i < boundaries.Length - 1; i++)
         {
-            var start = runs[i];
-            var end = runs[i + 1];
+            var start = boundaries[i];
+            var end = boundaries[i + 1];
             if (start is null || end is null)
             {
                 continue;
@@ -244,6 +246,14 @@ internal sealed class PaxBookingService(
             var endUtc = TenantLocalToUtc(anchor.Add(end.Value.TimeOfDay), timeZone);
             if (startUtc is null || endUtc is null)
             {
+                continue;
+            }
+
+            if (endUtc <= startUtc)
+            {
+                Log.Warning(
+                    "GetTimeslots: tblEcoSetting boundary {Index} ({Start}) is not before {End} — skipping window",
+                    i + 1, start.Value.TimeOfDay, end.Value.TimeOfDay);
                 continue;
             }
 

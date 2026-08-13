@@ -32,7 +32,39 @@ public class PaxBookingServiceTests
             EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
             EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
             EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
-            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0)
+            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
+            EconomyCutOff = new DateTime(1900, 1, 1, 21, 0, 0)
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
+            CancellationToken.None);
+
+        Assert.Equal(5, slots.Count);
+        Assert.Equal("9:00 AM - 12:00 PM", slots[0].Label);
+        Assert.Equal("12:00 PM - 3:00 PM", slots[1].Label);
+        Assert.Equal("3:00 PM - 5:00 PM", slots[2].Label);
+        Assert.Equal("5:00 PM - 7:00 PM", slots[3].Label);
+        Assert.Equal("7:00 PM - 9:00 PM", slots[4].Label);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_omits_final_window_when_cutoff_is_null()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+
+        db.TblEcoSettings.Add(new TblEcoSetting
+        {
+            SettingId = 1,
+            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
+            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
+            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
+            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
+            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
+            EconomyCutOff = null
         });
         await db.SaveChangesAsync(CancellationToken.None);
 
@@ -42,10 +74,67 @@ public class PaxBookingServiceTests
             CancellationToken.None);
 
         Assert.Equal(4, slots.Count);
-        Assert.Equal("9:00 AM - 12:00 PM", slots[0].Label);
-        Assert.Equal("12:00 PM - 3:00 PM", slots[1].Label);
-        Assert.Equal("3:00 PM - 5:00 PM", slots[2].Label);
         Assert.Equal("5:00 PM - 7:00 PM", slots[3].Label);
+    }
+
+    [Theory]
+    [InlineData(18)]
+    [InlineData(19)]
+    public async Task GetTimeslots_omits_final_window_when_cutoff_is_not_after_last_run(int cutOffHour)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+
+        db.TblEcoSettings.Add(new TblEcoSetting
+        {
+            SettingId = 1,
+            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
+            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
+            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
+            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
+            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
+            EconomyCutOff = new DateTime(1900, 1, 1, cutOffHour, 0, 0)
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
+            CancellationToken.None);
+
+        Assert.Equal(4, slots.Count);
+        Assert.Equal("5:00 PM - 7:00 PM", slots[3].Label);
+        Assert.DoesNotContain(slots, s => s.EndUtc <= s.StartUtc);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_marks_final_window_first_available_after_the_last_run()
+    {
+        await using var db = InMemoryDb.NewContext();
+        // 2026-06-10 08:00 UTC = 2026-06-10 20:00 Pacific/Auckland (NZST UTC+12),
+        // i.e. after Run5 (19:00) but before the 21:00 cutoff.
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 8, 0, 0, DateTimeKind.Utc));
+
+        db.TblEcoSettings.Add(new TblEcoSetting
+        {
+            SettingId = 1,
+            EconomyRun1 = new DateTime(1900, 1, 1, 9, 0, 0),
+            EconomyRun2 = new DateTime(1900, 1, 1, 12, 0, 0),
+            EconomyRun3 = new DateTime(1900, 1, 1, 15, 0, 0),
+            EconomyRun4 = new DateTime(1900, 1, 1, 17, 0, 0),
+            EconomyRun5 = new DateTime(1900, 1, 1, 19, 0, 0),
+            EconomyCutOff = new DateTime(1900, 1, 1, 21, 0, 0)
+        });
+        await db.SaveChangesAsync(CancellationToken.None);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time);
+
+        var slots = await svc.GetTimeslotsAsync(localDate: new DateTime(2026, 6, 10),
+            CancellationToken.None);
+
+        Assert.Equal(5, slots.Count);
+        Assert.True(slots[4].FirstAvailable);
+        Assert.DoesNotContain(slots.Take(4), s => s.FirstAvailable);
     }
 
     [Fact]
