@@ -6,24 +6,33 @@ This is an update to the earlier spec:
 
 This note covers the latest requested passenger-portal changes for the baggage app, based on:
 - Steve's screenshot / markup
+- the HTML mockup Steve provided to Jacob
 - the current **real GitLab baggage app** at `urgent-couriers/baggagedelivery`
 - Jacob's latest baggage-app implementation relevant to delivery slots
+
+Reference mockup:
+- `https://deliver-different-testing.github.io/baggage-portal/pax-mobile.html`
+
+Jacob should treat that HTML page as the visual / interaction reference unless this document explicitly overrides something.
 
 ---
 
 ## Executive summary
-There are **five asks** here:
+There are **six asks** here:
 
 1. Change the header narration from **`Ref`** to **`File Reference`**.
 2. Change the section heading from **`Delivery time`** to **`Delivery window`**.
 3. Stop showing raw eco-run start times as if they are windows; add an explicit **duration field** to eco-run configuration and use that to build customer-facing windows.
 4. Do **not** restrict slots to today — show the **next 6 available delivery windows**, and include the **date** in each option so tomorrow / later is obvious.
-5. Check Jacob's latest GitLab baggage work to see whether he already added schedule-based delivery-slot logic for jobs not covered by eco runs.
+5. Restore the mock's **10-minute booking warning** so a passenger does not confirm against an old run after leaving the page open.
+6. Check Jacob's latest GitLab baggage work to see whether he already added schedule-based delivery-slot logic for jobs not covered by eco runs.
 
 The current GitLab source shows:
 - **`Delivery window` is already used in at least one place**, but **`Delivery time` still exists in the main edit section**.
 - The portal is still showing **`REF · {summary.jobId}`**, not a file reference field.
 - Jacob's slot-generation work currently builds windows from **`tblEcoSetting.EconomyRun1..5` only**.
+- The React page has **lost the 10-minute booking warning** that existed in the HTML mock.
+- The React page has also drifted away from the mock's clear **Today / Tomorrow** slot presentation.
 - I do **not** see schedule-based fallback logic in the latest baggage-app code for deliveries not covered by eco runs.
 
 ---
@@ -43,6 +52,9 @@ Current confirmed behaviour:
   - `Delivery window`
 - Validation message still says:
   - `Please pick a delivery time slot.`
+- The React page still shows `First available`, but I do **not** see the mock's warning:
+  - `Please confirm within 10 minutes to secure your selected time slot`
+- The React page does **not** currently mirror the mock's explicit rolling `Today` / `Tomorrow` slot treatment.
 
 ### Backend
 File:
@@ -216,7 +228,7 @@ while still excluding slots already expired for the relevant date.
 
 ---
 
-## 4) Return the next 6 available delivery windows, with date in the label
+## 4) Return the next 6 available delivery windows, with date in the label and mock-style day context
 
 ### Problem
 Restricting slots to just "today" will not work.
@@ -235,8 +247,11 @@ The API / backend should return:
 - with each label including enough date context that tomorrow / later is obvious
 
 Examples of acceptable labels:
-- `Thu 13 Aug · 9:00 AM - 12:00 PM`
-- `Fri 14 Aug · 9:00 AM - 12:00 PM`
+- `Today, Thu 13 Aug · 9:00 AM - 12:00 PM`
+- `Tomorrow, Fri 14 Aug · 9:00 AM - 12:00 PM`
+- if the list extends further out, continue with explicit dated labels so the passenger can tell the day at a glance
+
+The key point is that the passenger must not be left guessing whether a slot is today or tomorrow. The old HTML mock handled that better than the current React page and Jacob should restore that clarity.
 
 ### Recommendation
 Do this in the **backend**, not by making the frontend orchestrate repeated date calls.
@@ -267,11 +282,40 @@ That probably means:
 - The passenger sees the **next 6 available windows**, not just today's windows.
 - If today's windows are exhausted, tomorrow's windows appear automatically.
 - If the list spans multiple days, the date is shown on each option clearly.
+- The wording is clear enough that the passenger can immediately tell `Today` vs `Tomorrow`.
 - Passenger does not get stranded with an empty or misleading slot list late in the day.
 
 ---
 
-## 5) Check Jacob's latest GitLab commit for schedule logic outside eco runs
+## 5) Restore the mock's 10-minute booking warning
+
+### Problem
+The HTML mock Steve provided included an operationally important warning under the delivery-window choices:
+- `Please confirm within 10 minutes to secure your selected time slot`
+
+That warning is missing from the current React implementation.
+
+This matters because a passenger can open the page, leave it sitting, then confirm against a slot that is no longer the right operational choice.
+
+### Required implementation
+Restore a clear warning/reminder in the delivery-window section matching the intent of the mock.
+
+Minimum acceptable wording:
+- `Please confirm within 10 minutes to secure your selected time slot`
+
+Jacob can restyle it to match the React component system, but he should not drop the warning behaviour.
+
+### Files to update
+- `src/BaggageDelivery.PaxPortal/src/pages/PaxMobile.tsx`
+
+### Acceptance criteria
+- The delivery-window section includes the 10-minute confirm warning.
+- The warning is visible near the selectable windows, not buried elsewhere.
+- The React page no longer loses this important operational reminder versus the HTML mock.
+
+---
+
+## 6) Check Jacob's latest GitLab commit for schedule logic outside eco runs
 
 ### Result of review
 I checked Jacob's latest baggage-app commits in GitLab.
@@ -316,8 +360,9 @@ Then implement fallback rules for jobs not covered by eco runs.
 3. **Change eco-run slot labels to duration-based windows**
    - preferred: add duration to eco-run config and use that
    - fallback: hardcode `+3 hours` only if schema change is not worth it
-4. **Return the next 6 available windows with date in each label**
-5. **Implement / confirm schedule fallback for non-eco deliveries**
+4. **Return the next 6 available windows with date / Today / Tomorrow context**
+5. **Restore the 10-minute booking warning from the mock**
+6. **Implement / confirm schedule fallback for non-eco deliveries**
 
 ---
 
@@ -341,7 +386,8 @@ Then implement fallback rules for jobs not covered by eco runs.
 - The slot-picker section says **Delivery window**.
 - Eco-run-driven options display real customer-facing duration-based windows.
 - The API / portal returns the **next 6 available windows** from now forward.
-- Each option clearly shows the **date** as well as the time window.
+- Each option clearly shows the **date** and enough context to make `Today` / `Tomorrow` obvious.
+- The 10-minute confirm warning from the mock is restored near the slot list.
 - Jacob has added duration maintenance to the relevant **Admin Manager client-record UI**.
 - Jacob has either implemented non-eco schedule fallback or explicitly documented that it is still outstanding.
 
