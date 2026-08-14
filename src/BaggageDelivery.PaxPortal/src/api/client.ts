@@ -101,6 +101,8 @@ export type BookingSummary = {
   reference: string
   airlineLabel: string
   airlineCode?: string | null
+  /** "Need help? Call …" — the client's own phone, or the tenant's support line. Empty to hide. */
+  supportPhone: string
   passengerName: string
   passengerPhone?: string | null
   passengerEmail?: string | null
@@ -118,6 +120,9 @@ export type AtlOption = {
 export type TimeSlot = {
   id: string
   runUtc: string
+  /** Date line, e.g. `Tomorrow, Fri 15 Aug`. Rendered server-side in the tenant's timezone. */
+  dayLabel: string
+  /** Delivery window, e.g. `9:00 AM – 12:00 PM`. */
   label: string
   firstAvailable: boolean
 }

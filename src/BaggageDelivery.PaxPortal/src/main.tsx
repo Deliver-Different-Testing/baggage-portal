@@ -6,7 +6,12 @@ import '@mantine/notifications/styles.css'
 import './index.css'
 
 import { ColorModeProvider } from './hooks/ColorModeProvider'
+import { prefetchRouteData } from './api/prefetch'
 import { ThemedApp } from './ThemedApp'
+
+// Before React mounts: the passenger's booking is fetched in parallel with the
+// lazy route chunk rather than after it.
+void prefetchRouteData(window.location.pathname)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

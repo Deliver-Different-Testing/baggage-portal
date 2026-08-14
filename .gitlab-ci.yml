@@ -24,10 +24,13 @@ test:unit:
   allow_failure: false
   script:
     - dotnet restore
-    - dotnet test tests/BaggageDelivery.UnitTests/BaggageDelivery.UnitTests.csproj
-        --verbosity normal
-        --no-restore
-        --logger "junit;LogFilePath=$CI_PROJECT_DIR/test-results/unit-tests.xml"
+    # xUnit v3 runs on Microsoft.Testing.Platform, which ignores `dotnet test
+    # --logger` (MTP0001) — no report is written and failures go unnamed. Run the
+    # test assembly directly and use its own JUnit reporter instead.
+    - dotnet build tests/BaggageDelivery.UnitTests/BaggageDelivery.UnitTests.csproj --no-restore
+    - mkdir -p $CI_PROJECT_DIR/test-results
+    - dotnet tests/BaggageDelivery.UnitTests/bin/Debug/net10.0/BaggageDelivery.UnitTests.dll
+        -jUnit $CI_PROJECT_DIR/test-results/unit-tests.xml
   artifacts:
     when: always
     paths:

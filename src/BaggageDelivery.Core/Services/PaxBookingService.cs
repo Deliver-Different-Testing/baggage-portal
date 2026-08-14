@@ -26,7 +26,20 @@ internal sealed class PaxBookingService(
     // Per-client: a process-wide key would serve one airline's runs to another.
     private const string EcoRunsCacheKeyPrefix = "pax:eco-runs:";
     private const string BaggageFallbackCacheKey = "pax:baggage-fallback";
+    // Per-client and per-date: the roll-forward answer depends on the client's site
+    // calendar, and a holiday-driven roll must not survive into the next day.
+    private const string NextBusinessDayCacheKeyPrefix = "pax:next-business-day:";
     private static readonly TimeSpan ReferenceDataTtl = TimeSpan.FromMinutes(30);
+
+    // Steve's ask: enough options that tomorrow is always visible, not just what's
+    // left of today.
+    private const int TargetSlotCount = 8;
+    // A client with one run a day needs eight days to fill the list; the cap only
+    // exists so a calendar that never returns a business day can't spin.
+    private const int MaxDaysWalked = 14;
+    // Same default despatchweb uses when a speed has no duration
+    // (Repositories/JobRepository.cs:4091).
+    private const int DefaultWindowMinutes = 180;
 
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
     {
@@ -48,6 +61,7 @@ internal sealed class PaxBookingService(
                 j.DeliveryLatitude,
                 j.DeliveryLongitude,
                 ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null,
+                ClientPhone = j.UcjbClient != null ? j.UcjbClient.UcclPhone : null,
                 ClientRefa = j.UcjbClientRefa,
                 JobClientCode = j.UcjbClientCode,
                 ClientCode = j.UcjbClient != null ? j.UcjbClient.UcclCode : null
@@ -81,8 +95,15 @@ internal sealed class PaxBookingService(
 
         return new BookingSummary(
             JobId: jobId,
-            Reference: jobId.ToString(),
+            // The WorldTracer file reference the passenger quotes to the helpline.
+            // Empty when the job doesn't carry one — the portal hides the badge
+            // rather than showing a job id that means nothing to them.
+            Reference: (job.ClientRefa ?? string.Empty).Trim(),
             AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
+            // The airline's own line first — it's the one the passenger's baggage
+            // file is with. The tenant's number is the backstop for clients that
+            // carry no phone on tucClient.
+            SupportPhone: FirstNonBlank(job.ClientPhone, despatchOptions.Value.SupportPhone),
             AirlineCode: string.IsNullOrWhiteSpace(airlineCode) ? null : airlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
@@ -95,6 +116,11 @@ internal sealed class PaxBookingService(
             AtlOptions: atlOptions);
     }
     
+    private static string FirstNonBlank(string? preferred, string? fallback) =>
+        !string.IsNullOrWhiteSpace(preferred) ? preferred.Trim()
+        : !string.IsNullOrWhiteSpace(fallback) ? fallback.Trim()
+        : string.Empty;
+
     private static AddressUpdateDto BuildAddressDto(
         int jobId,
         string? line3, string? line4, string? line5, string? line6, string? line7, string? line8,
@@ -175,18 +201,18 @@ internal sealed class PaxBookingService(
         return b.Length == 0 ? a : $"{a} {b}";
     }
 
-    private static DateTime? TenantLocalToUtc(DateTime? local, string? timeZoneCode)
+    // Resolves the tenant zone once per request — the slot loop converts up to
+    // sixteen wall-clock times and FindSystemTimeZoneById is not free.
+    private static TimeZoneInfo? ResolveTimeZone(string? timeZoneCode)
     {
-        if (local is null || string.IsNullOrWhiteSpace(timeZoneCode))
+        if (string.IsNullOrWhiteSpace(timeZoneCode))
         {
             return null;
         }
 
         try
         {
-            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneCode);
-            var unspecified = DateTime.SpecifyKind(local.Value, DateTimeKind.Unspecified);
-            return TimeZoneInfo.ConvertTimeToUtc(unspecified, tz);
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneCode);
         }
         catch (TimeZoneNotFoundException)
         {
@@ -200,34 +226,80 @@ internal sealed class PaxBookingService(
         }
     }
 
+    // Despatch stores wall-clock time with no offset. Null when the zone is
+    // unresolvable, or when the local time doesn't exist because it falls in the
+    // DST spring-forward gap — ConvertTimeToUtc throws on those, and one unusable
+    // run must not take the whole timeslot list down with it.
+    private static DateTime? LocalToUtc(DateTime local, TimeZoneInfo? timeZone)
+    {
+        if (timeZone is null)
+        {
+            return null;
+        }
+
+        var unspecified = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (!timeZone.IsInvalidTime(unspecified))
+        {
+            return TimeZoneInfo.ConvertTimeToUtc(unspecified, timeZone);
+        }
+
+        Log.Warning("Local time {Local} does not exist in {TimeZone} — skipping that window",
+            unspecified, timeZone.Id);
+        return null;
+
+    }
+
+    private static DateTime? TenantLocalToUtc(DateTime? local, string? timeZoneCode) =>
+        local is { } value ? LocalToUtc(value, ResolveTimeZone(timeZoneCode)) : null;
+
     public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId,
         DateTime? localDate, CancellationToken ct)
     {
-        var client = await db.TucJobs
+        var job = await db.TucJobs
             .AsNoTracking()
             .Where(j => j.UcjbId == jobId && j.UcjbClient != null)
-            .Select(j => new { j.UcjbClient!.UcclId })
+            .Select(j => new
+            {
+                j.UcjbClient!.UcclId,
+                // ucjbSpeed is an FK to tucJobType.ucjtID, but no navigation is
+                // mapped here: legacy rows can point at a retired speed, and a
+                // correlated subquery yields null for those instead of dropping
+                // the job from the result.
+                WindowMinutes = db.TucJobTypes
+                    .Where(t => t.UcjtId == j.UcjbSpeed)
+                    .Select(t => t.Minutes)
+                    .FirstOrDefault()
+            })
             .FirstOrDefaultAsync(ct);
 
-        if (client is null)
+        if (job is null)
         {
             Log.Warning("GetTimeslots: tucJob {JobId} not found or has no client", jobId);
             return [];
         }
 
-        var runs = await LoadClientRunsAsync(client.UcclId, ct);
+        var timeZone = ResolveTimeZone(despatchOptions.Value.TimeZone);
+        if (timeZone is null)
+        {
+            return [];
+        }
 
-        var timeZone = despatchOptions.Value.TimeZone;
+        var runs = await LoadClientRunsAsync(job.UcclId, ct);
+
         var nowUtc = time.GetUtcNow().UtcDateTime;
-        var anchor = TenantToday(localDate, timeZone, nowUtc);
+        var today = TenantToday(nowUtc, timeZone);
+        // `?date=` means "the next windows from this date", so an anchor in the
+        // past would offer windows that have already been run.
+        var anchor = localDate is { } supplied && supplied.Date > today ? supplied.Date : today;
+        var window = TimeSpan.FromMinutes(
+            job.WindowMinutes is > 0 ? job.WindowMinutes.Value : DefaultWindowMinutes);
 
         return runs.Count == 0
-            ? await BuildFallbackSlotsAsync(client.UcclId, anchor, nowUtc, timeZone, ct)
-            : await BuildRunSlotsAsync(runs, client.UcclId, anchor, nowUtc, timeZone, ct);
+            ? await BuildFallbackSlotsAsync(job.UcclId, anchor, today, nowUtc, timeZone, window, ct)
+            : await BuildRunSlotsAsync(runs, job.UcclId, anchor, today, nowUtc, timeZone, window, ct);
     }
 
     // Runs are per-client: tucClient.EconomyRun1..8, mirroring
-    // UTL_fncJob_GetNextAvailableEconomyRun_DateTime. An empty list means the
     // client isn't on run-based delivery and the caller should fall back.
     private async Task<IReadOnlyList<TimeOnly>> LoadClientRunsAsync(int clientId,
         CancellationToken ct)
@@ -274,9 +346,14 @@ internal sealed class PaxBookingService(
         return cached ?? [];
     }
 
+    // Walks forward from the anchor, flattening (business day × run) in
+    // chronological order until there are TargetSlotCount windows. The two cases
+    // the single-day version handled specially fall out for free: a non-business
+    // anchor is skipped before the walk starts, and a day whose runs have all been
+    // filtered out simply contributes nothing.
     private async Task<IReadOnlyList<BookingTimeSlot>> BuildRunSlotsAsync(
-        IReadOnlyList<TimeOnly> runs, int clientId, DateTime anchor, DateTime nowUtc,
-        string? timeZone, CancellationToken ct)
+        IReadOnlyList<TimeOnly> runs, int clientId, DateTime anchor, DateTime today,
+        DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
     {
         var date = anchor;
         // A non-business anchor rolls forward with the whole day available — the
@@ -284,45 +361,33 @@ internal sealed class PaxBookingService(
         var honourCurrentTime = true;
         if (!await calendar.IsBusinessDayAsync(date, clientId, ct))
         {
-            date = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+            date = await NextBusinessDayAsync(clientId, date, ct);
             honourCurrentTime = false;
         }
 
-        var available = runs;
-        if (honourCurrentTime)
+        var slots = new List<BookingTimeSlot>(TargetSlotCount);
+        for (var day = 0; day < MaxDaysWalked && slots.Count < TargetSlotCount; day++)
         {
-            var remaining = runs
-                .Where(r => TenantLocalToUtc(date.Add(r.ToTimeSpan()), timeZone) is { } utc && utc >= nowUtc)
-                .ToList();
+            foreach (var run in runs)
+            {
+                if (slots.Count == TargetSlotCount)
+                {
+                    break;
+                }
 
-            if (remaining.Count == 0)
-            {
-                // Today's runs are spent; the passenger's earliest option is the
-                // next business day, in full.
-                date = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+                AddSlot(slots, date, run, today, nowUtc, timeZone, window, honourCurrentTime);
             }
-            else
+
+            if (slots.Count < TargetSlotCount)
             {
-                available = remaining;
+                date = await NextBusinessDayAsync(clientId, date, ct);
+                // Only the anchor day is measured against the clock; a later day is
+                // offered whole.
+                honourCurrentTime = false;
             }
         }
 
-        var slots = new List<BookingTimeSlot>(available.Count);
-        for (var i = 0; i < available.Count; i++)
-        {
-            var runUtc = TenantLocalToUtc(date.Add(available[i].ToTimeSpan()), timeZone);
-            if (runUtc is null)
-            {
-                continue;
-            }
-
-            slots.Add(new BookingTimeSlot(
-                Id: Guid.NewGuid(),
-                RunUtc: runUtc.Value,
-                Label: FormatSlotLabel(available[i], isLast: i == available.Count - 1),
-                FirstAvailable: slots.Count == 0));
-        }
-
+        WarnIfShort(slots.Count, clientId);
         return slots;
     }
 
@@ -330,7 +395,8 @@ internal sealed class PaxBookingService(
     // NET_stpBaggageJobBooking_OnHoldInsertJobAndChildren: clients without runs
     // fall back to the global BaggageCutOff/BaggageRebook pair.
     private async Task<IReadOnlyList<BookingTimeSlot>> BuildFallbackSlotsAsync(
-        int clientId, DateTime anchor, DateTime nowUtc, string? timeZone, CancellationToken ct)
+        int clientId, DateTime anchor, DateTime today, DateTime nowUtc, TimeZoneInfo? timeZone,
+        TimeSpan window, CancellationToken ct)
     {
         var setting = await cache.GetOrCreateAsync(BaggageFallbackCacheKey, async entry =>
         {
@@ -351,62 +417,108 @@ internal sealed class PaxBookingService(
 
         var date = anchor;
         if (!await calendar.IsBusinessDayAsync(date, clientId, ct) || setting.CutOff is { } cutOff
-            && TenantLocalToUtc(date.Add(cutOff.TimeOfDay), timeZone) is { } cutOffUtc
+            && LocalToUtc(date.Add(cutOff.TimeOfDay), timeZone) is { } cutOffUtc
             && nowUtc > cutOffUtc)
         {
-            date = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+            date = await NextBusinessDayAsync(clientId, date, ct);
         }
 
-        var runUtc = TenantLocalToUtc(date.Add(rebook.TimeOfDay), timeZone);
-        if (runUtc is null)
+        var run = TimeOnly.FromDateTime(rebook);
+        var slots = new List<BookingTimeSlot>(TargetSlotCount);
+        for (var day = 0; day < MaxDaysWalked && slots.Count < TargetSlotCount; day++)
         {
-            return [];
+            // honourCurrentTime is false throughout: the cutoff above is the only
+            // "is today still bookable" test on this path, same as the stored proc.
+            // Comparing the rebook time against the clock as well would drop today
+            // for a passenger arriving after it, which the proc doesn't do.
+            AddSlot(slots, date, run, today, nowUtc, timeZone, window, honourCurrentTime: false);
+
+            if (slots.Count < TargetSlotCount)
+            {
+                date = await NextBusinessDayAsync(clientId, date, ct);
+            }
         }
 
-        return
-        [
-            new BookingTimeSlot(
-                Id: Guid.NewGuid(),
-                RunUtc: runUtc.Value,
-                Label: FormatSlotLabel(TimeOnly.FromDateTime(rebook), isLast: true),
-                FirstAvailable: true)
-        ];
+        WarnIfShort(slots.Count, clientId);
+        return slots;
     }
 
     private sealed record BaggageFallback(DateTime? CutOff, DateTime? Rebook);
 
-    private static DateTime TenantToday(DateTime? localDate, string? timeZoneCode, DateTime nowUtc)
+    private static void AddSlot(List<BookingTimeSlot> slots, DateTime date, TimeOnly run,
+        DateTime today, DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window,
+        bool honourCurrentTime)
     {
-        if (localDate is { } d)
+        var localStart = date.Add(run.ToTimeSpan());
+        if (LocalToUtc(localStart, timeZone) is not { } runUtc)
         {
-            return d.Date;
+            return;
         }
 
-        if (string.IsNullOrWhiteSpace(timeZoneCode))
+        if (honourCurrentTime && runUtc < nowUtc)
         {
-            return nowUtc.Date;
+            return;
         }
 
-        try
+        slots.Add(new BookingTimeSlot(
+            Id: Guid.NewGuid(),
+            RunUtc: runUtc,
+            DayLabel: FormatDayLabel(date, today),
+            // The end is derived in local time, not from runUtc, so a window
+            // straddling a DST change still reads as the promise the passenger was
+            // given rather than shifting by an hour.
+            Label: FormatWindowLabel(localStart, localStart.Add(window)),
+            FirstAvailable: slots.Count == 0));
+    }
+
+    // The answer is identical for every passenger of this client on this date, and
+    // holidays don't move intraday — without this a client with one run a day costs
+    // one UTL_AddBusinessDays round trip per window offered.
+    private async Task<DateTime> NextBusinessDayAsync(int clientId, DateTime date,
+        CancellationToken ct)
+    {
+        var key = string.Create(CultureInfo.InvariantCulture,
+            $"{NextBusinessDayCacheKeyPrefix}{clientId}:{date:yyyy-MM-dd}");
+
+        if (cache.TryGetValue(key, out DateTime cached))
         {
-            var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneCode);
-            return TimeZoneInfo.ConvertTimeFromUtc(nowUtc, tz).Date;
+            return cached;
         }
-        catch (TimeZoneNotFoundException)
+
+        var next = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
+        cache.Set(key, next, ReferenceDataTtl);
+        return next;
+    }
+
+    private static void WarnIfShort(int count, int clientId)
+    {
+        if (count < TargetSlotCount)
         {
-            return nowUtc.Date;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            return nowUtc.Date;
+            Log.Warning(
+                "GetTimeslots: only {Count} of {Target} windows resolved for client {ClientId}",
+                count, TargetSlotCount, clientId);
         }
     }
 
-    // The final run of the day has no closing edge, so it reads open-ended.
-    private static string FormatSlotLabel(TimeOnly run, bool isLast) =>
-        isLast
-            ? string.Create(CultureInfo.InvariantCulture, $"After {run:h:mm tt}")
-            : string.Create(CultureInfo.InvariantCulture, $"{run:h:mm tt}");
+    private static DateTime TenantToday(DateTime nowUtc, TimeZoneInfo? timeZone) =>
+        timeZone is null ? nowUtc.Date : TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone).Date;
+
+    // Without the date the passenger can't tell whether an option is today or next
+    // week; without Today/Tomorrow they have to read a date to work out the
+    // obvious cases.
+    private static string FormatDayLabel(DateTime date, DateTime today)
+    {
+        var prefix = date == today
+            ? "Today, "
+            : date == today.AddDays(1)
+                ? "Tomorrow, "
+                : string.Empty;
+
+        return string.Create(CultureInfo.InvariantCulture, $"{prefix}{date:ddd d MMM}");
+    }
+
+    private static string FormatWindowLabel(DateTime start, DateTime end) =>
+        string.Create(CultureInfo.InvariantCulture, $"{start:h:mm tt} – {end:h:mm tt}");
 
     public async Task ConfirmAsync(ConfirmBookingInput input, CancellationToken ct)
     {

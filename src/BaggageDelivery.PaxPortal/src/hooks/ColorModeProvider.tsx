@@ -61,7 +61,9 @@ function persist(preference: ColorModePreference): void {
 
 export function ColorModeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ColorModePreference>(readStoredPreference)
-  const [mode, setModeState] = useState<Md3Mode>(() => resolveMode(readStoredPreference()))
+  // Derived from the state above rather than a second read — the initializer only
+  // runs on mount, so `preference` is already the stored value here.
+  const [mode, setModeState] = useState<Md3Mode>(() => resolveMode(preference))
   const preferenceRef = useRef<ColorModePreference>(preference)
 
   const setPreference = useCallback((next: ColorModePreference) => {

@@ -36,6 +36,10 @@ builder.Services.AddAppAuthentication(builder.Configuration, builder.Environment
 // brings in are what supply ValidateAntiforgeryTokenAuthorizationFilter for
 // [ValidateAntiForgeryToken] on PaxBookingController.
 builder.Services.AddControllersWithViews(options => { options.MaxModelBindingCollectionSize = 100; });
+
+// Without this an unhandled exception returns a 500 with an empty body, which the
+// pax portal can only render as a blank failure and CloudWatch shows as nothing.
+builder.Services.AddProblemDetails();
 builder.WebHost.ConfigureKestrel(options => { options.Limits.MaxRequestBodySize = 4 * 1024 * 1024; });
 
 builder.Services.AddRateLimiter(options =>
@@ -130,6 +134,13 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+
+app.UseExceptionHandler();
+
+// One structured line per request, with status and elapsed ms, and 5xx escalated
+// to Error with the exception attached. Logs under Serilog.AspNetCore, so the
+// "Microsoft.AspNetCore": "Warning" override does not suppress it.
+app.UseSerilogRequestLogging();
 
 app.Use(async (context, next) =>
 {

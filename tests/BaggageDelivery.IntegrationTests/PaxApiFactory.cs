@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -8,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace BaggageDelivery.IntegrationTests;
@@ -58,7 +60,38 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
 
             // Keeps the antiforgery key ring off the filesystem and out of AWS SSM.
             services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+
+            // UTL_IsBusinessDay / UTL_AddBusinessDays are SQL Server scalar UDFs
+            // with no SQLite equivalent — the interface exists for exactly this.
+            services.RemoveAll<IDespatchCalendar>();
+            services.AddSingleton<IDespatchCalendar, WeekdayCalendar>();
         });
+    }
+
+    // Weekdays are business days; holidays are the real calendar's job, not this
+    // fixture's.
+    private sealed class WeekdayCalendar : IDespatchCalendar
+    {
+        public Task<bool> IsBusinessDayAsync(DateTime localDate, int clientId, CancellationToken ct) =>
+            Task.FromResult(IsWeekday(localDate.Date));
+
+        public Task<DateTime> AddBusinessDaysAsync(int days, DateTime localDate, int clientId,
+            CancellationToken ct)
+        {
+            var date = localDate.Date;
+            for (var i = 0; i < days; i++)
+            {
+                do
+                {
+                    date = date.AddDays(1);
+                } while (!IsWeekday(date));
+            }
+
+            return Task.FromResult(date);
+        }
+
+        private static bool IsWeekday(DateTime date) =>
+            date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday);
     }
 
     // Owns the scope so the context can't outlive it. EnsureCreated is idempotent —

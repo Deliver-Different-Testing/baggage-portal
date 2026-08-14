@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { Autocomplete, Loader } from '@mantine/core'
 import { MapPinIcon } from './Icon'
 import { useAddressSearch } from '../hooks/useAddressSearch'
@@ -20,6 +20,10 @@ export const AddressAutocomplete = memo(function AddressAutocomplete({
   const [displayValue, setDisplayValue] = useState('')
 
   const loading = isLoading || isLookingUp
+
+  // A fresh array on every keystroke re-runs Mantine's option filtering and
+  // re-renders the whole dropdown even when the suggestions haven't changed.
+  const options = useMemo(() => suggestions.map((s) => s.title), [suggestions])
 
   // Mantine's Autocomplete works on string options; keep our own suggestion list to
   // recover the PAF id for the selected title and fetch full address details.
@@ -51,7 +55,7 @@ export const AddressAutocomplete = memo(function AddressAutocomplete({
       label={label}
       placeholder={placeholder}
       value={displayValue}
-      data={suggestions.map((s) => s.title)}
+      data={options}
       // Present suggestions as-is (server already ranked them); don't re-filter locally.
       filter={({ options }) => options}
       onChange={(value) => {

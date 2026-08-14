@@ -14,8 +14,12 @@ namespace BaggageDelivery.UnitTests.Services;
 
 public class PaxBookingServiceTests
 {
-    private static IOptions<DespatchOptions> DespatchOpts() =>
-        Options.Create(new DespatchOptions { TimeZone = "Pacific/Auckland" });
+    private static IOptions<DespatchOptions> DespatchOpts(string supportPhone = "") =>
+        Options.Create(new DespatchOptions
+        {
+            TimeZone = "Pacific/Auckland",
+            SupportPhone = supportPhone
+        });
 
     // Fresh cache per service so reference-data caching can't leak between tests.
     private static MemoryCache NewCache() => new(new MemoryCacheOptions());
@@ -75,8 +79,21 @@ public class PaxBookingServiceTests
         DateTime? At(int i) => i < runs.Length ? new DateTime(1900, 1, 1).Add(runs[i]) : null;
     }
 
-    private static TucJob NewJob(int jobId, int clientId) =>
-        new() { UcjbId = jobId, UcjbNumber = $"JOB-{jobId}", UcjbClientId = clientId };
+    private static TucJob NewJob(int jobId, int clientId, int? speed = BaggageSpeed) =>
+        new() { UcjbId = jobId, UcjbNumber = $"JOB-{jobId}", UcjbClientId = clientId, UcjbSpeed = speed };
+
+    // tucJob.ucjbSpeed points at tucJobType.ucjtID; Minutes is how long the
+    // promised window runs for.
+    private const int BaggageSpeed = 38;
+
+    private static TucJobType NewJobType(int speedId, int? minutes) => new()
+    {
+        UcjtId = speedId,
+        UcjtName = $"Speed {speedId}",
+        CreatedBy = "test",
+        LastModifiedBy = "test",
+        Minutes = minutes
+    };
 
     private static readonly TimeSpan[] StandardRuns =
     [
@@ -84,7 +101,7 @@ public class PaxBookingServiceTests
     ];
 
     [Fact]
-    public async Task GetTimeslots_returns_one_option_per_client_run_with_open_ended_last_label()
+    public async Task GetTimeslots_returns_eight_windows_rolling_into_the_next_business_day()
     {
         await using var db = InMemoryDb.NewContext();
         var ct = TestContext.Current.CancellationToken;
@@ -93,6 +110,7 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         db.TucJobs.Add(NewJob(4242, 77));
         await db.SaveChangesAsync(ct);
 
@@ -100,14 +118,86 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        Assert.Equal(4, slots.Count);
-        Assert.Equal("9:00 AM", slots[0].Label);
-        Assert.Equal("12:30 PM", slots[1].Label);
-        Assert.Equal("3:00 PM", slots[2].Label);
-        // The final run has no closing edge, so it reads open-ended.
-        Assert.Equal("After 5:00 PM", slots[3].Label);
+        // Four runs a day, so the eighth window is on Thursday the 11th.
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
+        Assert.Equal("9:00 AM – 12:00 PM", slots[0].Label);
+        Assert.Equal("12:30 PM – 3:30 PM", slots[1].Label);
+        Assert.Equal("5:00 PM – 8:00 PM", slots[3].Label);
+        Assert.Equal("Tomorrow, Thu 11 Jun", slots[4].DayLabel);
+        Assert.Equal("9:00 AM – 12:00 PM", slots[4].Label);
         Assert.True(slots[0].FirstAvailable);
+        Assert.DoesNotContain(slots.Skip(1), s => s.FirstAvailable);
         Assert.Equal(new DateTime(2026, 6, 9, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_ends_each_window_at_the_job_speed_duration()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 90));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        Assert.Equal("9:00 AM – 10:30 AM", slots[0].Label);
+        Assert.Equal("12:30 PM – 2:00 PM", slots[1].Label);
+    }
+
+    [Theory]
+    // No speed on the job at all, and a speed whose job type has no Minutes —
+    // both land on the three-hour default rather than a zero-length window.
+    [InlineData(null, null)]
+    [InlineData(BaggageSpeed, null)]
+    public async Task GetTimeslots_falls_back_to_a_three_hour_window_without_a_speed_duration(
+        int? speed, int? minutes)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes));
+        db.TucJobs.Add(NewJob(4242, 77, speed));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        Assert.Equal("9:00 AM – 12:00 PM", slots[0].Label);
+    }
+
+    [Fact]
+    public async Task GetTimeslots_dates_every_window_past_tomorrow_without_a_relative_prefix()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        // One run a day, so eight windows span eight business days and step over
+        // two weekends.
+        db.TucClients.Add(NewClient(77, economyRuns: true, new TimeSpan(9, 0, 0)));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
+        db.TucJobs.Add(NewJob(4242, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        Assert.Equal(
+        [
+            "Today, Wed 10 Jun", "Tomorrow, Thu 11 Jun", "Fri 12 Jun", "Mon 15 Jun",
+            "Tue 16 Jun", "Wed 17 Jun", "Thu 18 Jun", "Fri 19 Jun"
+        ], slots.Select(s => s.DayLabel));
     }
 
     [Fact]
@@ -119,6 +209,7 @@ public class PaxBookingServiceTests
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
         db.TucClients.Add(NewClient(88, economyRuns: true, new TimeSpan(7, 0, 0), new TimeSpan(19, 0, 0)));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         db.TucJobs.Add(NewJob(4242, 77));
         db.TucJobs.Add(NewJob(4243, 88));
         await db.SaveChangesAsync(ct);
@@ -130,10 +221,11 @@ public class PaxBookingServiceTests
         // into this call.
         var second = await svc.GetTimeslotsAsync(4243, new DateTime(2026, 6, 10), ct);
 
-        Assert.Equal(4, first.Count);
-        Assert.Equal(2, second.Count);
-        Assert.Equal("7:00 AM", second[0].Label);
-        Assert.Equal("After 7:00 PM", second[1].Label);
+        Assert.Equal("12:30 PM – 3:30 PM", first[1].Label);
+        Assert.Equal("7:00 AM – 10:00 AM", second[0].Label);
+        Assert.Equal("7:00 PM – 10:00 PM", second[1].Label);
+        // Two runs a day, so the eighth window is four days out.
+        Assert.Equal("Mon 15 Jun", second[7].DayLabel);
     }
 
     [Fact]
@@ -145,6 +237,7 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 1, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         db.TucJobs.Add(NewJob(4242, 77));
         await db.SaveChangesAsync(ct);
 
@@ -152,9 +245,11 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        Assert.Equal(2, slots.Count);
-        Assert.Equal("3:00 PM", slots[0].Label);
-        Assert.Equal("After 5:00 PM", slots[1].Label);
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
+        Assert.Equal("3:00 PM – 6:00 PM", slots[0].Label);
+        Assert.Equal("5:00 PM – 8:00 PM", slots[1].Label);
+        Assert.Equal("Tomorrow, Thu 11 Jun", slots[2].DayLabel);
         Assert.True(slots[0].FirstAvailable);
         Assert.False(slots[1].FirstAvailable);
     }
@@ -168,6 +263,7 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 8, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         db.TucJobs.Add(NewJob(4242, 77));
         await db.SaveChangesAsync(ct);
 
@@ -176,7 +272,8 @@ public class PaxBookingServiceTests
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
         // Thursday the 11th, whole day offered again.
-        Assert.Equal(4, slots.Count);
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("Tomorrow, Thu 11 Jun", slots[0].DayLabel);
         Assert.Equal(new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
         Assert.True(slots[0].FirstAvailable);
     }
@@ -189,6 +286,7 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 12, 12, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         db.TucJobs.Add(NewJob(4242, 77));
         await db.SaveChangesAsync(ct);
 
@@ -198,8 +296,10 @@ public class PaxBookingServiceTests
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 13), ct);
 
         // Monday the 15th, every run available because the roll-forward resets
-        // the time-of-day comparison.
-        Assert.Equal(4, slots.Count);
+        // the time-of-day comparison. Neither today nor tomorrow, so the label is
+        // a bare date even though the anchor was "now".
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("Mon 15 Jun", slots[0].DayLabel);
         Assert.Equal(new DateTime(2026, 6, 14, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
     }
 
@@ -224,11 +324,15 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        // NZ-local 00:00 is before the 14:00 cutoff, so the rebook time stands today.
-        Assert.Single(slots);
-        Assert.Equal("After 10:00 AM", slots[0].Label);
+        // NZ-local 00:00 is before the 14:00 cutoff, so the rebook time stands today,
+        // then repeats on each of the next seven business days.
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
+        Assert.Equal("10:00 AM – 1:00 PM", slots[0].Label);
         Assert.Equal(new DateTime(2026, 6, 9, 22, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
         Assert.True(slots[0].FirstAvailable);
+        Assert.Equal("Tomorrow, Thu 11 Jun", slots[1].DayLabel);
+        Assert.Equal("Fri 19 Jun", slots[7].DayLabel);
     }
 
     [Fact]
@@ -253,7 +357,8 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        Assert.Single(slots);
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("Tomorrow, Thu 11 Jun", slots[0].DayLabel);
         Assert.Equal(new DateTime(2026, 6, 10, 22, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
     }
 
@@ -279,8 +384,8 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        Assert.Single(slots);
-        Assert.Equal("After 10:00 AM", slots[0].Label);
+        Assert.Equal(8, slots.Count);
+        Assert.Equal("10:00 AM – 1:00 PM", slots[0].Label);
     }
 
     [Fact]
@@ -327,7 +432,9 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct);
 
-        Assert.Equal(["9:00 AM", "12:00 PM", "After 3:00 PM"], slots.Select(s => s.Label));
+        Assert.Equal(
+            ["9:00 AM – 12:00 PM", "12:00 PM – 3:00 PM", "3:00 PM – 6:00 PM"],
+            slots.Take(3).Select(s => s.Label));
     }
 
     [Fact]
@@ -522,6 +629,51 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
+    public async Task GetSummary_returns_the_baggage_file_reference_not_the_job_id()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 179252, UcjbNumber = "JOB-179252", UcjbClientRefa = " AKLA2633476 "
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(179252, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal("AKLA2633476", summary.Reference);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetSummary_returns_an_empty_reference_when_the_job_has_no_file_reference(
+        string? refa)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientRefa = refa });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        // The portal hides the reference badge on empty rather than showing a job id
+        // the passenger can't quote to the helpline.
+        Assert.NotNull(summary);
+        Assert.Equal(string.Empty, summary.Reference);
+    }
+
+    [Fact]
     public async Task GetSummary_extracts_airline_code_from_worldtracer_ref()
     {
         await using var db = InMemoryDb.NewContext();
@@ -581,6 +733,73 @@ public class PaxBookingServiceTests
 
         Assert.NotNull(summary);
         Assert.Equal("QF", summary.AirlineCode);
+    }
+
+    [Fact]
+    public async Task GetSummary_offers_the_clients_own_phone_as_the_support_number()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        var client = NewClient(77, economyRuns: false);
+        client.UcclPhone = " 0800 267 5494 ";
+        db.TucClients.Add(client);
+        db.TucJobs.Add(NewJob(7, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts("0800 111 222"), NewCache(), time,
+            NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        // The airline the passenger flew with beats the courier's own line.
+        Assert.NotNull(summary);
+        Assert.Equal("0800 267 5494", summary.SupportPhone);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetSummary_falls_back_to_the_tenant_support_phone(string? clientPhone)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        var client = NewClient(77, economyRuns: false);
+        client.UcclPhone = clientPhone;
+        db.TucClients.Add(client);
+        db.TucJobs.Add(NewJob(7, 77));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts("0800 111 222"), NewCache(), time,
+            NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal("0800 111 222", summary.SupportPhone);
+    }
+
+    [Fact]
+    public async Task GetSummary_returns_an_empty_support_phone_when_neither_is_configured()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        // The portal drops the "Need help?" line rather than printing a dead prompt.
+        Assert.NotNull(summary);
+        Assert.Equal(string.Empty, summary.SupportPhone);
     }
 
     [Fact]

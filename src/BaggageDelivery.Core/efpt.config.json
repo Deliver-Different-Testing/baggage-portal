@@ -39,6 +39,10 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucJobType]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucManualMessage]",
          "ObjectType": 0
       },
