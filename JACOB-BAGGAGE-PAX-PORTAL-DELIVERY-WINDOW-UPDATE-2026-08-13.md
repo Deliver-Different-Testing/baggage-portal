@@ -23,7 +23,7 @@ There are **six asks** here:
 1. Change the header narration from **`Ref`** to **`File Reference`**.
 2. Change the section heading from **`Delivery time`** to **`Delivery window`**.
 3. Stop showing raw eco-run start times as if they are windows; add an explicit **duration field** to eco-run configuration and use that to build customer-facing windows.
-4. Do **not** restrict slots to today — show the **next 6 available delivery windows**, and include the **date** in each option so tomorrow / later is obvious.
+4. Do **not** restrict slots to today — show the **next 8 available delivery windows/runs**, and include the **date** in each option so tomorrow / later is obvious.
 5. Restore the mock's **10-minute booking warning** so a passenger does not confirm against an old run after leaving the page open.
 6. Check Jacob's latest GitLab baggage work to see whether he already added schedule-based delivery-slot logic for jobs not covered by eco runs.
 
@@ -228,11 +228,13 @@ while still excluding slots already expired for the relevant date.
 
 ---
 
-## 4) Return the next 6 available delivery windows, with date in the label and mock-style day context
+## 4) Return the next 8 available delivery windows/runs, with date in the label and mock-style day context
 
 ### Problem
 Restricting slots to just "today" will not work.
-The passenger needs to see the **next 6 available windows**, even if that spans tomorrow or later, and each option must clearly include the **date**.
+The passenger needs to see the **next 8 available windows/runs**, even if that spans tomorrow or later, and each option must clearly include the **date**.
+
+Steve's latest direction is to show **8** so the UI reliably includes at least a tomorrow option rather than stopping too early.
 
 ### Current code position
 `GetTimeslotsAsync(int jobId, DateTime? localDate, ...)` currently anchors to one date only and the current UI call is simply:
@@ -242,7 +244,7 @@ There is no confirmed logic that walks forward across days and composes a rollin
 
 ### Required implementation
 The API / backend should return:
-- the **next 6 available delivery windows** from "now" forward
+- the **next 8 available delivery windows/runs** from "now" forward
 - spanning as many future dates as needed
 - with each label including enough date context that tomorrow / later is obvious
 
@@ -260,15 +262,15 @@ Suggested behaviour:
 1. Start from tenant local "today".
 2. Build windows for that date.
 3. Exclude windows already expired.
-4. If fewer than 6 remain, continue into the next day.
-5. Keep rolling forward until 6 available windows are collected, or until an agreed safety cap is reached.
+4. If fewer than 8 remain, continue into the next day.
+5. Keep rolling forward until 8 available windows are collected, or until an agreed safety cap is reached.
 
 ### Required code shape
-Instead of returning windows for a single anchor date only, `GetTimeslotsAsync(...)` should build a rolling future list.
+Instead of returning windows for a single anchor date only, `GetTimeslotsAsync(...)` should build a rolling future list of 8 options.
 
 That probably means:
 - a helper that builds windows for a supplied local date
-- an outer loop that accumulates future windows across dates until 6 are gathered
+- an outer loop that accumulates future windows across dates until 8 are gathered
 - `FormatSlotLabel(...)` updated so the label includes the date as well as the time window
 
 ### Files to update
@@ -279,7 +281,7 @@ That probably means:
   - `src/BaggageDelivery.PaxPortal/src/pages/PaxMobile.tsx`
 
 ### Acceptance criteria
-- The passenger sees the **next 6 available windows**, not just today's windows.
+- The passenger sees the **next 8 available windows/runs**, not just today's windows.
 - If today's windows are exhausted, tomorrow's windows appear automatically.
 - If the list spans multiple days, the date is shown on each option clearly.
 - The wording is clear enough that the passenger can immediately tell `Today` vs `Tomorrow`.
@@ -360,7 +362,7 @@ Then implement fallback rules for jobs not covered by eco runs.
 3. **Change eco-run slot labels to duration-based windows**
    - preferred: add duration to eco-run config and use that
    - fallback: hardcode `+3 hours` only if schema change is not worth it
-4. **Return the next 6 available windows with date / Today / Tomorrow context**
+4. **Return the next 8 available windows/runs with date / Today / Tomorrow context**
 5. **Restore the 10-minute booking warning from the mock**
 6. **Implement / confirm schedule fallback for non-eco deliveries**
 
@@ -385,7 +387,7 @@ Then implement fallback rules for jobs not covered by eco runs.
 - Passenger header shows **File Reference** and the real baggage reference value.
 - The slot-picker section says **Delivery window**.
 - Eco-run-driven options display real customer-facing duration-based windows.
-- The API / portal returns the **next 6 available windows** from now forward.
+- The API / portal returns the **next 8 available windows/runs** from now forward.
 - Each option clearly shows the **date** and enough context to make `Today` / `Tomorrow` obvious.
 - The 10-minute confirm warning from the mock is restored near the slot list.
 - Jacob has added duration maintenance to the relevant **Admin Manager client-record UI**.
