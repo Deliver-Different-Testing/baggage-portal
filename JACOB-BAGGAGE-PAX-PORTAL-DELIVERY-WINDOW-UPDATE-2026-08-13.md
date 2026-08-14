@@ -22,7 +22,7 @@ There are **six asks** here:
 
 1. Change the header narration from **`Ref`** to **`File Reference`**.
 2. Change the section heading from **`Delivery time`** to **`Delivery window`**.
-3. Stop showing raw eco-run start times as if they are windows; add an explicit **duration field** to eco-run configuration and use that to build customer-facing windows.
+3. Stop showing raw run start times as if they are windows; derive each delivery window from the job's speed via `tucJob.ucjbSpeed` → `tucJobType.minutes`, and format it like the HTML mock with day, date, and time window.
 4. Do **not** restrict slots to today — show the **next 8 available delivery windows/runs**, and include the **date** in each option so tomorrow / later is obvious.
 5. Restore the mock's **10-minute booking warning** so a passenger does not confirm against an old run after leaving the page open.
 6. Check Jacob's latest GitLab baggage work to see whether he already added schedule-based delivery-slot logic for jobs not covered by eco runs.
@@ -30,7 +30,7 @@ There are **six asks** here:
 The current GitLab source shows:
 - **`Delivery window` is already used in at least one place**, but **`Delivery time` still exists in the main edit section**.
 - The portal is still showing **`REF · {summary.jobId}`**, not a file reference field.
-- Jacob's slot-generation work currently builds windows from **`tblEcoSetting.EconomyRun1..5` only**.
+- Jacob's slot-generation work currently builds windows from **`tblEcoSetting.EconomyRun1..5` only** and does not yet use the job speed's duration.
 - The React page has **lost the 10-minute booking warning** that existed in the HTML mock.
 - The React page has also drifted away from the mock's clear **Today / Tomorrow** slot presentation.
 - I do **not** see schedule-based fallback logic in the latest baggage-app code for deliveries not covered by eco runs.
@@ -109,6 +109,14 @@ So even though the DTO has a `reference` field, the app is not currently using a
 1. Update the summary backend to return the **real file reference**.
 2. Update the frontend header to render that returned reference.
 3. Change the narration text from `REF` to `File Reference`.
+4. Keep the rest of the heading / hero section aligned to the HTML mock.
+
+### Heading / hero requirement
+Match the mock's heading treatment, with only this wording change in the badge:
+- change `REF` to `File Reference`
+
+Keep this existing live wording exactly as-is, because Steve is happy with it:
+- `Review your details below and pick a delivery window. We'll text you when our driver is on the way.`
 
 ### Backend source of truth
 Use:
@@ -128,6 +136,8 @@ Do not leave this as `jobId.ToString()` and do not make Jacob guess among multip
 - Header no longer shows `REF · 179252`-style job id text.
 - Header instead shows `File Reference · AKLA2633476` (or the true mapped file reference for that job).
 - The value comes from the real baggage reference field, not `jobId.ToString()`.
+- The hero/header section looks like the HTML mockup, with `File Reference` replacing `Ref`.
+- The explanatory copy remains: `Review your details below and pick a delivery window. We'll text you when our driver is on the way.`
 
 ---
 
@@ -155,7 +165,7 @@ Also review adjacent wording so the terminology is consistent across the page.
 
 ---
 
-## 3) Where there is only an eco-run start, show a 3-hour delivery window
+## 3) Build the delivery window from `tucJob.ucjbSpeed` → `tucJobType.minutes`
 
 ### Problem
 Steve's screenshot suggests the options are being interpreted as run-start times, not true customer-facing delivery windows.
@@ -163,45 +173,36 @@ Steve's screenshot suggests the options are being interpreted as run-start times
 Current Jacob slot logic pairs consecutive `EconomyRun` values.
 That means if the data is effectively just a sequence of run starts, the passenger is seeing the eco-run timetable rather than a real promised window.
 
+We have now confirmed the economy run times are **not** stored in their own table. They are fields on `tucClient`, so adding a duration there would mean changing a critical table and is not the right move for this fix.
+
 Steve's requested behaviour:
 - if the run is `9:00 AM`, show:
   - `9:00 AM - 12:00 PM`
 
 ### Required implementation
-For baggage pax portal delivery options that are currently derived from eco-run starts:
+For baggage pax portal delivery options:
 - treat each available run start as the **start of a customer-facing delivery window**
-- compute the end from a configurable duration rather than assuming the next eco run is the boundary
-- label accordingly
+- derive the duration from the job's speed
+- label the result in the same style as the HTML mockup, with day/date/time-window clarity
 
-This is now an instruction, not an optional idea:
-- Jacob should add a **duration field** to the eco-run configuration and use that to build the passenger-facing delivery window.
+### Duration source of truth
+Use:
+- `tucJob.ucjbSpeed`
 
-Recommended model:
-- keep `EconomyRun1..5` as the run **start times**
-- add a duration field representing the window length for each run
-- baggage portal then shows:
-  - `windowStart = runStart`
-  - `windowEnd = runStart + configuredDuration`
+Then look up the matching job type row in:
+- `tucJobType`
 
-Minimum acceptable first pass:
-- one shared eco-run duration value for the tenant / eco-setting row
-- example: `180` minutes
+And use:
+- the `minutes` field
 
-Better long-term option if operations need different windows per run:
-- per-run duration fields aligned to each `EconomyRunN`
+So the window becomes:
+- `windowStart = runStart`
+- `windowEnd = runStart + tucJobType.minutes`
 
-### Admin Manager requirement
-This config cannot live only in SQL or baggage-app code.
-Jacob also needs to add the duration field to the relevant **client record UI in Admin Manager** so operations can maintain it.
-
-Steve's attached screenshot is the reference prompt for where this needs surfacing in the client configuration UX.
+This replaces the earlier idea of adding a duration to the economy-run/client configuration.
 
 ### Important decision
-Jacob needs to confirm whether the current `EconomyRun1..5` values are:
-1. actual consecutive window boundaries, or
-2. just run start times
-
-For this baggage flow, Steve's direction is that these should behave as customer-facing windows, and if easier than coding `+3 hours` on the fly, the configuration should explicitly carry a duration.
+Jacob should treat the current `EconomyRun1..5` values as the candidate **run start times** for passenger options, not as trustworthy end boundaries.
 
 ### Required code change
 Current code:
@@ -209,10 +210,10 @@ Current code:
 
 Required code for this flow:
 - stop assuming the next run start is the passenger window end
-- derive end from duration
+- derive end from `tucJob.ucjbSpeed` → `tucJobType.minutes`
 - first acceptable implementation:
-  - `Run1 -> Run1 + duration`
-  - `Run2 -> Run2 + duration`
+  - `Run1 -> Run1 + jobType.minutes`
+  - `Run2 -> Run2 + jobType.minutes`
   - etc
 
 while still excluding slots already expired for the relevant date.
@@ -224,6 +225,7 @@ while still excluding slots already expired for the relevant date.
 ### Acceptance criteria
 - If an eco run starts at `9:00 AM`, the passenger sees `9:00 AM - 12:00 PM`.
 - The page is no longer just echoing raw run-start behaviour as a pseudo-window.
+- The duration comes from `tucJob.ucjbSpeed` → `tucJobType.minutes`, not from a newly-added eco-run/client duration field.
 - `FirstAvailable` still correctly identifies the next valid slot.
 
 ---
@@ -359,9 +361,9 @@ Then implement fallback rules for jobs not covered by eco runs.
 
 1. **Fix file reference mapping + narration**
 2. **Rename `Delivery time` to `Delivery window` everywhere**
-3. **Change eco-run slot labels to duration-based windows**
-   - preferred: add duration to eco-run config and use that
-   - fallback: hardcode `+3 hours` only if schema change is not worth it
+3. **Change eco-run slot labels to speed-duration-based windows**
+   - use `tucJob.ucjbSpeed` → `tucJobType.minutes`
+   - do not add a new duration field to the client/economy-run config for this fix
 4. **Return the next 8 available windows/runs with date / Today / Tomorrow context**
 5. **Restore the 10-minute booking warning from the mock**
 6. **Implement / confirm schedule fallback for non-eco deliveries**
@@ -390,7 +392,6 @@ Then implement fallback rules for jobs not covered by eco runs.
 - The API / portal returns the **next 8 available windows/runs** from now forward.
 - Each option clearly shows the **date** and enough context to make `Today` / `Tomorrow` obvious.
 - The 10-minute confirm warning from the mock is restored near the slot list.
-- Jacob has added duration maintenance to the relevant **Admin Manager client-record UI**.
 - Jacob has either implemented non-eco schedule fallback or explicitly documented that it is still outstanding.
 
 ---
