@@ -30,6 +30,40 @@ textarea.mantine-Input-input[data-disabled] {
   scrollbar-color: var(--mantine-color-dimmed) transparent;
 }
 
+/* The fixed confirm bar (PaxMobile). Full-bleed on a phone, where it genuinely is
+   the bottom of the screen. From sm up the page is a 520px column in a wide field,
+   so the chrome shrinks to the column instead of drawing a band across an otherwise
+   empty desktop. Positioning and safe-area padding stay on the outer element either
+   way, so the bar never sits under the home indicator. */
+.pax-action-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  padding-top: 14px;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  background-color: var(--dd-surface-container);
+  border-top: 1px solid var(--mantine-color-default-border);
+  box-shadow: 0 -4px 16px -4px rgba(0, 0, 0, 0.06);
+}
+
+@media (min-width: 48em) {
+  .pax-action-bar {
+    background-color: transparent;
+    border-top: none;
+    box-shadow: none;
+  }
+
+  .pax-action-bar > * {
+    background-color: var(--dd-surface-container);
+    border: 1px solid var(--mantine-color-default-border);
+    border-radius: var(--mantine-radius-lg);
+    padding: 10px;
+    box-shadow: var(--mantine-shadow-md);
+  }
+}
+
 /* Live/current-step pulse ring (Tracking header dot + current timeline bullet). */
 @keyframes pax-pulse {
   0% {
@@ -47,4 +81,46 @@ textarea.mantine-Input-input[data-disabled] {
 }
 .pax-pulse {
   animation: pax-pulse 2s ease-out infinite;
+}
+
+/* Hero Stepper (PaxMobile confirm screen). Mantine's own Stepper structure does the
+   work — a soft filled circle, a brand ring on the step in progress, a brand fill
+   once complete. The only thing the theme can't supply is the palette: this sits on
+   the fixed Ink Blue hero and has to read white-on-ink in both colour schemes.
+
+   The icon FILL has to be restated, not just the icon text. Mantine paints an
+   upcoming step's circle from the scheme's own surface — near-white in light mode —
+   so forcing the numeral white left steps 2 and 3 as white-on-white. Give upcoming
+   steps a white-alpha fill of their own and the numerals read in both schemes. */
+.pax-hero-stepper {
+  --stepper-outline-color: rgba(255, 255, 255, 0.18);
+}
+
+.pax-hero-stepper .mantine-Stepper-stepIcon,
+.pax-hero-stepper .mantine-Stepper-stepLabel {
+  color: var(--mantine-color-white);
+}
+
+.pax-hero-stepper .mantine-Stepper-stepIcon {
+  background-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* The step in progress keeps its brand ring; the completed state keeps the brand
+   fill Mantine gives it. Both already carry their own contrast on the Ink hero. */
+.pax-hero-stepper .mantine-Stepper-stepIcon[data-progress],
+.pax-hero-stepper .mantine-Stepper-stepIcon[data-completed] {
+  background-color: var(--mantine-color-brand-filled);
+  border-color: var(--mantine-color-brand-filled);
+  color: var(--mantine-color-brand-contrast);
+}
+
+/* Default separator margin is spacing-md a side, which pushes three steps past the
+   edge of a 360px phone. */
+.pax-hero-stepper .mantine-Stepper-separator {
+  margin-inline: var(--mantine-spacing-xs);
+}
+
+.pax-hero-stepper .mantine-Stepper-stepLabel {
+  white-space: nowrap;
 }

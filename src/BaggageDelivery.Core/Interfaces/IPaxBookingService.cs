@@ -8,10 +8,13 @@ public interface IPaxBookingService
     // job isn't found (stale link).
     Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct);
 
-    // Builds the delivery time windows from the first tblEcoSetting row:
-    // EconomyRun1→EconomyRun2, EconomyRun2→EconomyRun3, etc. The run
-    // columns store time-of-day in tenant local time; we anchor to today
-    // (or `localDate` if supplied) in the tenant timezone and emit UTC.
+    // Builds the next eight delivery windows from the client's economy runs
+    // (tucClient.EconomyRun1..8), rolling forward across business days until
+    // there are eight. The run columns store time-of-day in tenant local time;
+    // each window ends at the run plus the duration of the job's speed
+    // (tucJobType.Minutes). Anchored on tenant-local today, or `localDate` if
+    // supplied and still in the future. Clients not on run-based delivery fall
+    // back to the global tblEcoSetting BaggageCutOff/BaggageRebook pair.
     Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId, DateTime? localDate, CancellationToken ct);
 
     // Forwards the passenger's submitted delivery details to the api repo:

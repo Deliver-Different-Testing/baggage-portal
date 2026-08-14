@@ -9,6 +9,10 @@ interface UseAddressSearchOptions {
   debounceMs?: number
 }
 
+// Hoisted: `data: suggestions = []` would otherwise hand out a fresh array on every
+// render until the first response lands, defeating any memo keyed on it downstream.
+const NO_SUGGESTIONS: AddressSearchResult[] = []
+
 export function useAddressSearch(options: UseAddressSearchOptions) {
   const { bookingId, minChars = 3, debounceMs = 300 } = options
   const [inputValue, setInputValue] = useState('')
@@ -24,7 +28,7 @@ export function useAddressSearch(options: UseAddressSearchOptions) {
 
   const query = isLongEnough ? debouncedValue : ''
 
-  const { data: suggestions = [], isLoading } = useQuery({
+  const { data: suggestions = NO_SUGGESTIONS, isLoading } = useQuery({
     queryKey: ['pax', 'addressAutocomplete', bookingId, query],
     queryFn: () => addressAutocompleteApi.autocomplete(bookingId, query),
     enabled: !!bookingId && query.length >= minChars,

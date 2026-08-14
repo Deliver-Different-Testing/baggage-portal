@@ -30,7 +30,11 @@ export default defineConfig({
         runtimeCaching: [
           {
             // /api/v1/pax/{id}/booking — the {id} segment precedes "booking".
-            urlPattern: /\/api\/v1\/pax\/[^/]+\/booking/,
+            // Anchored so it does not also swallow /booking/timeslots: a run time
+            // is "the next available departure", so a cached one can name a slot
+            // that has already gone, and a cached slot outlives any change to the
+            // slot shape the app is deployed with.
+            urlPattern: /\/api\/v1\/pax\/[^/]+\/booking$/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'pax-booking',

@@ -39,7 +39,7 @@ public sealed class PaxBookingController(
 
         var slots = await paxBooking.GetTimeslotsAsync(jobId.Value, date, ct);
         return Ok(slots
-            .Select(s => new TimeSlotDto(s.Id, s.RunUtc, s.Label, s.FirstAvailable))
+            .Select(s => new TimeSlotDto(s.Id, s.RunUtc, s.DayLabel, s.Label, s.FirstAvailable))
             .ToArray());
     }
 
@@ -71,7 +71,8 @@ public sealed class PaxBookingController(
                     Latitude = body.Address.Latitude,
                     Longitude = body.Address.Longitude
                 },
-                DeliveryTimeUtc: body.DeliveryTimeUtc,
+                // Non-null by [Required] + [ApiController]'s automatic 400.
+                DeliveryTimeUtc: body.DeliveryTimeUtc!.Value,
                 AtlOptionId: body.AtlOptionId,
                 AccessNotes: body.AccessNotes,
                 PassengerName: body.PassengerName,
@@ -95,6 +96,7 @@ public sealed class PaxBookingController(
         Reference: s.Reference,
         AirlineLabel: s.AirlineLabel,
         AirlineCode: s.AirlineCode,
+        SupportPhone: s.SupportPhone,
         PassengerName: s.PassengerName,
         PassengerPhone: s.PassengerPhone,
         PassengerEmail: s.PassengerEmail,

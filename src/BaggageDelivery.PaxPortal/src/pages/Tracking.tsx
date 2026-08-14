@@ -50,6 +50,45 @@ const STATUS_INFO = {
   },
 } as const
 
+// Constructing an Intl.DateTimeFormat is the expensive half of the formatting, and
+// toLocale*String builds a fresh one per call — this page re-renders every 30s and
+// formats once per timeline event. Same for the status regexes, which sit in a map.
+const DAY_MONTH = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+const TIME_OF_DAY = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+const LONG_DATE = new Intl.DateTimeFormat(undefined, {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+})
+const DAY_AND_TIME = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+const CAPITALS = /([A-Z])/g
+const FIRST_CHAR = /^./
+
+// Splitting the PascalCase status is a decent fallback but a poor label: it title-
+// cases every word, so the passenger read "Out For Delivery" and "Collected From
+// Airport". Statuses we know about get written English; anything new still falls
+// back to the split rather than showing a raw enum name.
+const STATUS_LABELS: Record<string, string> = {
+  BookingConfirmed: 'Booking confirmed',
+  CollectedFromAirport: 'Collected from the airport',
+  AtDepot: 'At our depot',
+  OutForDelivery: 'Out for delivery',
+  Delivered: 'Delivered',
+  Pending: 'Pending',
+  Cancelled: 'Cancelled',
+}
+
 const PENDING_STATUS = {
   icon: <HourglassIcon size={16} color="#fff" />,
   headline: 'Preparing your delivery',
@@ -89,7 +128,10 @@ export function Tracking() {
   const statusInfo = getStatusInfo(status)
 
   return (
-    <Box mih="100vh">
+    // Flex column so the footer sits on the bottom edge. A short timeline used to
+    // leave the sign-off floating mid-page with a few hundred pixels of blank
+    // surface under it, which reads as a page that failed to finish loading.
+    <Box mih="100vh" style={{ display: 'flex', flexDirection: 'column' }}>
       <Box
         px={{ base: 20, sm: 32 }}
         pt={{ base: 32, sm: 40 }}
@@ -167,7 +209,16 @@ export function Tracking() {
         </Container>
       </Box>
 
-      <Container size="lg" px={{ base: 12, sm: 16 }} mt={{ base: -28, sm: -32 }} pb={48} style={{ position: 'relative' }}>
+      <Container
+        size="lg"
+        px={{ base: 12, sm: 16 }}
+        mt={{ base: -28, sm: -32 }}
+        pb={48}
+        // width:100% because Container centres itself with auto inline margins,
+        // and an auto cross-axis margin opts a flex item out of stretching — it
+        // would otherwise shrink to its content width inside the column above.
+        style={{ position: 'relative', flex: 1, width: '100%' }}
+      >
         <Grid gap={{ base: 'md', md: 'lg' }}>
           <Grid.Col span={{ base: 12, md: 4 }}>
             <Stack gap="lg">
@@ -215,7 +266,7 @@ function getStatusInfo(status: string): {
   if (status in STATUS_INFO) {
     return STATUS_INFO[status as keyof typeof STATUS_INFO]
   }
-  return { ...PENDING_STATUS, label: status }
+  return { ...PENDING_STATUS, label: formatStatus(status) }
 }
 
 function EtaCard({
@@ -317,9 +368,17 @@ function TimelineList({ data, nowMs }: { data: TrackingTimeline; nowMs: number }
               </Text>
             }
           >
-            <Text size="xs" c="dimmed">
-              {formatRelativeTime(event.atUtc, nowMs)}
-            </Text>
+            {/* When it happened is the fact; how long ago is the gloss. The
+                relative time led here, which reads fine at "27m ago" and badly
+                at "3h ago" when the passenger wants to know the actual hour. */}
+            <Group gap={6} align="baseline" wrap="nowrap">
+              <Text size="sm" fw={500} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {formatEventTime(event.atUtc, nowMs)}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {formatRelativeTime(event.atUtc, nowMs)}
+              </Text>
+            </Group>
             {event.description && (
               <Text size="sm" c="dimmed" mt={2}>
                 {event.description}
@@ -338,7 +397,17 @@ function TimelineList({ data, nowMs }: { data: TrackingTimeline; nowMs: number }
 }
 
 function formatStatus(status: string): string {
-  return status.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim()
+  return (
+    STATUS_LABELS[status] ??
+    status.replace(CAPITALS, ' $1').replace(FIRST_CHAR, (c) => c.toUpperCase()).trim()
+  )
+}
+
+/** Clock time for today's events; day and clock time once "3:58 PM" is ambiguous. */
+function formatEventTime(utc: string, nowMs: number): string {
+  const date = new Date(utc)
+  const sameDay = date.toDateString() === new Date(nowMs).toDateString()
+  return sameDay ? TIME_OF_DAY.format(date) : DAY_AND_TIME.format(date)
 }
 
 function formatRelativeTime(utc: string, nowMs: number): string {
@@ -349,24 +418,13 @@ function formatRelativeTime(utc: string, nowMs: number): string {
   const diffHr = Math.floor(diffMin / 60)
   if (diffHr < 24) return `${diffHr}h ago`
   const sameYear = date.getFullYear() === new Date(nowMs).getFullYear()
-  return date.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    ...(sameYear ? {} : { year: 'numeric' }),
-  })
+  return (sameYear ? DAY_MONTH : DAY_MONTH_YEAR).format(date)
 }
 
 function formatTimeRange(startUtc: string, endUtc: string): string {
-  const start = new Date(startUtc)
-  const end = new Date(endUtc)
-  const timeFmt: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' }
-  return `${start.toLocaleTimeString(undefined, timeFmt)} – ${end.toLocaleTimeString(undefined, timeFmt)}`
+  return `${TIME_OF_DAY.format(new Date(startUtc))} – ${TIME_OF_DAY.format(new Date(endUtc))}`
 }
 
 function formatDateOnly(utc: string): string {
-  return new Date(utc).toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  return LONG_DATE.format(new Date(utc))
 }

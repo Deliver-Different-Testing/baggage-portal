@@ -152,6 +152,42 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         Assert.Contains("search", body, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Confirm_without_a_delivery_time_is_rejected_not_a_server_error()
+    {
+        const int jobId = 4248;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        var tokenResponse = await client.GetAsync("/api/v1/antiforgery/token",
+            TestContext.Current.CancellationToken);
+        tokenResponse.EnsureSuccessStatusCode();
+
+        var requestToken = CookieValue(tokenResponse.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith($"{RequestTokenCookie}=", StringComparison.Ordinal)));
+
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking/confirm")
+        {
+            Content = JsonContent.Create(ConfirmBodyWithoutDeliveryTime())
+        };
+        request.Headers.Add("X-XSRF-TOKEN", requestToken);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        // The SPA drops the key entirely when a stale-shaped cached timeslot has no
+        // runUtc. DeliveryTimeUtc used to be a non-nullable DateTime, so [Required]
+        // passed on the missing value, default(DateTime) reached the tucJob UPDATE,
+        // and SQL Server rejected 0001-01-01 for a `datetime` column — a 500 with an
+        // empty body, which the passenger saw as a blank response.
+        Assert.NotEqual(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("DeliveryTimeUtc", body, StringComparison.Ordinal);
+    }
+
     private string EncryptedId(int jobId)
     {
         using var scope = factory.Services.CreateScope();
@@ -180,12 +216,30 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
             postCode = "1011",
             country
         },
-        timeSlotStartUtc = new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
-        timeSlotEndUtc = new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+        deliveryTimeUtc = new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
         atlOptionId = (int?)null,
         accessNotes = "Leave at the door",
         passengerName = "Jane Pax",
         passengerPhone = "+64211234567",
+        passengerEmail = "jane@example.com"
+    };
+
+    // Mirrors what the SPA actually posts when selectedSlot.runUtc is undefined:
+    // JSON.stringify omits the key rather than sending null.
+    private static object ConfirmBodyWithoutDeliveryTime() => new
+    {
+        address = new
+        {
+            line1 = "17 Saleyards Road",
+            suburb = "Otahuhu",
+            city = "Auckland",
+            postCode = "1062",
+            country = "NZ"
+        },
+        atlOptionId = (int?)null,
+        accessNotes = (string?)null,
+        passengerName = "Jane Pax",
+        passengerPhone = "021759012",
         passengerEmail = "jane@example.com"
     };
 

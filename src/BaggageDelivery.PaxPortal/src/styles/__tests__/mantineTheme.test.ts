@@ -53,6 +53,35 @@ describe('dfrntCssVariablesResolver', () => {
   })
 })
 
+// Every code in airlineBranding.ts — the palette rules below must hold for all of them.
+const AIRLINE_CODES = [
+  'NZ', 'QF', 'VA', 'JQ', 'ZL', 'AA', 'DL', 'UA', 'WN', 'B6', 'AS', 'F9', 'G4', 'NK', 'SQ',
+  'NH', 'JL', 'KE', 'CI', 'BR', 'TG', 'MH', 'PR', 'VN', 'GA', 'CX', 'EK', 'QR', 'EY', 'FJ',
+  'LA', 'AC', 'HA', 'BA', 'LH',
+]
+
+const DARK_SURFACE = '#2c2a30'
+
+function relativeLuminance(hex: string): number {
+  const v = hex.replace('#', '')
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(v.slice(i, i + 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function contrastRatio(a: string, b: string): number {
+  const [la, lb] = [relativeLuminance(a), relativeLuminance(b)]
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+function shadeOf(code: string, scheme: 'light' | 'dark'): string {
+  const override = airlineThemeOverride(getAirlineBrand(code))
+  const shade = override.primaryShade as { light: number; dark: number }
+  return override.colors!.brand![shade[scheme]]
+}
+
 describe('airlineThemeOverride', () => {
   it('regenerates the brand tuple from the airline primary hex', () => {
     const override = airlineThemeOverride(getAirlineBrand('QF')) // Qantas red
@@ -60,6 +89,22 @@ describe('airlineThemeOverride', () => {
     expect(brand).toHaveLength(10)
     // Different from the house cyan tuple.
     expect(brand?.[5]).not.toBe(dfrntTheme.colors?.brand?.[5])
+  })
+
+  it('paints light mode in the airline own hex, not a generated stand-in', () => {
+    // generateColors places the seed by luminance, so a fixed primaryShade shipped
+    // Air NZ's Pacific teal as neon aqua (#56effa) and Qantas red as #fd1e35.
+    for (const code of AIRLINE_CODES) {
+      expect(shadeOf(code, 'light')).toBe(getAirlineBrand(code).primary.toLowerCase())
+    }
+  })
+
+  it('keeps the dark-mode fill readable on the charcoal page surface', () => {
+    // Near-black brands (Lufthansa #05164d) step up the ramp until they clear the
+    // WCAG non-text minimum against --dd-surface.
+    for (const code of AIRLINE_CODES) {
+      expect(contrastRatio(shadeOf(code, 'dark'), DARK_SURFACE)).toBeGreaterThanOrEqual(3)
+    }
   })
 
   it('keeps the DFRNT fonts and pill buttons when recoloured', () => {

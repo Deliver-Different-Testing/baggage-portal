@@ -23,6 +23,8 @@ public partial class BaggageDeliveryContext : DbContext
 
     public virtual DbSet<TucJob> TucJobs { get; set; }
 
+    public virtual DbSet<TucJobType> TucJobTypes { get; set; }
+
     public virtual DbSet<TucManualMessage> TucManualMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1005,6 +1007,63 @@ public partial class BaggageDeliveryContext : DbContext
             entity.HasOne(d => d.UcjbClient).WithMany(p => p.TucJobs)
                 .HasForeignKey(d => d.UcjbClientId)
                 .HasConstraintName("FK_tucJob_Client");
+        });
+
+        modelBuilder.Entity<TucJobType>(entity =>
+        {
+            entity.HasKey(e => e.UcjtId)
+                .IsClustered(false)
+                .HasFillFactor(80);
+
+            entity.ToTable("tucJobType");
+
+            entity.HasIndex(e => e.DeliveryTime, "DeliveryTime");
+
+            entity.HasIndex(e => e.ServiceTrackingId, "FK_ServiceTrackingId");
+
+            entity.HasIndex(e => e.Minutes, "Minuties");
+
+            entity.HasIndex(e => e.PickupTime, "PickUpTime");
+
+            entity.Property(e => e.UcjtId).HasColumnName("ucjtID");
+            entity.Property(e => e.AddonPercentage).HasColumnType("decimal(5, 4)");
+            entity.Property(e => e.Alias).HasMaxLength(500);
+            entity.Property(e => e.CourierPercentage).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.Created).HasColumnType("datetime");
+            entity.Property(e => e.CreatedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.ExtraName).HasMaxLength(50);
+            entity.Property(e => e.Faf).HasColumnName("FAF");
+            entity.Property(e => e.JobLetter).HasMaxLength(5);
+            entity.Property(e => e.LastModified).HasColumnType("datetime");
+            entity.Property(e => e.LastModifiedBy)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.Property(e => e.Mfv).HasColumnName("MFV");
+            entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.ShortName).HasMaxLength(50);
+            entity.Property(e => e.ShowPhotosWhenChild).HasDefaultValue(true);
+            entity.Property(e => e.SuccessRate).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.SystemName).HasMaxLength(50);
+            entity.Property(e => e.UcjtBaseRate)
+                .HasColumnType("money")
+                .HasColumnName("ucjtBaseRate");
+            entity.Property(e => e.UcjtClientId).HasColumnName("ucjtClientID");
+            entity.Property(e => e.UcjtCode)
+                .HasMaxLength(10)
+                .IsFixedLength()
+                .HasColumnName("ucjtCode");
+            entity.Property(e => e.UcjtDescription)
+                .HasMaxLength(500)
+                .HasColumnName("ucjtDescription");
+            entity.Property(e => e.UcjtName)
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnName("ucjtName");
+            entity.Property(e => e.UcjtUnitRate)
+                .HasColumnType("money")
+                .HasColumnName("ucjtUnitRate");
         });
 
         modelBuilder.Entity<TucManualMessage>(entity =>

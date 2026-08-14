@@ -93,6 +93,13 @@ public static class DependencyInjection
                 {
                     opts.TimeZone = timeZone;
                 }
+
+                var supportPhone = Environment.GetEnvironmentVariable("SupportPhone")
+                                   ?? configuration["SupportPhone"];
+                if (!string.IsNullOrEmpty(supportPhone))
+                {
+                    opts.SupportPhone = supportPhone;
+                }
             });
         }
 

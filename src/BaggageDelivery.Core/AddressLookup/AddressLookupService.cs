@@ -44,6 +44,7 @@ public sealed class AddressLookupService(
         // `at` is a single bias point — anchor on the first configured country.
         var primary = effectiveCountries[0];
         var at = CountryCoordinates.GetValueOrDefault(primary, DefaultCoordinates);
+     
         // Drop entries that don't resolve rather than passing them through —
         // HereMaps rejects a malformed `in` filter outright, which would turn a
         // config typo into a silently empty autocomplete.

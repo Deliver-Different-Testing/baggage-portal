@@ -64,7 +64,7 @@ const LANES: Array<{
     nodes: [
       { title: 'Open link', subtitle: 'Magic-link session', kind: 'action' },
       { title: 'Address OK?', subtitle: 'Update if needed', kind: 'decision' },
-      { title: 'Pick time slot', subtitle: 'Next 3-6 delivery slots', kind: 'action' },
+      { title: 'Pick window', subtitle: 'Next 8 delivery windows', kind: 'action' },
       { title: 'ATL options', subtitle: 'Authority to leave', kind: 'action' },
       { title: 'Confirm', subtitle: 'Submit booking', kind: 'action' },
     ],

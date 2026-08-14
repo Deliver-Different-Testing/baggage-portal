@@ -10,7 +10,12 @@ public sealed class DespatchOptions
 {
     public const string SectionName = "Despatch";
 
-    public string TimeZone { get; set; } = "";
+    public string TimeZone { get; set; } = string.Empty;
 
     public string[] Countries { get; set; } = ["NZ"];
+
+    // Shown to the passenger as "Need help? Call …" when the job's client has no
+    // phone of its own on tucClient. Optional — the portal hides the line rather
+    // than printing a dead "Need help?".
+    public string SupportPhone { get; set; } = string.Empty;
 }
