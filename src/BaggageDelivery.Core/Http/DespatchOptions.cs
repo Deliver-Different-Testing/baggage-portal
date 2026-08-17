@@ -24,8 +24,8 @@ public sealed class DespatchOptions
         LeaveNotHomeOption.Other
     ];
 
-    // Preselected on the confirm page, which arrives with Authority to Leave on.
-    // Deployments whose tblJobLeaveNotHome carries no such row fall back to the
-    // first surviving option.
+    // Selected when the passenger switches Authority to Leave on — the confirm
+    // page arrives with it off. Deployments whose tblJobLeaveNotHome carries no
+    // such row fall back to the first surviving option.
     public LeaveNotHomeOption DefaultAtlOption { get; set; } = LeaveNotHomeOption.FrontDoor;
 }

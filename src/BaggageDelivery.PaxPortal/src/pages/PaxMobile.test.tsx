@@ -395,6 +395,13 @@ describe('PaxMobile — Authority to Leave submit', () => {
     return screen.queryByRole('dialog', { name: /check your delivery details/i })
   }
 
+  // Authority to leave arrives off and its option list is collapsed, which puts the
+  // radios out of the accessibility tree — switch it on before reaching for them.
+  async function enableAtl(user: ReturnType<typeof userEvent.setup>) {
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    await user.click(screen.getByRole('switch'))
+  }
+
   it('opens on the saved address to confirm, not on a form to fill in', async () => {
     renderForm()
 
@@ -513,14 +520,27 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(lastConfirmBody).toBeNull()
   })
 
-  it('arrives with Authority to Leave on and the default option selected', async () => {
+  it('arrives with Authority to Leave off', async () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
 
-    // Front door is the normal handoff point for a suitcase; making the passenger
-    // opt into it costs two taps on the path almost everyone takes.
-    await waitFor(() => expect(screen.getByRole('switch')).toBeChecked())
+    // Leaving a suitcase unattended is the passenger's call to make, not a default
+    // they have to notice and undo.
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    expect(screen.getByRole('switch')).not.toBeChecked()
+    expect(screen.queryByRole('radio', { name: 'Front door' })).not.toBeInTheDocument()
+  })
+
+  it('selects the front door once the passenger switches Authority to Leave on', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await enableAtl(user)
+
+    // Front door is the normal handoff point for a suitcase, so opting in is one
+    // tap rather than one tap and a choice.
     expect(await screen.findByRole('radio', { name: 'Front door' })).toBeChecked()
   })
 
@@ -533,9 +553,11 @@ describe('PaxMobile — Authority to Leave submit', () => {
       ),
     )
 
+    const user = userEvent.setup()
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
+    await enableAtl(user)
 
     expect(await screen.findByRole('radio', { name: 'Front door' })).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /letter box/i })).not.toBeInTheDocument()
@@ -546,7 +568,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    await enableAtl(user)
 
     await user.click(await screen.findByRole('radio', { name: 'Back door' }))
 
@@ -563,7 +585,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    await enableAtl(user)
 
     await user.click(await screen.findByRole('radio', { name: 'Safe Place' }))
 
@@ -582,7 +604,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    await enableAtl(user)
 
     await user.click(await screen.findByRole('radio', { name: 'Safe Place' }))
     await user.type(
@@ -653,14 +675,13 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(screen.queryByText(/could not submit your confirmation/i)).not.toBeInTheDocument()
   })
 
-  it('posts null when the passenger switches Authority to Leave off', async () => {
+  it('posts null when the passenger leaves Authority to Leave off', async () => {
     const user = userEvent.setup()
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    await waitFor(() => expect(screen.getByRole('switch')).toBeChecked())
-
-    await user.click(screen.getByRole('switch'))
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    expect(screen.getByRole('switch')).not.toBeChecked()
 
     await confirmAddress(user)
     await reviewAndConfirm(user)
@@ -769,6 +790,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /review delivery/i })).toBeEnabled(),
     )
+    await enableAtl(user)
     await user.click(await screen.findByRole('radio', { name: 'Safe Place' }))
     await user.type(
       screen.getByRole('textbox', { name: /additional details/i }),
@@ -801,8 +823,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    await waitFor(() => expect(screen.getByRole('switch')).toBeChecked())
-    await user.click(screen.getByRole('switch'))
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
     await confirmAddress(user)
     await openReview(user)
 
