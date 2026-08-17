@@ -1,11 +1,7 @@
+using BaggageDelivery.Core.Enums;
+
 namespace BaggageDelivery.Core.Http;
 
-// Tenant identity for this deployment — one BaggageDelivery deployment
-// per Despatch tenant (matches inboundagent + trackingpage). TimeZone is
-// the tenant's IANA zone (e.g. "Pacific/Auckland"), used for UTC↔local
-// conversions on inbound pax submissions and timeslot generation.
-// Countries seeds HereMaps address autocomplete and supplies the default
-// country on the pax delivery address (first entry wins).
 public sealed class DespatchOptions
 {
     public const string SectionName = "Despatch";
@@ -18,4 +14,18 @@ public sealed class DespatchOptions
     // phone of its own on tucClient. Optional — the portal hides the line rather
     // than printing a dead "Need help?".
     public string SupportPhone { get; set; } = string.Empty;
+
+    // Authority-to-Leave handoff points the passenger flow must never offer.
+    // Matched on tblJobLeaveNotHome.LeaveNotHomeId, so a tenant rewording the row
+    // can't reintroduce it. A suitcase does not fit in a letter box.
+    public LeaveNotHomeOption[] ExcludedAtlOptions { get; set; } =
+    [
+        LeaveNotHomeOption.LetterBox,
+        LeaveNotHomeOption.Other
+    ];
+
+    // Preselected on the confirm page, which arrives with Authority to Leave on.
+    // Deployments whose tblJobLeaveNotHome carries no such row fall back to the
+    // first surviving option.
+    public LeaveNotHomeOption DefaultAtlOption { get; set; } = LeaveNotHomeOption.FrontDoor;
 }

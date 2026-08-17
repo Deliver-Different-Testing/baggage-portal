@@ -1000,13 +1000,23 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasColumnName("WhenPODNotificationSent");
             entity.Property(e => e.WhenSpeedChangeNotificationSent).HasColumnType("datetime");
 
+            entity.HasOne(d => d.AcceptedJobType).WithMany(p => p.TucJobAcceptedJobTypes).HasForeignKey(d => d.AcceptedJobTypeId);
+
             entity.HasOne(d => d.DeliverToLeave).WithMany(p => p.TucJobs)
                 .HasForeignKey(d => d.DeliverToLeaveId)
                 .HasConstraintName("FK_tucJob_LeaveNotHome");
 
+            entity.HasOne(d => d.DesiredJobType).WithMany(p => p.TucJobDesiredJobTypes).HasForeignKey(d => d.DesiredJobTypeId);
+
+            entity.HasOne(d => d.NotifiedJobType).WithMany(p => p.TucJobNotifiedJobTypes).HasForeignKey(d => d.NotifiedJobTypeId);
+
             entity.HasOne(d => d.UcjbClient).WithMany(p => p.TucJobs)
                 .HasForeignKey(d => d.UcjbClientId)
                 .HasConstraintName("FK_tucJob_Client");
+
+            entity.HasOne(d => d.UcjbSpeedNavigation).WithMany(p => p.TucJobUcjbSpeedNavigations)
+                .HasForeignKey(d => d.UcjbSpeed)
+                .HasConstraintName("FK_tucJob_tucJobType");
         });
 
         modelBuilder.Entity<TucJobType>(entity =>
@@ -1042,6 +1052,8 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasMaxLength(50);
             entity.Property(e => e.Mfv).HasColumnName("MFV");
             entity.Property(e => e.Notes).HasColumnType("ntext");
+            entity.Property(e => e.ServiceDescription).HasMaxLength(500);
+            entity.Property(e => e.ServiceType).HasMaxLength(100);
             entity.Property(e => e.ShortName).HasMaxLength(50);
             entity.Property(e => e.ShowPhotosWhenChild).HasDefaultValue(true);
             entity.Property(e => e.SuccessRate).HasColumnType("decimal(18, 4)");

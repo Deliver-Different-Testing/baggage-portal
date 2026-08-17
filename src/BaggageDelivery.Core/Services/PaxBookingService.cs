@@ -52,6 +52,7 @@ internal sealed class PaxBookingService(
                 j.DeliverToContact,
                 j.DeliverToPhone,
                 j.ProofOfDeliveryEmail,
+                j.DeliveryAddressLine2,
                 j.DeliveryAddressLine3,
                 j.DeliveryAddressLine4,
                 j.DeliveryAddressLine5,
@@ -77,16 +78,28 @@ internal sealed class PaxBookingService(
         var airlineCode = ExtractAirlineFromWorldTracerRef(job.ClientRefa)
             ?? (string.IsNullOrWhiteSpace(job.JobClientCode) ? job.ClientCode : job.JobClientCode);
         
+        // Excluded by LeaveNotHomeId, not by name: the rows are shared with
+        // despatchweb and a tenant rewording one must not be able to put it back
+        // in front of a passenger.
+        var excludedAtlIds = despatchOptions.Value.ExcludedAtlOptions
+            .Select(o => (int)o)
+            .ToArray();
+
         var atlOptions = await cache.GetOrCreateAsync(AtlOptionsCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = ReferenceDataTtl;
             return (IReadOnlyList<AtlOptionDto>)await db.TblJobLeaveNotHomes
                 .AsNoTracking()
-                .Where(l => l.Category == "All," && l.AllowLeave)
+                .Where(l => l.Category == "All," && l.AllowLeave
+                    && !((IEnumerable<int>)excludedAtlIds).Contains(l.LeaveNotHomeId))
                 .OrderByDescending(l => l.Sequence).ThenBy(l => l.Name)
                 .Select(l => new AtlOptionDto(l.LeaveNotHomeId, l.Name))
                 .ToListAsync(ct);
         }) ?? [];
+
+        var defaultAtlOptionId = atlOptions
+            .FirstOrDefault(o => o.Id == (int)despatchOptions.Value.DefaultAtlOption)?.Id
+            ?? atlOptions.FirstOrDefault()?.Id;
 
         var now = time.GetUtcNow().UtcDateTime;
         var etaUtc = TenantLocalToUtc(job.DeliverByTime, despatchOptions.Value.TimeZone);
@@ -108,12 +121,14 @@ internal sealed class PaxBookingService(
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
             PassengerEmail: job.ProofOfDeliveryEmail,
-            DeliveryAddress: BuildAddressDto(jobId, job.DeliveryAddressLine3, job.DeliveryAddressLine4,
-                job.DeliveryAddressLine5, job.DeliveryAddressLine6, job.DeliveryAddressLine7,
-                job.DeliveryAddressLine8, job.DeliveryLatitude, job.DeliveryLongitude, defaultCountry),
+            DeliveryAddress: BuildAddressDto(jobId, job.DeliveryAddressLine2, job.DeliveryAddressLine3,
+                job.DeliveryAddressLine4, job.DeliveryAddressLine5, job.DeliveryAddressLine6,
+                job.DeliveryAddressLine7, job.DeliveryAddressLine8, job.DeliveryLatitude,
+                job.DeliveryLongitude, defaultCountry),
             EarliestSlotUtc: etaUtc ?? now,
             LatestSlotUtc: etaUtc ?? now.AddDays(2),
-            AtlOptions: atlOptions);
+            AtlOptions: atlOptions,
+            DefaultAtlOptionId: defaultAtlOptionId);
     }
     
     private static string FirstNonBlank(string? preferred, string? fallback) =>
@@ -123,15 +138,15 @@ internal sealed class PaxBookingService(
 
     private static AddressUpdateDto BuildAddressDto(
         int jobId,
-        string? line3, string? line4, string? line5, string? line6, string? line7, string? line8,
-        decimal? latitude, decimal? longitude, string defaultCountry)
+        string? line2, string? line3, string? line4, string? line5, string? line6, string? line7,
+        string? line8, decimal? latitude, decimal? longitude, string defaultCountry)
     {
         var country = ResolveStoredCountry(jobId, line8, defaultCountry);
         var isUs = country == "US";
         return new AddressUpdateDto
         {
             Line1 = CombineStreet(line3, line4),
-            Line2 = null,
+            Line2 = line2,
             Suburb = isUs ? null : line5,
             City = (isUs ? line5 : line6) ?? string.Empty,
             PostCode = line7,
@@ -356,8 +371,6 @@ internal sealed class PaxBookingService(
         DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
     {
         var date = anchor;
-        // A non-business anchor rolls forward with the whole day available — the
-        // SQL resets @TimeBooked to 00:00:00 in the same situation.
         var honourCurrentTime = true;
         if (!await calendar.IsBusinessDayAsync(date, clientId, ct))
         {
@@ -378,13 +391,13 @@ internal sealed class PaxBookingService(
                 AddSlot(slots, date, run, today, nowUtc, timeZone, window, honourCurrentTime);
             }
 
-            if (slots.Count < TargetSlotCount)
+            if (slots.Count >= TargetSlotCount)
             {
-                date = await NextBusinessDayAsync(clientId, date, ct);
-                // Only the anchor day is measured against the clock; a later day is
-                // offered whole.
-                honourCurrentTime = false;
+                continue;
             }
+
+            date = await NextBusinessDayAsync(clientId, date, ct);
+            honourCurrentTime = false;
         }
 
         WarnIfShort(slots.Count, clientId);
@@ -530,8 +543,9 @@ internal sealed class PaxBookingService(
         // Write back using the canonical Despatch DeliveryAddressLine convention
         // (see BuildAddressDto). The pax form captures a single combined street, so
         // it goes in L4 (street name) with L3 (number) cleared — CombineStreet on
-        // read reproduces it. L1 (company) / L2 (building) are deliberately left
-        // untouched so a pax edit can't clobber them. For US, L5=city; otherwise
+        // read reproduces it. L2 (building) is the "Extra delivery information"
+        // field, so it round-trips; L1 (company) is deliberately left untouched
+        // because the passenger is never shown it. For US, L5=city; otherwise
         // L5=suburb, L6=city.
         // Normalise before deriving the column layout: a stale client (the booking
         // GET is service-worker cached for 30 minutes) can still post the legacy
@@ -555,6 +569,7 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.ProofOfDeliveryEmail, input.PassengerEmail)
                     .SetProperty(j => j.DeliverToLeaveId, leaveId)
                     .SetProperty(j => j.UcjbToSpecial, input.AccessNotes)
+                    .SetProperty(j => j.DeliveryAddressLine2, input.Address.Line2)
                     .SetProperty(j => j.DeliveryAddressLine3, (string?)null)
                     .SetProperty(j => j.DeliveryAddressLine4, input.Address.Line1)
                     .SetProperty(j => j.DeliveryAddressLine5, line5)

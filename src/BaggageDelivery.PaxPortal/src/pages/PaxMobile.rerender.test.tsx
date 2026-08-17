@@ -94,10 +94,14 @@ function renderForm() {
   )
 }
 
-describe('PaxMobile — slot hold countdown', () => {
-  it('ticks the remaining hold down every second', async () => {
+// slot departs at 02:00Z, so ten minutes before it the countdown reads 10:00.
+const TEN_MINUTES_OUT = new Date('2026-06-10T01:50:00Z')
+
+describe('PaxMobile — run start countdown', () => {
+  it('ticks the time left before the run down every second', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
+      vi.setSystemTime(TEN_MINUTES_OUT)
       renderForm()
 
       expect(await screen.findByText('10:00')).toBeInTheDocument()
@@ -115,6 +119,7 @@ describe('PaxMobile — slot hold countdown', () => {
   it('keeps the tick off the rest of the form', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
+      vi.setSystemTime(TEN_MINUTES_OUT)
       renderForm()
 
       await screen.findByText('10:00')
