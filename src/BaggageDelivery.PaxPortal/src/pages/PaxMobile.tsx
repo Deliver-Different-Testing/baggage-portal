@@ -169,10 +169,12 @@ function ConfirmForm({
   const [passengerPhone, setPassengerPhone] = useState(summary.passengerPhone ?? '')
   const [passengerEmail, setPassengerEmail] = useState(summary.passengerEmail ?? '')
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
-  // The server resolves which handoff point the page arrives on, so the portal
-  // never has to know a LeaveNotHomeId or match on a display name.
+  // Authority to leave starts off: leaving a suitcase unattended is a decision the
+  // passenger opts into, not one they have to notice and undo. Switching it on
+  // lands on the handoff point the server resolved, so the portal never has to
+  // know a LeaveNotHomeId or match on a display name.
   const defaultAtlOptionId = summary.defaultAtlOptionId ?? null
-  const [atlOptionId, setAtlOptionId] = useState<number | null>(defaultAtlOptionId)
+  const [atlOptionId, setAtlOptionId] = useState<number | null>(null)
   const [accessNotes, setAccessNotes] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
