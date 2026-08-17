@@ -110,6 +110,7 @@ export type BookingSummary = {
   earliestSlotUtc: string
   latestSlotUtc: string
   atlOptions: AtlOption[]
+  defaultAtlOptionId?: number | null
 }
 
 export type AtlOption = {

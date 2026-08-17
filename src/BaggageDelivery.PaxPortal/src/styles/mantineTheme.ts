@@ -101,6 +101,8 @@ export const sidebarColors = {
 
 /** White-based overlays for content on the fixed Ink-Blue scrim (hero, shell, dialog headers). */
 export const onBrandScrim = {
+  /** The Ink-Blue hero itself — the ground every alpha below is mixed against. */
+  heroBg: 'var(--mantine-color-ink-9)',
   text: '#fff',
   bodyText: 'rgba(255,255,255,0.85)',
   subtleText: 'rgba(255,255,255,0.8)',
@@ -122,9 +124,33 @@ export const codeBlockPalette = {
   textError: '#f1adb5',
 };
 
-/** Radius / duration / shadow tokens (MD3 corner scale). */
+/**
+ * Radius / type / duration / shadow tokens (MD3 corner scale).
+ *
+ * The radius scale is semantic, not decorative: `full` and `sm`–`lg` are for things
+ * the passenger *touches*, `tile` (2px) is for things that are *printed* — the file
+ * reference, the chosen window, the ETA, a docket line. Keeping the two apart is what
+ * makes the baggage-tag motif read as a system rather than a one-off ornament.
+ */
 export const tokens = {
   radius: { xs: 4, sm: 8, md: 12, lg: 16, xl: 28, full: 9999, tile: 2 },
+  /**
+   * The display scale. `hero`/`figure` replace the near-identical clamps that had
+   * drifted across the hero, the ETA card and the confirmed screen; `eyebrow` is the
+   * single spec for the uppercase micro-label role, which had six.
+   */
+  type: {
+    hero: 'clamp(32px, 8vw, 40px)',
+    figure: 'clamp(24px, 6vw, 28px)',
+    // `as const` so `textTransform` keeps its literal type and the object can be
+    // spread straight into a `CSSProperties`.
+    eyebrow: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '0.12em',
+      textTransform: 'uppercase',
+    } as const,
+  },
   duration: { instant: 100, fast: 150, normal: 200, slow: 350 },
   shadow: {
     sm: '0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px -1px rgba(0,0,0,.1)',
@@ -190,18 +216,37 @@ export const dfrntTheme = createTheme({
     // below. Applied as a class-based `styles.root`, NOT a `bg` defaultProp, so a
     // component's own inline `style={{ background }}` still wins — hero cards paint
     // a dark Ink scrim that way and must not be overpainted white in light mode.
+    //
+    // The hairline carries the separation the tone step can't: in light mode a card
+    // is #ffffff on a #f4f2f1 page, which is a ~3% step and reads as no edge at all.
+    // A flat outline suits the no-gradient house style better than a drop shadow.
     Card: {
       defaultProps: { radius: 'md' },
-      styles: { root: { backgroundColor: 'var(--dd-surface-container)' } },
+      styles: {
+        root: {
+          backgroundColor: 'var(--dd-surface-container)',
+          border: '1px solid var(--dd-outline-variant)',
+        },
+      },
     },
     Paper: {
       defaultProps: { radius: 'md' },
-      styles: { root: { backgroundColor: 'var(--dd-surface-container)' } },
+      styles: {
+        root: {
+          backgroundColor: 'var(--dd-surface-container)',
+          border: '1px solid var(--dd-outline-variant)',
+        },
+      },
     },
     Modal: {
       defaultProps: { radius: 'lg', centered: true },
       styles: { content: { backgroundColor: 'var(--dd-surface-container-high)' } },
     },
+    // The tick and the dot are Ink on cyan, stated rather than inferred. Cyan is a
+    // light colour (relative luminance ~0.48) — a white glyph on it is about 1.9:1
+    // and effectively invisible at checkbox size.
+    Checkbox: { defaultProps: { iconColor: 'var(--dd-on-brand-fill)' } },
+    Radio: { defaultProps: { iconColor: 'var(--dd-on-brand-fill)' } },
     TextInput: { defaultProps: { radius: 'sm' } },
     Textarea: { defaultProps: { radius: 'sm' } },
     Select: { defaultProps: { radius: 'sm' } },
@@ -247,6 +292,13 @@ export const dfrntCssVariablesResolver: CSSVariablesResolver = (theme) => {
       '--dd-surface': light.surface,
       '--dd-surface-container': light.surfaceContainerLowest, // #ffffff cards
       '--dd-surface-container-high': light.surfaceContainerLowest, // #ffffff menus/dialogs
+      '--dd-outline-variant': light.outlineVariant, // #e7e5e4 — card + docket hairlines
+      // Content sitting ON brand cyan. Both are stated explicitly rather than left to
+      // Mantine's `-contrast` / `-light-color` vars: under v8CssVariablesResolver
+      // `--mantine-color-brand-light-color` resolves to brand[5] — the same cyan as
+      // the tint behind it — so anything relying on it was cyan-on-cyan.
+      '--dd-on-brand-fill': ink[9], // #0d0c2c on the solid cyan fill (~8:1)
+      '--dd-on-brand-tint': brand[8], // #0f6f96 on the pale cyan tint (~5:1)
       // Disabled inputs (e.g. saved delivery address) read as a locked summary,
       // not greyed-out placeholder text — keep the value legible. See index.css
       // for the paired opacity/-webkit-text-fill-color override.
@@ -258,6 +310,12 @@ export const dfrntCssVariablesResolver: CSSVariablesResolver = (theme) => {
       '--dd-surface': dk.surface,
       '--dd-surface-container': dk.surfaceContainer, // #37353c cards
       '--dd-surface-container-high': dk.surfaceContainerHigh, // #413f47 menus/dialogs
+      '--dd-outline-variant': dk.outlineVariant, // #56535c — card + docket hairlines
+      // Cyan stays a light colour in dark mode (the fill steps to brand[4]), so the
+      // fill still takes Ink content; only the tint flips, because there the ground
+      // is translucent cyan over charcoal.
+      '--dd-on-brand-fill': ink[9], // #0d0c2c on the solid cyan fill
+      '--dd-on-brand-tint': brand[2], // #b1e9fb on cyan-over-charcoal (~7:1)
       // Mantine's dark defaults are near-invisible on the charcoal ladder:
       // error = red[8] (#6c1823) and disabled text = dark[3] (#6f6c75) at 0.6
       // opacity. Lift both so validation messages and locked field values read.

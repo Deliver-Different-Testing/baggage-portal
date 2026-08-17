@@ -15,6 +15,7 @@ import IconTruckDelivery from '@tabler/icons-react/dist/esm/icons/IconTruckDeliv
 import IconMapPin from '@tabler/icons-react/dist/esm/icons/IconMapPin.mjs'
 import IconClock from '@tabler/icons-react/dist/esm/icons/IconClock.mjs'
 import IconHourglass from '@tabler/icons-react/dist/esm/icons/IconHourglass.mjs'
+import IconFileInvoice from '@tabler/icons-react/dist/esm/icons/IconFileInvoice.mjs'
 import User from 'lucide-react/dist/esm/icons/user.mjs'
 import Lock from 'lucide-react/dist/esm/icons/lock.mjs'
 import Pencil from 'lucide-react/dist/esm/icons/pencil.mjs'
@@ -54,6 +55,8 @@ export const TruckIcon = tabler(IconTruckDelivery)
 export const MapPinIcon = tabler(IconMapPin)
 export const ClockIcon = tabler(IconClock)
 export const HourglassIcon = tabler(IconHourglass)
+// The docket the review step reads back — a delivery record, not generic paperwork.
+export const DocketIcon = tabler(IconFileInvoice)
 
 // UI chrome — Lucide.
 export const UserIcon = lucide(User)

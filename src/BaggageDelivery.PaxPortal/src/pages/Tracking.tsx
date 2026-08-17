@@ -19,7 +19,6 @@ import {
 } from '@mantine/core'
 import {
   CheckCircleIcon,
-  ClockIcon,
   HourglassIcon,
   LuggageIcon,
   TruckIcon,
@@ -27,13 +26,10 @@ import {
 import { getTracking } from '../api/pax'
 import type { TrackingTimeline } from '../api/client'
 import { PoweredByFooter } from '../components/PoweredByFooter'
+import { DocketTile, Eyebrow } from '../components/Docket'
+import { FlightPathBackdrop } from '../components/FlightPathBackdrop'
+import { onBrandScrim, tokens } from '../styles/mantineTheme'
 import { useRedirectOnNotFound } from '../hooks/useRedirectOnNotFound'
-
-// White-on-Ink hero scrim (white alphas, not brand hex) — reads on the Ink-Blue hero.
-const SCRIM_HERO = 'var(--mantine-color-ink-9)'
-const SCRIM_FILL = 'rgba(255,255,255,0.18)'
-const SCRIM_FILL_STRONG = 'rgba(255,255,255,0.2)'
-const SCRIM_BODY = 'rgba(255,255,255,0.85)'
 
 const STATUS_INFO = {
   Delivered: {
@@ -136,31 +132,28 @@ export function Tracking() {
         px={{ base: 20, sm: 32 }}
         pt={{ base: 32, sm: 40 }}
         pb={{ base: 48, sm: 56 }}
-        style={{ backgroundColor: SCRIM_HERO, color: '#fff' }}
+        style={{
+          backgroundColor: onBrandScrim.heroBg,
+          color: onBrandScrim.text,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
       >
-        <Container size="lg" px={0} style={{ position: 'relative' }}>
+        <FlightPathBackdrop />
+        <Container size="lg" px={0} style={{ position: 'relative', zIndex: 1 }}>
           <Group gap="sm" align="center" mb="lg" wrap="nowrap">
             <Center
               w={36}
               h={36}
-              style={{ borderRadius: 12, backgroundColor: SCRIM_FILL, flexShrink: 0 }}
+              style={{ borderRadius: 12, backgroundColor: onBrandScrim.fill, flexShrink: 0 }}
             >
-              <LuggageIcon size={20} color="#fff" />
+              <LuggageIcon size={20} color={onBrandScrim.text} />
             </Center>
             <Box style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                style={{
-                  opacity: 0.8,
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                  fontSize: 10.5,
-                  lineHeight: 1.2,
-                }}
-              >
+              <Eyebrow tone="onScrim" mb={2}>
                 Baggage tracking
-              </Text>
-              <Group gap={6} align="center" mt={2} wrap="nowrap">
+              </Eyebrow>
+              <Group gap={6} align="center" wrap="nowrap">
                 <Box
                   className="pax-pulse"
                   style={{
@@ -183,8 +176,8 @@ export function Tracking() {
             mb="sm"
             leftSection={statusInfo.icon}
             style={{
-              backgroundColor: SCRIM_FILL_STRONG,
-              color: '#fff',
+              backgroundColor: onBrandScrim.fillStrong,
+              color: onBrandScrim.text,
               fontWeight: 700,
               letterSpacing: '0.04em',
             }}
@@ -196,7 +189,7 @@ export function Tracking() {
             order={1}
             mb="xs"
             style={{
-              fontSize: 'clamp(32px, 8vw, 42px)',
+              fontSize: tokens.type.hero,
               lineHeight: 1.05,
               color: 'inherit',
               fontWeight: 700,
@@ -205,7 +198,9 @@ export function Tracking() {
           >
             {statusInfo.headline}
           </Title>
-          <Text style={{ color: SCRIM_BODY, maxWidth: 480 }}>{statusInfo.description}</Text>
+          <Text style={{ color: onBrandScrim.bodyText, maxWidth: 480 }}>
+            {statusInfo.description}
+          </Text>
         </Container>
       </Box>
 
@@ -279,36 +274,33 @@ function EtaCard({
   const hasEta = !!startUtc && !!endUtc
   return (
     <Card p="lg">
-      <Group gap="sm" align="center" mb="md" wrap="nowrap">
-        <Center
-          w={36}
-          h={36}
-          style={{
-            borderRadius: 'var(--mantine-radius-sm)',
-            backgroundColor: 'var(--mantine-color-brand-light)',
-            color: 'var(--mantine-color-brand-light-color)',
-          }}
-        >
-          <ClockIcon size={18} />
-        </Center>
-        <Text tt="uppercase" size="xs" fw={600} c="dimmed" style={{ flex: 1, letterSpacing: '0.06em' }}>
-          Estimated arrival
-        </Text>
-      </Group>
-      {hasEta ? (
-        <Box>
-          <Text fw={700} mb={4} style={{ fontSize: 'clamp(24px, 6vw, 28px)', lineHeight: 1.15 }}>
-            {formatTimeRange(startUtc!, endUtc!)}
+      {/* The arrival window is the one fact this page exists to deliver, so it gets
+          the printed treatment — a 2px slip inside the card rather than a heading
+          with a clock icon restating the word "arrival" beside it. */}
+      <DocketTile label="Estimated arrival">
+        {hasEta ? (
+          <Box>
+            <Text
+              fw={700}
+              mb={4}
+              style={{
+                fontSize: tokens.type.figure,
+                lineHeight: 1.15,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {formatTimeRange(startUtc!, endUtc!)}
+            </Text>
+            <Text size="sm" c="dimmed">
+              {formatDateOnly(startUtc!)}
+            </Text>
+          </Box>
+        ) : (
+          <Text c="dimmed" size="sm">
+            Pending — we'll update this as soon as a driver is assigned.
           </Text>
-          <Text size="sm" c="dimmed">
-            {formatDateOnly(startUtc!)}
-          </Text>
-        </Box>
-      ) : (
-        <Text c="dimmed" size="sm">
-          Pending — we'll update this as soon as a driver is assigned.
-        </Text>
-      )}
+        )}
+      </DocketTile>
     </Card>
   )
 }
@@ -316,9 +308,7 @@ function EtaCard({
 function DriverCard({ name, vehicle }: { name: string; vehicle?: string | null }) {
   return (
     <Card p="lg">
-      <Text tt="uppercase" size="xs" fw={600} c="dimmed" mb="sm" style={{ letterSpacing: '0.06em' }}>
-        Your driver
-      </Text>
+      <Eyebrow mb={12}>Your driver</Eyebrow>
       <Group gap="md" align="center" wrap="nowrap">
         <Avatar variant="filled" color="brand" radius={100} size={48} style={{ fontWeight: 600 }}>
           {name.charAt(0)}

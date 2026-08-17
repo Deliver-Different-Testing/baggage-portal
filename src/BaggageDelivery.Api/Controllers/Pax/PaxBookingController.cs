@@ -81,9 +81,6 @@ public sealed class PaxBookingController(
         }
         catch (PaxAddressValidationException ex)
         {
-            // Same ModelState key the framework would have used, so the SPA's
-            // existing error handling picks it up — but with a message that tells
-            // the passenger what to actually do about it.
             ModelState.AddModelError("Address.Country", ex.Message);
             return ValidationProblem(ModelState);
         }
@@ -111,5 +108,6 @@ public sealed class PaxBookingController(
             s.DeliveryAddress.Longitude),
         EarliestSlotUtc: s.EarliestSlotUtc,
         LatestSlotUtc: s.LatestSlotUtc,
-        AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))]);
+        AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))],
+        DefaultAtlOptionId: s.DefaultAtlOptionId);
 }

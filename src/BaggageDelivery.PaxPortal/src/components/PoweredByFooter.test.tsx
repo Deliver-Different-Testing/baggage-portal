@@ -18,35 +18,24 @@ describe('PoweredByFooter', () => {
 
     // Intrinsic dimensions stay on the element so the light/dark swap reserves
     // its box and doesn't shift the footer.
-    expect(logo).toHaveAttribute('width', '118')
-    expect(logo).toHaveAttribute('height', '40')
+    expect(logo).toHaveAttribute('width', '147')
+    expect(logo).toHaveAttribute('height', '50')
 
     expect(screen.getByRole('contentinfo')).toBeInTheDocument()
   })
 
-  it('signs off with the client name and a dialable support number', () => {
-    render(
-      <MantineTestProvider>
-        <PoweredByFooter clientName="Air New Zealand" supportPhone="0800 267 5494" />
-      </MantineTestProvider>,
-    )
-
-    expect(screen.getByText('Air New Zealand')).toBeInTheDocument()
-    expect(screen.getByText(/need help\?/i)).toBeInTheDocument()
-
-    // Punctuation is for reading, not for dialling.
-    const call = screen.getByRole('link', { name: /call 0800 267 5494/i })
-    expect(call).toHaveAttribute('href', 'tel:08002675494')
-  })
-
-  it('drops the sign-off entirely when there is no client or number to show', () => {
+  it('carries the attribution and nothing else', () => {
     render(
       <MantineTestProvider>
         <PoweredByFooter />
       </MantineTestProvider>,
     )
 
+    // The carrier name repeated the hero, and a phone number at the foot of a form
+    // is an invitation to stop filling it in and call. The number still appears on
+    // the empty-window state, where it is the passenger's only way forward.
     expect(screen.queryByText(/need help\?/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /call/i })).not.toBeInTheDocument()
     expect(screen.getByText(/powered by/i)).toBeInTheDocument()
   })
 })

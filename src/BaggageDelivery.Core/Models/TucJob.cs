@@ -521,9 +521,17 @@ public partial class TucJob
 
     public bool ContentsUnknownAtPickup { get; set; }
 
+    public virtual TucJobType AcceptedJobType { get; set; }
+
     public virtual TblJobLeaveNotHome DeliverToLeave { get; set; }
+
+    public virtual TucJobType DesiredJobType { get; set; }
 
     public virtual ICollection<JobDeliveryJourney> JobDeliveryJourneys { get; set; } = new List<JobDeliveryJourney>();
 
+    public virtual TucJobType NotifiedJobType { get; set; }
+
     public virtual TucClient UcjbClient { get; set; }
+
+    public virtual TucJobType UcjbSpeedNavigation { get; set; }
 }

@@ -14,7 +14,8 @@ public sealed record BookingSummaryDto(
     AddressDto DeliveryAddress,
     DateTime EarliestSlotUtc,
     DateTime LatestSlotUtc,
-    AtlOptionDto[] AtlOptions);
+    AtlOptionDto[] AtlOptions,
+    int? DefaultAtlOptionId);
 
 public sealed record AtlOptionDto(int Id, string Name);
 

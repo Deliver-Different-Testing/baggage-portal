@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_THEME, mergeMantineTheme } from '@mantine/core'
-import { dfrntTheme, dfrntCssVariablesResolver } from '../mantineTheme'
-import { airlineThemeOverride } from '../airlineMantineTheme'
+import { dfrntTheme, dfrntCssVariablesResolver, tokens } from '../mantineTheme'
+import { airlineAccent } from '../airlineAccent'
 import { getAirlineBrand } from '../airlineBranding'
 
 describe('dfrntTheme', () => {
@@ -16,6 +16,31 @@ describe('dfrntTheme', () => {
 
   it('makes buttons pill-shaped (lozenge)', () => {
     expect(dfrntTheme.components?.Button?.defaultProps).toMatchObject({ radius: 9999 })
+  })
+
+  it('separates the printed radius from the touchable ones', () => {
+    // The docket motif rests on this: 2px means "this is a fact", everything the
+    // passenger can press keeps a soft corner or a pill.
+    expect(tokens.radius.tile).toBe(2)
+    expect(tokens.radius.tile).toBeLessThan(tokens.radius.sm)
+  })
+
+  it('carries one eyebrow spec for every micro-label', () => {
+    // Six hand-tuned variants had drifted across the pages before this existed.
+    expect(tokens.type.eyebrow).toEqual({
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '0.12em',
+      textTransform: 'uppercase',
+    })
+  })
+
+  it('gives cards a hairline so they separate from the page', () => {
+    // Light mode puts a #ffffff card on a #f4f2f1 page — a ~3% step that reads as
+    // no edge at all without this.
+    expect(dfrntTheme.components?.Card?.styles).toMatchObject({
+      root: { border: '1px solid var(--dd-outline-variant)' },
+    })
   })
 })
 
@@ -51,6 +76,36 @@ describe('dfrntCssVariablesResolver', () => {
     expect(vars.dark['--mantine-color-disabled-color']?.toLowerCase()).toBe('#cac4d0')
     expect(vars.dark['--mantine-color-disabled']?.toLowerCase()).toBe('#28262c')
   })
+
+  it('exposes the hairline colour the card border and docket tiles read from', () => {
+    expect(vars.light['--dd-outline-variant']).toBe('#e7e5e4')
+    expect(vars.dark['--dd-outline-variant']).toBe('#56535c')
+  })
+
+  it('puts Ink on the solid cyan fill in both schemes', () => {
+    // Cyan is a light colour (relative luminance ~0.48). A white glyph on it is
+    // about 1.9:1, which is what made the checkbox tick disappear.
+    expect(vars.light['--dd-on-brand-fill']).toBe('#0d0c2c')
+    expect(vars.dark['--dd-on-brand-fill']).toBe('#0d0c2c')
+    expect(contrastRatio('#0d0c2c', '#3bc7f4')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('flips the on-tint colour per scheme rather than trusting -light-color', () => {
+    // Under v8CssVariablesResolver `--mantine-color-brand-light-color` resolves to
+    // brand[5] — the same cyan as the tint behind it. Anything that read from it
+    // was cyan on cyan, so the tint carries its own token.
+    expect(vars.light['--dd-on-brand-tint']).toBe('#0f6f96')
+    expect(vars.dark['--dd-on-brand-tint']).toBe('#b1e9fb')
+  })
+
+  it('states the checkbox and radio glyph colour instead of inferring it', () => {
+    expect(dfrntTheme.components?.Checkbox?.defaultProps).toMatchObject({
+      iconColor: 'var(--dd-on-brand-fill)',
+    })
+    expect(dfrntTheme.components?.Radio?.defaultProps).toMatchObject({
+      iconColor: 'var(--dd-on-brand-fill)',
+    })
+  })
 })
 
 // Every code in airlineBranding.ts — the palette rules below must hold for all of them.
@@ -60,7 +115,8 @@ const AIRLINE_CODES = [
   'LA', 'AC', 'HA', 'BA', 'LH',
 ]
 
-const DARK_SURFACE = '#2c2a30'
+// The Ink-Blue hero, the only ground an airline accent is ever painted on.
+const INK_HERO = '#0d0c2c'
 
 function relativeLuminance(hex: string): number {
   const v = hex.replace('#', '')
@@ -76,41 +132,45 @@ function contrastRatio(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
-function shadeOf(code: string, scheme: 'light' | 'dark'): string {
-  const override = airlineThemeOverride(getAirlineBrand(code))
-  const shade = override.primaryShade as { light: number; dark: number }
-  return override.colors!.brand![shade[scheme]]
-}
-
-describe('airlineThemeOverride', () => {
-  it('regenerates the brand tuple from the airline primary hex', () => {
-    const override = airlineThemeOverride(getAirlineBrand('QF')) // Qantas red
-    const brand = override.colors?.brand
-    expect(brand).toHaveLength(10)
-    // Different from the house cyan tuple.
-    expect(brand?.[5]).not.toBe(dfrntTheme.colors?.brand?.[5])
-  })
-
-  it('paints light mode in the airline own hex, not a generated stand-in', () => {
-    // generateColors places the seed by luminance, so a fixed primaryShade shipped
-    // Air NZ's Pacific teal as neon aqua (#56effa) and Qantas red as #fd1e35.
+describe('airlineAccent', () => {
+  it('never recolours the DFRNT brand ramp', () => {
+    // The whole point of the split: affordance (buttons, focus rings, selection)
+    // stays cyan for every carrier, so "what can I press" never changes meaning
+    // between airlines. The earlier airlineThemeOverride regenerated colors.brand
+    // and had this exactly backwards.
+    expect(dfrntTheme.colors?.brand?.[5]).toBe('#3bc7f4')
     for (const code of AIRLINE_CODES) {
-      expect(shadeOf(code, 'light')).toBe(getAirlineBrand(code).primary.toLowerCase())
+      expect(airlineAccent(getAirlineBrand(code)).accent).not.toBe(
+        dfrntTheme.colors?.brand?.[5],
+      )
     }
   })
 
-  it('keeps the dark-mode fill readable on the charcoal page surface', () => {
-    // Near-black brands (Lufthansa #05164d) step up the ramp until they clear the
-    // WCAG non-text minimum against --dd-surface.
+  it('keeps every carrier accent readable on the Ink hero', () => {
     for (const code of AIRLINE_CODES) {
-      expect(contrastRatio(shadeOf(code, 'dark'), DARK_SURFACE)).toBeGreaterThanOrEqual(3)
+      expect(
+        contrastRatio(airlineAccent(getAirlineBrand(code)).accent, INK_HERO),
+      ).toBeGreaterThanOrEqual(3)
     }
   })
 
-  it('keeps the DFRNT fonts and pill buttons when recoloured', () => {
-    const override = airlineThemeOverride(getAirlineBrand('QF'))
-    expect(override.primaryColor).toBe('brand')
-    expect(override.components?.Button?.defaultProps).toMatchObject({ radius: 9999 })
+  it('keeps the seed hex wherever the seed is already legible', () => {
+    // Brand fidelity is the point — we only step off the carrier's own colour when
+    // it would otherwise vanish. Spirit's yellow and Qantas red both clear Ink.
+    expect(airlineAccent(getAirlineBrand('NK')).accent).toBe('#fff200')
+    expect(airlineAccent(getAirlineBrand('QF')).accent).toBe('#e0001b')
+  })
+
+  it('steps near-black carriers up until they clear the Ink hero', () => {
+    // Lufthansa #05164d against #0d0c2c is ~1.2:1 — invisible as a rule on the hero.
+    const lh = airlineAccent(getAirlineBrand('LH'))
+    expect(lh.accent).not.toBe('#05164d')
+    expect(contrastRatio('#05164d', INK_HERO)).toBeLessThan(3)
+    expect(contrastRatio(lh.accent, INK_HERO)).toBeGreaterThanOrEqual(3)
+  })
+
+  it('knocks the chip fill back so a white glyph still reads on it', () => {
+    expect(airlineAccent(getAirlineBrand('NZ')).accentTint).toMatch(/^rgba\(/)
   })
 
   it('carries a dark contrast text for light airline brands (Spirit NK)', () => {

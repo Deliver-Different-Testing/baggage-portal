@@ -17,4 +17,9 @@ public sealed record BookingSummary(
     AddressUpdateDto DeliveryAddress,
     DateTime EarliestSlotUtc,
     DateTime LatestSlotUtc,
-    IReadOnlyList<AtlOptionDto> AtlOptions);
+    IReadOnlyList<AtlOptionDto> AtlOptions,
+    // Which of AtlOptions the confirm page arrives with selected. Resolved here
+    // rather than in the portal so the passenger flow never has to know a
+    // LeaveNotHomeId or match on a display name. Null when the tenant offers
+    // nothing to leave a bag with.
+    int? DefaultAtlOptionId);
