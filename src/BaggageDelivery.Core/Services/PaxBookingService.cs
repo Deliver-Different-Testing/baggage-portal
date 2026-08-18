@@ -48,6 +48,7 @@ internal sealed class PaxBookingService(
             .Where(j => j.UcjbId == jobId)
             .Select(j => new
             {
+                JobNumber = j.UcjbNumber,
                 j.DeliverByTime,
                 j.DeliverToContact,
                 j.DeliverToPhone,
@@ -108,10 +109,10 @@ internal sealed class PaxBookingService(
 
         return new BookingSummary(
             JobId: jobId,
-            // The WorldTracer file reference the passenger quotes to the helpline.
-            // Empty when the job doesn't carry one — the portal hides the badge
-            // rather than showing a job id that means nothing to them.
-            Reference: (job.ClientRefa ?? string.Empty).Trim(),
+            // The Urgent job number, shown to the passenger as the Booking Reference.
+            // Empty when the job doesn't carry one — the portal hides the tag rather
+            // than showing the internal id behind the link.
+            JobNumber: (job.JobNumber ?? string.Empty).Trim(),
             AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
             // The airline's own line first — it's the one the passenger's baggage
             // file is with. The tenant's number is the backstop for clients that
@@ -131,6 +132,13 @@ internal sealed class PaxBookingService(
             DefaultAtlOptionId: defaultAtlOptionId);
     }
     
+    public Task<string?> GetJobNumberAsync(int jobId, CancellationToken ct) =>
+        db.TucJobs
+            .AsNoTracking()
+            .Where(j => j.UcjbId == jobId)
+            .Select(j => j.UcjbNumber)
+            .FirstOrDefaultAsync(ct);
+
     private static string FirstNonBlank(string? preferred, string? fallback) =>
         !string.IsNullOrWhiteSpace(preferred) ? preferred.Trim()
         : !string.IsNullOrWhiteSpace(fallback) ? fallback.Trim()
@@ -370,6 +378,11 @@ internal sealed class PaxBookingService(
         IReadOnlyList<TimeOnly> runs, int clientId, DateTime anchor, DateTime today,
         DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
     {
+        // Ceiling division: how many days this many runs need to fill the list,
+        // plus one for an anchor that is a holiday or already part-spent.
+        await PrimeBusinessDayChainAsync(clientId, anchor,
+            Math.Min(MaxDaysWalked, (TargetSlotCount + runs.Count - 1) / runs.Count + 1), ct);
+
         var date = anchor;
         var honourCurrentTime = true;
         if (!await calendar.IsBusinessDayAsync(date, clientId, ct))
@@ -427,6 +440,10 @@ internal sealed class PaxBookingService(
                 "GetTimeslots: no client runs and no tblEcoSetting BaggageRebook — returning empty slot list");
             return [];
         }
+
+        // One window a day on this path, so the walk needs a day per slot.
+        await PrimeBusinessDayChainAsync(clientId, anchor,
+            Math.Min(MaxDaysWalked, TargetSlotCount + 1), ct);
 
         var date = anchor;
         if (!await calendar.IsBusinessDayAsync(date, clientId, ct) || setting.CutOff is { } cutOff
@@ -490,8 +507,7 @@ internal sealed class PaxBookingService(
     private async Task<DateTime> NextBusinessDayAsync(int clientId, DateTime date,
         CancellationToken ct)
     {
-        var key = string.Create(CultureInfo.InvariantCulture,
-            $"{NextBusinessDayCacheKeyPrefix}{clientId}:{date:yyyy-MM-dd}");
+        var key = BusinessDayKey(clientId, date);
 
         if (cache.TryGetValue(key, out DateTime cached))
         {
@@ -501,6 +517,34 @@ internal sealed class PaxBookingService(
         var next = await calendar.AddBusinessDaysAsync(1, date, clientId, ct);
         cache.Set(key, next, ReferenceDataTtl);
         return next;
+    }
+
+    private static string BusinessDayKey(int clientId, DateTime date) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{NextBusinessDayCacheKeyPrefix}{clientId}:{date:yyyy-MM-dd}");
+
+    // The walks below advance one business day at a time, and each hop that misses
+    // the cache is its own round trip — a client with one run a day pays eight of
+    // them to render one page. Resolve the whole chain in a single call up front
+    // and seed the keys the walk reads, so the loops themselves stay unchanged and
+    // simply hit cache. Anything the walk needs beyond `count` still falls through
+    // to a live hop, so this only ever changes the round-trip count.
+    private async Task PrimeBusinessDayChainAsync(int clientId, DateTime anchor, int count,
+        CancellationToken ct)
+    {
+        // The chain is seeded in one pass under one TTL, so a hit on its first link
+        // means the rest is there too.
+        if (cache.TryGetValue(BusinessDayKey(clientId, anchor), out DateTime _))
+        {
+            return;
+        }
+
+        var previous = anchor.Date;
+        foreach (var day in await calendar.NextBusinessDaysAsync(count, previous, clientId, ct))
+        {
+            cache.Set(BusinessDayKey(clientId, previous), day, ReferenceDataTtl);
+            previous = day;
+        }
     }
 
     private static void WarnIfShort(int count, int clientId)

@@ -31,7 +31,7 @@ const TONE_STYLE: Record<EyebrowTone, CSSProperties> = {
 
 /**
  * The uppercase micro-label. One spec — 10px / 700 / 0.12em — for every place a value
- * needs naming: the file reference, a docket line, the ETA, the tracking kicker. Six
+ * needs naming: the booking reference, a docket line, the ETA, the tracking kicker. Six
  * hand-tuned variants had drifted across the pages before this existed.
  */
 export function Eyebrow({
@@ -113,7 +113,7 @@ const TAG_VALUE_STYLE: CSSProperties = {
 }
 
 /**
- * The file reference set as the thing it actually is — a baggage tag. It is the only
+ * The booking reference set as the thing it actually is — a baggage tag. It is the only
  * token the passenger will be asked to read back, and it is the page's answer to the
  * question they arrived with, which is whether anyone has their bag.
  *

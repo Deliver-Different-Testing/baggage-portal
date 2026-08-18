@@ -40,7 +40,7 @@ vi.mock('../components/Icon', async (importOriginal) => ({
 const summary: BookingSummary = {
   bookingId: 1,
   jobId: 42,
-  reference: 'REF-42',
+  jobNumber: 'URG-42',
   airlineLabel: 'Test Air',
   supportPhone: '0800 267 5494',
   passengerName: 'Test Passenger',

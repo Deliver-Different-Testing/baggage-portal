@@ -60,7 +60,10 @@ test:frontend:
   script:
     - cd src/BaggageDelivery.PaxPortal
     - npm ci
-    - npx vitest run --pool=forks --reporter=junit --outputFile=$CI_PROJECT_DIR/test-results/frontend-tests.xml
+    # The junit reporter writes only to the XML artifact — on its own the job log
+    # shows no failing test name at all, so pair it with the default reporter.
+    # With two reporters the output path has to be scoped to the junit one.
+    - npx vitest run --pool=forks --reporter=default --reporter=junit --outputFile.junit=$CI_PROJECT_DIR/test-results/frontend-tests.xml
   artifacts:
     when: always
     paths:

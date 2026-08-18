@@ -90,7 +90,7 @@ public sealed class PaxBookingController(
 
     private static BookingSummaryDto MapSummary(BookingSummary s) => new(
         JobId: s.JobId,
-        Reference: s.Reference,
+        JobNumber: s.JobNumber,
         AirlineLabel: s.AirlineLabel,
         AirlineCode: s.AirlineCode,
         SupportPhone: s.SupportPhone,

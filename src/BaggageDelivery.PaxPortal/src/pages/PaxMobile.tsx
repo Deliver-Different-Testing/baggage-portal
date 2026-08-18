@@ -701,6 +701,23 @@ function addressLines(a: AddressDto): string[] {
 }
 
 /**
+ * The second address line, named. It carries the buzzer number and the gate code —
+ * what the driver needs and the street address has nowhere to put — so it is read
+ * back with the address on every screen rather than living only in the editor.
+ * Nothing renders when the booking has none.
+ */
+function ExtraDeliveryInfo({ value }: { value?: string | null }) {
+  const text = (value ?? '').trim()
+  if (!text) return null
+  return (
+    <Box mt={8}>
+      <Eyebrow mb={2}>Extra delivery information</Eyebrow>
+      <Text size="sm">{text}</Text>
+    </Box>
+  )
+}
+
+/**
  * The read-back between tapping the bar button and the POST. Deliberately not
  * shaped like the form behind it — no inputs, no section icons — so it reads as
  * the record about to be filed rather than one more step to fill in.
@@ -771,6 +788,7 @@ export function ConfirmReviewModal({
               {line}
             </Text>
           ))}
+          <ExtraDeliveryInfo value={address.line2} />
         </Box>
 
         <Divider />
@@ -909,12 +927,19 @@ function AddressGate({
         <Box style={{ flex: 1, minWidth: 0 }}>
           {/* Read first, tick second. While the fields are open they are the
               address, and repeating it above them is noise. */}
-          {!editing &&
-            addressLines(address).map((line, i) => (
-              <Text key={`${i}-${line}`} size="sm" fw={500} style={{ lineHeight: 1.35 }}>
-                {line}
-              </Text>
-            ))}
+          {!editing && (
+            <>
+              {addressLines(address).map((line, i) => (
+                <Text key={`${i}-${line}`} size="sm" fw={500} style={{ lineHeight: 1.35 }}>
+                  {line}
+                </Text>
+              ))}
+              {/* Deane's review: the delivery instructions are what the driver
+                  needs, so they are read back here rather than only in the
+                  editor the passenger has no reason to open. */}
+              <ExtraDeliveryInfo value={address.line2} />
+            </>
+          )}
           <Checkbox
             mt={editing ? 0 : 8}
             checked={confirmed}
@@ -1261,8 +1286,8 @@ export function ConfirmedScreen({
               button below it — rather than as a tick and a headline. */}
           <Card p="lg">
             <Stack gap="md">
-              {summary.reference && (
-                <PunchedTag label="File reference" value={summary.reference} />
+              {summary.jobNumber && (
+                <PunchedTag label="Booking Reference" value={summary.jobNumber} />
               )}
 
               {slot && (
@@ -1285,6 +1310,7 @@ export function ConfirmedScreen({
                     {line}
                   </Text>
                 ))}
+                <ExtraDeliveryInfo value={address.line2} />
               </Box>
 
               <Divider />

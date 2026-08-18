@@ -79,13 +79,13 @@ export const ConfirmHero = memo(function ConfirmHero({
         <Title order={1} style={HERO_TITLE_STYLE}>
           Confirm your baggage delivery
         </Title>
-        {/* The WorldTracer reference the helpline asks for. Jobs without one show
-            nothing rather than an internal id. */}
-        {summary.reference && (
+        {/* The Urgent job number — the reference the passenger and the helpline
+            both quote. Jobs without one show nothing rather than an internal id. */}
+        {summary.jobNumber && (
           <Box mt="md">
             <PunchedTag
-              label="File reference"
-              value={summary.reference}
+              label="Booking Reference"
+              value={summary.jobNumber}
               accent={accent.accent}
               onScrim
             />

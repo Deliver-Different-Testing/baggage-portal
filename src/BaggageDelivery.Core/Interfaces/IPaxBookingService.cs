@@ -8,6 +8,11 @@ public interface IPaxBookingService
     // job isn't found (stale link).
     Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct);
 
+    // The job's Urgent number (tucJob.ucjbNumber) on its own, for the admin mint
+    // path: the booking-link SMS/email has to quote the same Booking Reference the
+    // portal shows. Null when Despatch has no such job — JobId is a soft reference.
+    Task<string?> GetJobNumberAsync(int jobId, CancellationToken ct);
+
     // Builds the next eight delivery windows from the client's economy runs
     // (tucClient.EconomyRun1..8), rolling forward across business days until
     // there are eight. The run columns store time-of-day in tenant local time;

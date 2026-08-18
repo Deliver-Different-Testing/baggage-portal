@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using Microsoft.AspNetCore.DataProtection;
@@ -88,6 +88,20 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
             }
 
             return Task.FromResult(date);
+        }
+
+        public async Task<IReadOnlyList<DateTime>> NextBusinessDaysAsync(int count,
+            DateTime localDate, int clientId, CancellationToken ct)
+        {
+            var days = new List<DateTime>(count);
+            var date = localDate.Date;
+            for (var i = 0; i < count; i++)
+            {
+                date = await AddBusinessDaysAsync(1, date, clientId, ct);
+                days.Add(date);
+            }
+
+            return days;
         }
 
         private static bool IsWeekday(DateTime date) =>
