@@ -39,7 +39,7 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                 <mj-section background-color="#001F3D" padding="32px">
                   <mj-column>
                     <mj-text color="#ffffff" font-size="22px" font-weight="700">Your baggage is ready</mj-text>
-                    <mj-text color="#9eb2cf" font-size="13px">Ref: {c.Reference} · {c.AirlineLabel}</mj-text>
+                    <mj-text color="#9eb2cf" font-size="13px">Booking Reference: {c.Reference} · {c.AirlineLabel}</mj-text>
                   </mj-column>
                 </mj-section>
                 <mj-section background-color="#ffffff" padding="32px">

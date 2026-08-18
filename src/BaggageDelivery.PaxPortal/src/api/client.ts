@@ -98,7 +98,8 @@ export type AddressDto = {
 export type BookingSummary = {
   bookingId: number
   jobId: number
-  reference: string
+  /** The Urgent job number, shown as the Booking Reference. Empty to hide the tag. */
+  jobNumber: string
   airlineLabel: string
   airlineCode?: string | null
   /** "Need help? Call …" — the client's own phone, or the tenant's support line. Empty to hide. */

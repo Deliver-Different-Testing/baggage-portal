@@ -40,6 +40,12 @@ public class PaxBookingServiceTests
     // don't exist on SQLite. Weekends are non-business unless stated otherwise.
     private sealed class FakeCalendar(params DateTime[] extraNonBusinessDays) : IDespatchCalendar
     {
+        // The service is expected to batch its day-walk: one NextBusinessDays call
+        // per timeslot request, and no per-hop AddBusinessDays round trips.
+        public int NextBusinessDaysCalls { get; private set; }
+
+        public int AddBusinessDaysCalls { get; private set; }
+
         private bool IsBusiness(DateTime d) =>
             d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
             && !extraNonBusinessDays.Contains(d.Date);
@@ -50,7 +56,28 @@ public class PaxBookingServiceTests
         public Task<DateTime> AddBusinessDaysAsync(int days, DateTime localDate, int clientId,
             CancellationToken ct)
         {
+            AddBusinessDaysCalls++;
+            return Task.FromResult(Walk(localDate, days));
+        }
+
+        public Task<IReadOnlyList<DateTime>> NextBusinessDaysAsync(int count, DateTime localDate,
+            int clientId, CancellationToken ct)
+        {
+            NextBusinessDaysCalls++;
+            var days = new List<DateTime>(count);
             var d = localDate.Date;
+            for (var i = 0; i < count; i++)
+            {
+                d = Walk(d, 1);
+                days.Add(d);
+            }
+
+            return Task.FromResult<IReadOnlyList<DateTime>>(days);
+        }
+
+        private DateTime Walk(DateTime from, int days)
+        {
+            var d = from.Date;
             for (var i = 0; i < days; i++)
             {
                 do
@@ -59,7 +86,7 @@ public class PaxBookingServiceTests
                 } while (!IsBusiness(d));
             }
 
-            return Task.FromResult(d);
+            return d;
         }
     }
 
@@ -125,6 +152,33 @@ public class PaxBookingServiceTests
     [
         new(9, 0, 0), new(12, 30, 0), new(15, 0, 0), new(17, 0, 0)
     ];
+
+    [Fact]
+    public async Task GetTimeslots_walks_the_business_day_chain_in_one_batched_call()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
+
+        // One run a day means eight windows span eight separate business days —
+        // the worst case for a walk that asks the database one hop at a time.
+        db.TucClients.Add(NewClient(77, economyRuns: true, new TimeSpan(9, 0, 0)));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
+        AddJob(db, 4242, 77);
+        await db.SaveChangesAsync(ct);
+
+        var calendar = NewCalendar();
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, calendar);
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
+
+        Assert.Equal(8, slots.Count);
+        Assert.Equal(1, calendar.NextBusinessDaysCalls);
+        Assert.Equal(0, calendar.AddBusinessDaysCalls);
+        // Wednesday the 10th through Friday the 19th, weekends skipped.
+        Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
+        Assert.Equal("Fri 19 Jun", slots[7].DayLabel);
+    }
 
     [Fact]
     public async Task GetTimeslots_returns_eight_windows_rolling_into_the_next_business_day()
@@ -854,7 +908,7 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
-    public async Task GetSummary_returns_the_baggage_file_reference_not_the_job_id()
+    public async Task GetSummary_returns_the_urgent_job_number_not_the_job_id_or_file_reference()
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
@@ -862,7 +916,7 @@ public class PaxBookingServiceTests
 
         db.TucJobs.Add(new TucJob
         {
-            UcjbId = 179252, UcjbNumber = "JOB-179252", UcjbClientRefa = " AKLA2633476 "
+            UcjbId = 179252, UcjbNumber = " URG-179252 ", UcjbClientRefa = "AKLA2633476"
         });
         await db.SaveChangesAsync(ct);
 
@@ -871,31 +925,58 @@ public class PaxBookingServiceTests
         var summary = await svc.GetSummaryAsync(179252, ct);
 
         Assert.NotNull(summary);
-        Assert.Equal("AKLA2633476", summary.Reference);
+        Assert.Equal("URG-179252", summary.JobNumber);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task GetSummary_returns_an_empty_reference_when_the_job_has_no_file_reference(
-        string? refa)
+    public async Task GetSummary_returns_an_empty_job_number_when_the_job_has_none(
+        string? jobNumber)
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
-        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientRefa = refa });
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = jobNumber, UcjbClientRefa = "AKLNZ12345" });
         await db.SaveChangesAsync(ct);
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
-        // The portal hides the reference badge on empty rather than showing a job id
-        // the passenger can't quote to the helpline.
+        // The portal hides the booking-reference tag on empty rather than falling
+        // back to an internal id the passenger can't quote.
         Assert.NotNull(summary);
-        Assert.Equal(string.Empty, summary.Reference);
+        Assert.Equal(string.Empty, summary.JobNumber);
+    }
+
+    [Fact]
+    public async Task GetJobNumber_returns_the_job_number_for_a_known_job()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        Assert.Equal("URG-7", await svc.GetJobNumberAsync(7, ct));
+    }
+
+    [Fact]
+    public async Task GetJobNumber_returns_null_when_despatch_has_no_such_job()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        Assert.Null(await svc.GetJobNumberAsync(404, ct));
     }
 
     [Fact]

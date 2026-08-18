@@ -18,6 +18,7 @@ namespace BaggageDelivery.Api.Controllers.Admin;
 public sealed class BookingLinksController(
     IEncryptionService encryption,
     INotificationService notifications,
+    IPaxBookingService bookings,
     IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
     private const string DefaultPassenger = "Unknown Passenger";
@@ -41,7 +42,14 @@ public sealed class BookingLinksController(
 
         var passengerName = body.PassengerName ?? DefaultPassenger;
         var airline = body.AirlineLabel ?? DefaultAirline;
-        var reference = body.Reference ?? body.JobId.ToString();
+        // The portal shows tucJob.ucjbNumber as the Booking Reference, so the
+        // message carrying the link quotes the same value. The caller's own
+        // reference is the fallback for a JobId Despatch doesn't know — the link
+        // is minted against a soft reference and the job may not exist yet.
+        var jobNumber = await bookings.GetJobNumberAsync(body.JobId, ct);
+        var reference = !string.IsNullOrWhiteSpace(jobNumber)
+            ? jobNumber.Trim()
+            : body.Reference ?? body.JobId.ToString();
 
         if (body.Channel is "sms" or "both" && !string.IsNullOrWhiteSpace(body.Phone))
         {

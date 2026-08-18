@@ -12,9 +12,9 @@ describe('Eyebrow', () => {
   it('renders every micro-label to the one spec', () => {
     // Six hand-tuned variants had drifted across the hero, the review dialog, the
     // ETA card and the slot rows before this component existed.
-    renderIn(<Eyebrow>File reference</Eyebrow>)
+    renderIn(<Eyebrow>Booking reference</Eyebrow>)
 
-    expect(screen.getByText('File reference')).toHaveStyle({
+    expect(screen.getByText('Booking reference')).toHaveStyle({
       fontSize: `${tokens.type.eyebrow.fontSize}px`,
       fontWeight: `${tokens.type.eyebrow.fontWeight}`,
       letterSpacing: tokens.type.eyebrow.letterSpacing,
@@ -66,16 +66,16 @@ describe('PunchedTag', () => {
   it('keeps the label and the value as separate nodes', () => {
     // The helpline asks the passenger to read the reference back on its own, so
     // the value has to be selectable without dragging the label along with it.
-    renderIn(<PunchedTag label="File reference" value="AKLA2633476" />)
+    renderIn(<PunchedTag label="Booking reference" value="URG-179252" />)
 
-    expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
-    expect(screen.getByText('AKLA2633476')).toBeInTheDocument()
+    expect(screen.getByText(/^booking reference$/i)).toBeInTheDocument()
+    expect(screen.getByText('URG-179252')).toBeInTheDocument()
   })
 
   it('sets the reference in tabular figures so it reads as a printed code', () => {
-    renderIn(<PunchedTag label="File reference" value="AKLA2633476" />)
+    renderIn(<PunchedTag label="Booking reference" value="URG-179252" />)
 
-    expect(screen.getByText('AKLA2633476')).toHaveStyle({
+    expect(screen.getByText('URG-179252')).toHaveStyle({
       fontVariantNumeric: 'tabular-nums',
     })
   })
@@ -84,11 +84,11 @@ describe('PunchedTag', () => {
     // Airline colour is identity, DFRNT cyan is affordance — the tag's ground and
     // its value stay neutral so the reference keeps its contrast for every carrier.
     const { container } = renderIn(
-      <PunchedTag label="File reference" value="REF-42" accent="#008c95" onScrim />,
+      <PunchedTag label="Booking reference" value="URG-42" accent="#008c95" onScrim />,
     )
 
     const painted = container.querySelectorAll('[style*="#008c95"]')
     expect(painted.length).toBeGreaterThan(0)
-    expect(screen.getByText('REF-42')).not.toHaveStyle({ color: '#008c95' })
+    expect(screen.getByText('URG-42')).not.toHaveStyle({ color: '#008c95' })
   })
 })

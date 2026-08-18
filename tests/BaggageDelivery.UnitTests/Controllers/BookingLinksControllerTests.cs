@@ -21,12 +21,14 @@ public class BookingLinksControllerTests
     {
         public IEncryptionService Encryption { get; } = Substitute.For<IEncryptionService>();
         public INotificationService Notifications { get; } = Substitute.For<INotificationService>();
+        public IPaxBookingService Bookings { get; } = Substitute.For<IPaxBookingService>();
         public ProblemDetailsFactory ProblemFactory { get; } = Substitute.For<ProblemDetailsFactory>();
         public BookingLinksController Controller { get; }
 
-        public Harness(string publicBaseUrl = "https://bags.example.com")
+        public Harness(string publicBaseUrl = "https://bags.example.com", string? jobNumber = "URG-4242")
         {
             Encryption.EncryptId(Arg.Any<int>()).Returns(Token);
+            Bookings.GetJobNumberAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(jobNumber);
 
             ProblemFactory.CreateProblemDetails(
                     Arg.Any<HttpContext>(), Arg.Any<int?>(), Arg.Any<string>(),
@@ -36,6 +38,7 @@ public class BookingLinksControllerTests
             Controller = new BookingLinksController(
                 Encryption,
                 Notifications,
+                Bookings,
                 Options.Create(new BookingLinkOptions { PublicBaseUrl = publicBaseUrl }))
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
@@ -207,22 +210,48 @@ public class BookingLinksControllerTests
     // ---- Notification content defaults --------------------------------------
 
     [Fact]
-    public async Task Passes_the_supplied_passenger_airline_and_reference_through()
+    public async Task Passes_the_supplied_passenger_and_airline_through()
     {
         var harness = new Harness();
 
-        await harness.Mint(passengerName: "Jane Pax", airlineLabel: "Air New Zealand", reference: "REF-1");
+        await harness.Mint(passengerName: "Jane Pax", airlineLabel: "Air New Zealand");
 
         var context = Assert.Single(harness.Sends).Context;
         Assert.Equal("Jane Pax", context.PassengerName);
         Assert.Equal("Air New Zealand", context.AirlineLabel);
-        Assert.Equal("REF-1", context.Reference);
+    }
+
+    // ---- Booking reference --------------------------------------------------
+
+    [Fact]
+    public async Task Quotes_the_urgent_job_number_over_the_callers_own_reference()
+    {
+        // The portal shows ucjbNumber as the Booking Reference, so the message that
+        // sends the passenger there has to quote the same value.
+        var harness = new Harness(jobNumber: " URG-4242 ");
+
+        await harness.Mint(jobId: 4242, reference: "AKLNZ12345");
+
+        Assert.Equal("URG-4242", Assert.Single(harness.Sends).Context.Reference);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public async Task Falls_back_to_the_callers_reference_when_despatch_has_no_job_number(
+        string? jobNumber)
+    {
+        var harness = new Harness(jobNumber: jobNumber);
+
+        await harness.Mint(jobId: 4242, reference: "AKLNZ12345");
+
+        Assert.Equal("AKLNZ12345", Assert.Single(harness.Sends).Context.Reference);
     }
 
     [Fact]
     public async Task Falls_back_to_defaults_and_the_job_id_when_details_are_absent()
     {
-        var harness = new Harness();
+        var harness = new Harness(jobNumber: null);
 
         await harness.Mint(jobId: 4242, passengerName: null, airlineLabel: null, reference: null);
 

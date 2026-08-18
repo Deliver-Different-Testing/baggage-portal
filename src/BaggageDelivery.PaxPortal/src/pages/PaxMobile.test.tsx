@@ -12,7 +12,7 @@ import type { BookingSummary, ConfirmBookingRequest, TimeSlot } from '../api/cli
 const summary: BookingSummary = {
   bookingId: 1,
   jobId: 42,
-  reference: 'REF-42',
+  jobNumber: 'URG-42',
   airlineLabel: 'Test Air',
   supportPhone: '0800 267 5494',
   passengerName: 'Test Passenger',
@@ -82,13 +82,13 @@ describe('ConfirmedScreen', () => {
     ).toBeInTheDocument()
   })
 
-  it('narrates the file reference and the chosen window', () => {
+  it('narrates the booking reference and the chosen window', () => {
     renderConfirmed('token-abc-123')
 
     // The reference is set as a baggage tag, same as the confirm hero: label and
     // value are separate nodes because the helpline asks for the value alone.
-    expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
-    expect(screen.getByText('REF-42')).toBeInTheDocument()
+    expect(screen.getByText(/^booking reference$/i)).toBeInTheDocument()
+    expect(screen.getByText('URG-42')).toBeInTheDocument()
     expect(screen.getByText('Delivery window')).toBeInTheDocument()
     expect(screen.getByText('Today, Wed 10 Jun')).toBeInTheDocument()
     expect(screen.getByText('2:00 PM – 5:00 PM')).toBeInTheDocument()
@@ -111,6 +111,35 @@ describe('ConfirmedScreen', () => {
     expect(screen.getByText('Authority to leave')).toBeInTheDocument()
     expect(screen.getByText('Safe Place')).toBeInTheDocument()
     expect(screen.getByText(/behind the blue bin/i)).toBeInTheDocument()
+  })
+
+  it('reads the extra delivery information back with the address', () => {
+    render(
+      <MemoryRouter>
+        <MantineTestProvider>
+          <ConfirmedScreen
+            summary={summary}
+            slot={slot}
+            bookingId="token-abc-123"
+            address={{ ...summary.deliveryAddress, line2: 'Apartment 4B, ring the buzzer' }}
+            passengerName="Test Passenger"
+            passengerPhone="+64211234567"
+            passengerEmail="test@example.com"
+            atlOption={undefined}
+            accessNotes=""
+          />
+        </MantineTestProvider>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Extra delivery information')).toBeInTheDocument()
+    expect(screen.getByText('Apartment 4B, ring the buzzer')).toBeInTheDocument()
+  })
+
+  it('leaves no empty extra-information block when the booking has none', () => {
+    renderConfirmed('token-abc-123')
+
+    expect(screen.queryByText(/extra delivery information/i)).not.toBeInTheDocument()
   })
 
   it('keeps the Ink hero rather than introducing a green one', () => {
@@ -211,32 +240,32 @@ describe('PaxMobile — Authority to Leave submit', () => {
     )
   }
 
-  it('narrates the baggage file reference, not the job id', async () => {
+  it('narrates the urgent job number, not the job id', async () => {
     server.use(
       http.get('*/pax/:id/booking', () =>
-        HttpResponse.json(booking({ reference: 'AKLA2633476' })),
+        HttpResponse.json(booking({ jobNumber: 'URG-179252' })),
       ),
     )
 
     renderForm()
 
     // Label and value are separate nodes on the tag, so they are matched apart.
-    expect(await screen.findByText('AKLA2633476')).toBeInTheDocument()
-    expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
+    expect(await screen.findByText('URG-179252')).toBeInTheDocument()
+    expect(screen.getByText(/^booking reference$/i)).toBeInTheDocument()
     expect(screen.queryByText(/REF · 42/)).not.toBeInTheDocument()
   })
 
-  it('omits the reference line when the job carries no file reference', async () => {
+  it('omits the reference line when the job carries no job number', async () => {
     server.use(
       http.get('*/pax/:id/booking', () =>
-        HttpResponse.json(booking({ reference: '' })),
+        HttpResponse.json(booking({ jobNumber: '' })),
       ),
     )
 
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    expect(screen.queryByText(/file reference/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/booking reference/i)).not.toBeInTheDocument()
   })
 
   it('heads the slot picker "Delivery window" rather than "Delivery time"', async () => {
@@ -478,6 +507,52 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await waitFor(() => expect(lastConfirmBody).not.toBeNull())
     expect(lastConfirmBody!.address.line2).toBe('Apartment 4B, ring the buzzer')
+  })
+
+  it('shows the saved extra delivery information without opening the editor', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({
+            deliveryAddress: { ...summary.deliveryAddress, line2: 'Gate code 1234' },
+          }),
+        ),
+      ),
+    )
+
+    renderForm()
+
+    // Deane's review: delivery instructions are what the driver needs, so they
+    // are read back with the address rather than hidden behind Edit.
+    expect(await screen.findByText('Extra delivery information')).toBeInTheDocument()
+    expect(screen.getByText('Gate code 1234')).toBeInTheDocument()
+  })
+
+  it('leaves no empty extra-information block when the booking has none', async () => {
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    expect(screen.queryByText(/extra delivery information/i)).not.toBeInTheDocument()
+  })
+
+  it('reads the extra delivery information back in the review dialog', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+    await user.type(
+      screen.getByRole('textbox', { name: /extra delivery information/i }),
+      'Apartment 4B, ring the buzzer',
+    )
+    await confirmAddress(user)
+    await openReview(user)
+
+    const dialog = within(
+      await screen.findByRole('dialog', { name: /check your delivery details/i }),
+    )
+    expect(dialog.getByText('Extra delivery information')).toBeInTheDocument()
+    expect(dialog.getByText('Apartment 4B, ring the buzzer')).toBeInTheDocument()
   })
 
   it('reopens the editor when a field hidden behind it is invalid', async () => {
@@ -918,13 +993,13 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(airline.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('sets the file reference as a baggage tag under the task', async () => {
+  it('sets the booking reference as a baggage tag under the task', async () => {
     renderForm()
 
     // The one token the passenger will be read back over the phone, and the
     // page's answer to the question they arrived with — does anyone have my bag.
-    const value = await screen.findByText('REF-42')
-    const label = screen.getByText(/^file reference$/i)
+    const value = await screen.findByText('URG-42')
+    const label = screen.getByText(/^booking reference$/i)
     const task = screen.getByRole('heading', { level: 1, name: /Confirm your baggage delivery/i })
 
     expect(task.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -23,9 +23,14 @@ const ETA_END = '2026-06-10T05:00:00Z'
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 
-// Relative to the wall clock, so the "Nh ago" branch stays stable whenever the
-// suite runs. The absolute-date branches get their own fixtures below.
-const hoursAgo = (h: number) => new Date(Date.now() - h * HOUR_MS).toISOString()
+// Pinned, not the wall clock: the page shows bare clock time only while an event
+// falls on the same local day as now, and a day-and-time stamp otherwise. Built
+// in local time so it lands at midday in whatever zone the runner uses — a suite
+// run just after local midnight (CI runs in UTC) would push the "2h ago" event
+// onto the previous day, and a run in early January would push the week-old one
+// into the previous year.
+const NOW = new Date(2026, 5, 10, 12, 0, 0)
+const hoursAgo = (h: number) => new Date(NOW.getTime() - h * HOUR_MS).toISOString()
 
 const timeline: TrackingTimeline = {
   jobId: 42,
@@ -67,6 +72,14 @@ function renderTracking() {
 }
 
 describe('Tracking', () => {
+  beforeEach(() => {
+    // shouldAdvanceTime keeps MSW and React Query's async resolution moving while
+    // the clock the page reads stays anchored to NOW.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(NOW)
+  })
+  afterEach(() => vi.useRealTimers())
+
   it('renders the ETA window as a local time range with its date', async () => {
     renderTracking()
 
@@ -140,7 +153,7 @@ describe('Tracking', () => {
   })
 
   it('drops to a day-and-month date once an event is over a day old', async () => {
-    const lastWeek = new Date(Date.now() - 7 * DAY_MS)
+    const lastWeek = new Date(NOW.getTime() - 7 * DAY_MS)
     server.use(
       http.get('*/pax/:id/tracking', () =>
         HttpResponse.json({
@@ -160,7 +173,7 @@ describe('Tracking', () => {
   })
 
   it('adds the year once an event falls outside the current one', async () => {
-    const lastYear = new Date(Date.now() - 400 * DAY_MS)
+    const lastYear = new Date(NOW.getTime() - 400 * DAY_MS)
     server.use(
       http.get('*/pax/:id/tracking', () =>
         HttpResponse.json({

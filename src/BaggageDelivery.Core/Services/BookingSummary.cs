@@ -4,7 +4,9 @@ namespace BaggageDelivery.Core.Services;
 
 public sealed record BookingSummary(
     int JobId,
-    string Reference,
+    // The Urgent job number (tucJob.ucjbNumber) — the reference ops and the
+    // passenger both quote. Empty when the job carries none.
+    string JobNumber,
     string AirlineLabel,
     string? AirlineCode,
     // The number behind "Need help? Call …": the client's own phone, or the

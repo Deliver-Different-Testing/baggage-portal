@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw'
 import { queryClient } from './queryClient'
 import { prefetchRouteData } from './prefetch'
 
-const booking = { bookingId: 1, jobId: 42, reference: 'REF-42' }
+const booking = { bookingId: 1, jobId: 42, jobNumber: 'URG-42' }
 const timeslots = [{ id: 'slot-1', runUtc: '2026-06-10T02:00:00Z' }]
 const tracking = { jobId: 42, currentStatus: 'OutForDelivery', events: [] }
 
