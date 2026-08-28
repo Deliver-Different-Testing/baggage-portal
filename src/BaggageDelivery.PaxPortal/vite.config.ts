@@ -37,7 +37,7 @@ export default defineConfig({
             urlPattern: /\/api\/v1\/pax\/[^/]+\/booking$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'pax-booking',
+              cacheName: 'pax-booking-v2',
               networkTimeoutSeconds: 4,
               expiration: { maxAgeSeconds: 60 * 30 },
             },

@@ -12,6 +12,7 @@ import type { BookingSummary, ConfirmBookingRequest, TimeSlot } from '../api/cli
 const summary: BookingSummary = {
   bookingId: 1,
   jobId: 42,
+  jobNumber: 'URG-179252',
   fileReference: 'AKLNZ12345',
   airlineLabel: 'Test Air',
   supportPhone: '0800 267 5494',
@@ -19,15 +20,17 @@ const summary: BookingSummary = {
   passengerPhone: '+64211234567',
   passengerEmail: 'test@example.com',
   deliveryAddress: {
-    line1: '123 Test St',
-    suburb: 'Suburb',
-    city: 'Auckland',
-    postCode: '1010',
+    line3: '123',
+    line4: 'Test St',
+    line5: 'Suburb',
+    line6: 'Auckland',
+    line7: '1010',
     country: 'NZ',
   },
   earliestSlotUtc: '2026-06-10T00:00:00Z',
   latestSlotUtc: '2026-06-11T00:00:00Z',
   atlOptions: [],
+  trackingAvailable: true,
 }
 
 const slot: TimeSlot = {
@@ -46,12 +49,12 @@ const tomorrowSlot: TimeSlot = {
   firstAvailable: false,
 }
 
-function renderConfirmed(bookingId: string) {
+function renderConfirmed(bookingId: string, overrides: Partial<BookingSummary> = {}) {
   return render(
     <MemoryRouter>
       <MantineTestProvider>
         <ConfirmedScreen
-          summary={summary}
+          summary={{ ...summary, ...overrides }}
           slot={slot}
           bookingId={bookingId}
           address={summary.deliveryAddress}
@@ -82,14 +85,55 @@ describe('ConfirmedScreen', () => {
     ).toBeInTheDocument()
   })
 
-  it('narrates the file reference and the chosen window', () => {
+  it('narrates the job number, the file reference and the chosen window', () => {
     renderConfirmed('token-abc-123')
 
+    expect(screen.getByText(/^job number$/i)).toBeInTheDocument()
+    expect(screen.getByText('URG-179252')).toBeInTheDocument()
     expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
     expect(screen.getByText('AKLNZ12345')).toBeInTheDocument()
     expect(screen.getByText('Delivery window')).toBeInTheDocument()
     expect(screen.getByText('Today, Wed 10 Jun')).toBeInTheDocument()
     expect(screen.getByText('2:00 PM – 5:00 PM')).toBeInTheDocument()
+  })
+
+  it('leads with the job number and closes with the file reference', () => {
+    renderConfirmed('token-abc-123')
+
+    const jobNumber = screen.getByText('URG-179252')
+    const fileReference = screen.getByText('AKLNZ12345')
+    const authorityToLeave = screen.getByText('Authority to leave')
+
+    expect(jobNumber.compareDocumentPosition(authorityToLeave) & 4).toBeTruthy()
+    expect(authorityToLeave.compareDocumentPosition(fileReference) & 4).toBeTruthy()
+  })
+
+  it('drops the job number tag when Despatch has no number for the job', () => {
+    renderConfirmed('token-abc-123', { jobNumber: '' })
+
+    expect(screen.queryByText(/^job number$/i)).not.toBeInTheDocument()
+  })
+
+  it('scrolls back to the top so the passenger lands on the hero', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+
+    renderConfirmed('token-abc-123')
+
+    expect(scrollTo).toHaveBeenCalledWith(0, 0)
+    scrollTo.mockRestore()
+  })
+
+  it('greys out tracking until a courier is actually under way', async () => {
+    renderConfirmed('token-abc-123', { trackingAvailable: false })
+
+    expect(screen.queryByRole('link', { name: /track your delivery/i })).not.toBeInTheDocument()
+
+    const button = screen.getByRole('button', { name: /track your delivery/i })
+    expect(button).toBeDisabled()
+
+    expect(
+      screen.getByText(/tracking will be available once your delivery starts/i),
+    ).toBeInTheDocument()
   })
 
   it('issues a full docket of what was submitted', () => {
@@ -128,14 +172,14 @@ describe('ConfirmedScreen', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Extra delivery information')).toBeInTheDocument()
+    expect(screen.getByText('Apartment, unit or suite')).toBeInTheDocument()
     expect(screen.getByText('Apartment 4B, ring the buzzer')).toBeInTheDocument()
   })
 
   it('leaves no empty extra-information block when the booking has none', () => {
     renderConfirmed('token-abc-123')
 
-    expect(screen.queryByText(/extra delivery information/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/apartment, unit or suite/i)).not.toBeInTheDocument()
   })
 
   it('keeps the Ink hero rather than introducing a green one', () => {
@@ -445,7 +489,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
   async function editAddress(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await screen.findByRole('button', { name: /^edit$/i }))
-    await screen.findByRole('textbox', { name: /street address/i })
+    await screen.findByRole('textbox', { name: /street name/i })
   }
 
   async function openReview(user: ReturnType<typeof userEvent.setup>) {
@@ -476,9 +520,9 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(screen.getByRole('checkbox', { name: /this address is correct/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
 
-    expect(screen.queryByRole('textbox', { name: /street address/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /street name/i })).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('textbox', { name: /extra delivery information/i }),
+      screen.queryByRole('textbox', { name: /apartment, unit or suite/i }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: /search address/i })).not.toBeInTheDocument()
 
@@ -493,12 +537,120 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await editAddress(user)
 
     expect(screen.getByRole('combobox', { name: /search address/i })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: /street address/i })).toHaveValue('123 Test St')
-    expect(screen.getByRole('textbox', { name: /extra delivery information/i })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /street number/i })).toHaveValue('123')
+    expect(screen.getByRole('textbox', { name: /street name/i })).toHaveValue('Test St')
+    expect(screen.getByRole('textbox', { name: /apartment, unit or suite/i })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /suburb/i })).toHaveValue('Suburb')
     expect(screen.getByRole('textbox', { name: /city/i })).toHaveValue('Auckland')
     expect(screen.getByRole('textbox', { name: /postcode/i })).toHaveValue('1010')
     expect(screen.getByRole('textbox', { name: /country/i })).toHaveValue('NZ')
+  })
+
+  it('relabels the locality fields for a US address', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({
+            deliveryAddress: {
+              line3: '350',
+              line4: '5th Ave',
+              line5: 'New York',
+              line6: 'NY',
+              line7: '10118',
+              country: 'US',
+            },
+          }),
+        ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+
+    expect(screen.getByRole('textbox', { name: /^city$/i })).toHaveValue('New York')
+    expect(screen.getByRole('textbox', { name: /^state$/i })).toHaveValue('NY')
+    expect(screen.getByRole('textbox', { name: /zip code/i })).toHaveValue('10118')
+    expect(screen.queryByRole('textbox', { name: /suburb/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /postcode/i })).not.toBeInTheDocument()
+  })
+
+  it('drops stale coordinates when the passenger retypes the street', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({
+            deliveryAddress: {
+              ...summary.deliveryAddress,
+              latitude: -36.8485,
+              longitude: 174.7633,
+            },
+          }),
+        ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+    await user.clear(screen.getByRole('textbox', { name: /street name/i }))
+    await user.type(screen.getByRole('textbox', { name: /street name/i }), 'Other St')
+    await confirmAddress(user)
+    await reviewAndConfirm(user)
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.address.latitude).toBeNull()
+    expect(lastConfirmBody!.address.longitude).toBeNull()
+  })
+
+  it('keeps the coordinates that came with the booking when the street is untouched', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({
+            deliveryAddress: {
+              ...summary.deliveryAddress,
+              latitude: -36.8485,
+              longitude: 174.7633,
+            },
+          }),
+        ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await confirmAddress(user)
+    await reviewAndConfirm(user)
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.address.latitude).toBe(-36.8485)
+    expect(lastConfirmBody!.address.longitude).toBe(174.7633)
+  })
+
+  it('posts each address line under its own key', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await confirmAddress(user)
+    await reviewAndConfirm(user)
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.address).toMatchObject({
+      line3: '123',
+      line4: 'Test St',
+      line5: 'Suburb',
+      line6: 'Auckland',
+      line7: '1010',
+      country: 'NZ',
+    })
   })
 
   it('closes the editor again once the passenger says the address is correct', async () => {
@@ -511,7 +663,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await confirmAddress(user)
 
     await waitFor(() =>
-      expect(screen.queryByRole('textbox', { name: /street address/i })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('textbox', { name: /street name/i })).not.toBeInTheDocument(),
     )
     expect(screen.queryByRole('combobox', { name: /search address/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
@@ -524,7 +676,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await screen.findByText(/confirm your baggage delivery/i)
     await editAddress(user)
     await user.type(
-      screen.getByRole('textbox', { name: /extra delivery information/i }),
+      screen.getByRole('textbox', { name: /apartment, unit or suite/i }),
       'Apartment 4B, ring the buzzer',
     )
 
@@ -548,7 +700,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     renderForm()
 
-    expect(await screen.findByText('Extra delivery information')).toBeInTheDocument()
+    expect(await screen.findByText('Apartment, unit or suite')).toBeInTheDocument()
     expect(screen.getByText('Gate code 1234')).toBeInTheDocument()
   })
 
@@ -556,7 +708,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    expect(screen.queryByText(/extra delivery information/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/apartment, unit or suite/i)).not.toBeInTheDocument()
   })
 
   it('reads the extra delivery information back in the review dialog', async () => {
@@ -566,7 +718,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await screen.findByText(/confirm your baggage delivery/i)
     await editAddress(user)
     await user.type(
-      screen.getByRole('textbox', { name: /extra delivery information/i }),
+      screen.getByRole('textbox', { name: /apartment, unit or suite/i }),
       'Apartment 4B, ring the buzzer',
     )
     await confirmAddress(user)
@@ -575,7 +727,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const dialog = within(
       await screen.findByRole('dialog', { name: /check your delivery details/i }),
     )
-    expect(dialog.getByText('Extra delivery information')).toBeInTheDocument()
+    expect(dialog.getByText('Apartment, unit or suite')).toBeInTheDocument()
     expect(dialog.getByText('Apartment 4B, ring the buzzer')).toBeInTheDocument()
   })
 
@@ -583,7 +735,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     server.use(
       http.get('*/pax/:id/booking', () =>
         HttpResponse.json(
-          booking({ deliveryAddress: { ...summary.deliveryAddress, suburb: '' } }),
+          booking({ deliveryAddress: { ...summary.deliveryAddress, line5: '' } }),
         ),
       ),
     )
@@ -1206,5 +1358,76 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(steps).toHaveLength(3)
     expect(steps[0]).toHaveAttribute('data-progress')
     steps.forEach((step) => expect(step).toHaveAttribute('tabindex', '-1'))
+  })
+})
+
+describe('PaxMobile — a booking that is already confirmed', () => {
+  const confirmedBooking = {
+    ...summary,
+    atlOptions: [{ id: 7, name: 'Safe Place' }],
+    trackingAvailable: false,
+    confirmation: {
+      confirmedAtUtc: '2026-06-10T00:30:00Z',
+      deliveryTimeUtc: '2026-06-10T21:00:00Z',
+      dayLabel: 'Tomorrow, Thu 11 Jun',
+      windowLabel: '9:00 AM – 12:00 PM',
+      atlOptionId: 7,
+      accessNotes: 'Behind the blue bin',
+    },
+  }
+
+  const server = setupServer(
+    http.get('*/antiforgery/token', () => new HttpResponse(null, { status: 204 })),
+    http.get('*/pax/:id/booking', () => HttpResponse.json(confirmedBooking)),
+    http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])),
+  )
+
+  beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
+  afterEach(() => server.resetHandlers())
+  afterAll(() => server.close())
+
+  function renderPage() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
+      <MemoryRouter initialEntries={['/c/token-xyz']}>
+        <MantineTestProvider>
+          <QueryClientProvider client={queryClient}>
+            <Routes>
+              <Route path="/c/:id" element={<PaxMobile />} />
+            </Routes>
+          </QueryClientProvider>
+        </MantineTestProvider>
+      </MemoryRouter>,
+    )
+  }
+
+  it('reopens as the confirmation, never as a form the passenger can resubmit', async () => {
+    renderPage()
+
+    expect(await screen.findByRole('heading', { level: 1, name: /you're all set/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /review and confirm/i })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: /confirm your baggage delivery/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('reads the stored booking back rather than the first available window', async () => {
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: /you're all set/i })
+
+    expect(screen.getByText('Tomorrow, Thu 11 Jun')).toBeInTheDocument()
+    expect(screen.getByText('9:00 AM – 12:00 PM')).toBeInTheDocument()
+    expect(screen.getByText('Safe Place')).toBeInTheDocument()
+    expect(screen.getByText(/behind the blue bin/i)).toBeInTheDocument()
+    expect(screen.getByText('Test Passenger')).toBeInTheDocument()
+  })
+
+  it('holds tracking closed until the job is under way', async () => {
+    renderPage()
+
+    await screen.findByRole('heading', { level: 1, name: /you're all set/i })
+
+    expect(screen.getByRole('button', { name: /track your delivery/i })).toBeDisabled()
   })
 })

@@ -1,4 +1,4 @@
-using System.Collections.Frozen;
+﻿using System.Collections.Frozen;
 using System.Net.Http.Json;
 using BaggageDelivery.Core.Globalization;
 using BaggageDelivery.Core.Interfaces;
@@ -131,19 +131,19 @@ public sealed class AddressLookupService(
         }
 
         var addr = response.Address;
-        var street = string.IsNullOrEmpty(addr.HouseNumber)
-            ? addr.Street
-            : $"{addr.HouseNumber} {addr.Street}";
 
         return new AddressDetail
         {
-            Street = street,
+            StreetNumber = addr.HouseNumber,
+            Street = addr.Street,
             Suburb = addr.District,
             City = addr.City,
             State = addr.State,
             StateCode = addr.StateCode,
             PostalCode = addr.PostalCode,
-            CountryCode = ToIso2(addr.CountryCode)
+            CountryCode = ToIso2(addr.CountryCode),
+            Latitude = response.Position?.Lat,
+            Longitude = response.Position?.Lng
         };
     }
 

@@ -1,8 +1,9 @@
 using BaggageDelivery.Api.DTOs.Admin;
-using BaggageDelivery.Core.Interfaces;
+using BaggageDelivery.Core.Interfaces; 
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Security;
+using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +23,6 @@ public sealed class BookingLinksController(
     IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
     private const string DefaultPassenger = "Unknown Passenger";
-    private const string DefaultAirline = "Deliver DFRNT";
     
     [HttpPost("")]
     [EnableRateLimiting("admin-mint")]
@@ -40,19 +40,20 @@ public sealed class BookingLinksController(
         var confirmUrl = $"{publicBase}/c/{token}";
         var trackUrl = $"{publicBase}/t/{token}";
 
+        var details = await bookings.GetNotificationDetailsAsync(body.JobId, ct);
+
         var passengerName = body.PassengerName ?? DefaultPassenger;
-        var airline = body.AirlineLabel ?? DefaultAirline;
-        var jobNumber = await bookings.GetJobNumberAsync(body.JobId, ct);
-        var reference = !string.IsNullOrWhiteSpace(jobNumber)
-            ? jobNumber.Trim()
-            : body.Reference ?? body.JobId.ToString();
+        var airline = !string.IsNullOrWhiteSpace(body.AirlineLabel)
+            ? body.AirlineLabel
+            : details?.AirlineLabel ?? BookingNotificationDetails.UnknownAirline;
+        var fileReference = details?.FileReference ?? string.Empty;
 
         if (body.Channel is "sms" or "both" && !string.IsNullOrWhiteSpace(body.Phone))
         {
             await notifications.SendBookingLinkAsync(
                 body.JobId, body.Phone!,
                 new BookingNotificationContext(
-                    NotificationChannel.Sms, passengerName, airline, reference, confirmUrl),
+                    NotificationChannel.Sms, passengerName, airline, fileReference, confirmUrl),
                 ct);
         }
 
@@ -61,7 +62,7 @@ public sealed class BookingLinksController(
             await notifications.SendBookingLinkAsync(
                 body.JobId, body.Email!,
                 new BookingNotificationContext(
-                    NotificationChannel.Email, passengerName, airline, reference, confirmUrl),
+                    NotificationChannel.Email, passengerName, airline, fileReference, confirmUrl),
                 ct);
         }
 

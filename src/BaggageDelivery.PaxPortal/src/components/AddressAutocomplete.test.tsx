@@ -32,13 +32,16 @@ const suggestions: AddressSearchResult[] = [
 ]
 
 const detail: AddressDetail = {
-  street: '123 Queen Street',
+  streetNumber: '123',
+  street: 'Queen Street',
   suburb: 'Onehunga',
   city: 'Auckland',
   state: 'Auckland',
   stateCode: 'AUK',
   postalCode: '1061',
   countryCode: 'NZ',
+  latitude: -36.9333,
+  longitude: 174.7833,
 }
 
 const server = setupServer(

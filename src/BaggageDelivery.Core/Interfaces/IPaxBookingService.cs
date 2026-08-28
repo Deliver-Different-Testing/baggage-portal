@@ -6,7 +6,7 @@ public interface IPaxBookingService
 {
     Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct);
 
-    Task<string?> GetJobNumberAsync(int jobId, CancellationToken ct);
+    Task<BookingNotificationDetails?> GetNotificationDetailsAsync(int jobId, CancellationToken ct);
 
     Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId, DateTime? localDate, CancellationToken ct);
 

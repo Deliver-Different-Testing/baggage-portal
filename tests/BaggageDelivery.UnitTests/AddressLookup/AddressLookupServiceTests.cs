@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.UnitTests.Helpers;
 using Microsoft.Extensions.Options;
@@ -291,7 +291,7 @@ public class AddressLookupServiceTests
     }
 
     [Fact]
-    public async Task Lookup_maps_the_address_and_composes_street()
+    public async Task Lookup_keeps_the_street_number_separate_from_the_street_name()
     {
         var handler = StubHttpMessageHandler.Json(HttpStatusCode.OK, """
                                                                      {
@@ -306,6 +306,10 @@ public class AddressLookupServiceTests
                                                                          "street": "Queen Street",
                                                                          "houseNumber": "12",
                                                                          "postalCode": "1010"
+                                                                       },
+                                                                       "position": {
+                                                                         "lat": -36.8485,
+                                                                         "lng": 174.7633
                                                                        }
                                                                      }
                                                                      """);
@@ -314,13 +318,39 @@ public class AddressLookupServiceTests
             .LookupAsync("here:af:street:abc", TestContext.Current.CancellationToken);
 
         Assert.NotNull(detail);
-        Assert.Equal("12 Queen Street", detail.Street);
+        Assert.Equal("12", detail.StreetNumber);
+        Assert.Equal("Queen Street", detail.Street);
         Assert.Equal("Auckland Central", detail.Suburb);
         Assert.Equal("Auckland", detail.City);
         Assert.Equal("Auckland", detail.State);
         Assert.Equal("AUK", detail.StateCode);
         Assert.Equal("1010", detail.PostalCode);
         Assert.Equal("NZ", detail.CountryCode);
+        Assert.Equal(-36.8485m, detail.Latitude);
+        Assert.Equal(174.7633m, detail.Longitude);
+    }
+
+    [Fact]
+    public async Task Lookup_leaves_coordinates_null_when_here_returns_no_position()
+    {
+        var handler = StubHttpMessageHandler.Json(HttpStatusCode.OK, """
+                                                                     {
+                                                                       "id": "here:af:street:abc",
+                                                                       "address": {
+                                                                         "label": "Queen Street, Auckland",
+                                                                         "countryCode": "NZL",
+                                                                         "city": "Auckland",
+                                                                         "street": "Queen Street"
+                                                                       }
+                                                                     }
+                                                                     """);
+
+        var detail = await NewService(handler)
+            .LookupAsync("here:af:street:abc", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(detail);
+        Assert.Null(detail.Latitude);
+        Assert.Null(detail.Longitude);
     }
 
     [Fact]

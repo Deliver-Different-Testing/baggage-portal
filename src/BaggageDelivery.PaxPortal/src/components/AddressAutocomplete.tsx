@@ -28,7 +28,7 @@ export const AddressAutocomplete = memo(function AddressAutocomplete({
     try {
       const detail = await getDetails(match.id)
       const fullDisplay = [
-        detail.street,
+        [detail.streetNumber, detail.street].filter(Boolean).join(' '),
         detail.suburb,
         detail.city,
         detail.stateCode || detail.state,

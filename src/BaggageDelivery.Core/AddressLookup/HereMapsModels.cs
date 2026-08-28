@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace BaggageDelivery.Core.AddressLookup;
 
@@ -56,6 +56,15 @@ public sealed class HereMapsAddress
     public string PostalCode { get; set; } = string.Empty;
 }
 
+public sealed class HereMapsPosition
+{
+    [JsonPropertyName("lat")]
+    public decimal? Lat { get; set; }
+
+    [JsonPropertyName("lng")]
+    public decimal? Lng { get; set; }
+}
+
 public sealed class HereMapsLookupResponse
 {
     [JsonPropertyName("id")]
@@ -69,4 +78,7 @@ public sealed class HereMapsLookupResponse
 
     [JsonPropertyName("address")]
     public HereMapsAddress? Address { get; set; }
+
+    [JsonPropertyName("position")]
+    public HereMapsPosition? Position { get; set; }
 }

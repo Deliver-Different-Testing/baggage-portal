@@ -4,6 +4,7 @@ namespace BaggageDelivery.Api.DTOs.Pax;
 
 public sealed record BookingSummaryDto(
     int JobId,
+    string JobNumber,
     string FileReference,
     string AirlineLabel,
     string? AirlineCode,
@@ -15,16 +16,28 @@ public sealed record BookingSummaryDto(
     DateTime EarliestSlotUtc,
     DateTime LatestSlotUtc,
     AtlOptionDto[] AtlOptions,
-    int? DefaultAtlOptionId);
+    int? DefaultAtlOptionId,
+    bool TrackingAvailable,
+    BookingConfirmationDto? Confirmation);
+
+public sealed record BookingConfirmationDto(
+    DateTime ConfirmedAtUtc,
+    DateTime? DeliveryTimeUtc,
+    string DayLabel,
+    string WindowLabel,
+    int? AtlOptionId,
+    string? AccessNotes);
 
 public sealed record AtlOptionDto(int Id, string Name);
 
 public sealed record AddressDto(
-    [Required, MaxLength(200)] string Line1,
-    [MaxLength(200)] string? Line2,
-    [MaxLength(100)] string? Suburb,
-    [Required, MaxLength(100)] string City,
-    [MaxLength(20)] string? PostCode,
+    [MaxLength(255)] string? Line1,
+    [MaxLength(255)] string? Line2,
+    [MaxLength(255)] string? Line3,
+    [Required, MaxLength(255)] string Line4,
+    [Required, MaxLength(255)] string Line5,
+    [Required, MaxLength(255)] string Line6,
+    [MaxLength(255)] string? Line7,
     [Required, MaxLength(100)] string Country,
     decimal? Latitude,
     decimal? Longitude);
