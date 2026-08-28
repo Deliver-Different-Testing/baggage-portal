@@ -57,41 +57,39 @@ function Plane({ x, y, angle, scale }: { x: number; y: number; angle: number; sc
   )
 }
 
-export const FlightPathBackdrop = memo(function FlightPathBackdrop() {
-  return (
+export const FlightPathBackdrop = memo(() => (
     <svg
-      aria-hidden="true"
-      focusable="false"
-      width={340}
-      height={240}
-      viewBox="0 0 340 240"
-      style={{
-        position: 'absolute',
-        top: -24,
-        right: -28,
-        pointerEvents: 'none',
-        zIndex: 0,
-      }}
+        aria-hidden="true"
+        focusable="false"
+        width={340}
+        height={240}
+        viewBox="0 0 340 240"
+        style={{
+            position: 'absolute',
+            top: -24,
+            right: -28,
+            pointerEvents: 'none',
+            zIndex: 0,
+        }}
     >
-      {/* The sector, climbing away to the corner. Dashes thin out along the way, so
+        {/* The sector, climbing away to the corner. Dashes thin out along the way, so
           the near end reads as the one in front. */}
-      <path
-        d="M4 214 C 78 206, 168 176, 236 74"
-        fill="none"
-        stroke={ARC}
-        strokeWidth={1.25}
-        strokeDasharray="5 8"
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-      />
-      <circle cx={4} cy={214} r={2.5} fill={NODE} />
+        <path
+            d="M4 214 C 78 206, 168 176, 236 74"
+            fill="none"
+            stroke={ARC}
+            strokeWidth={1.25}
+            strokeDasharray="5 8"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+        />
+        <circle cx={4} cy={214} r={2.5} fill={NODE}/>
 
-      {/* Trailing aircraft, further down the path and smaller — depth, not a second
+        {/* Trailing aircraft, further down the path and smaller — depth, not a second
           subject. */}
-      <Plane x={150} y={186} angle={-22} scale={0.85} />
+        <Plane x={150} y={186} angle={-22} scale={0.85}/>
 
-      {/* The lead, at the head of the arc and half off the corner. */}
-      <Plane x={252} y={56} angle={-52} scale={1.7} />
+        {/* The lead, at the head of the arc and half off the corner. */}
+        <Plane x={252} y={56} angle={-52} scale={1.7}/>
     </svg>
-  )
-})
+))

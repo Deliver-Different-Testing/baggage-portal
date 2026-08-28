@@ -22,18 +22,23 @@ public class PaxTrackingControllerTests
 
     private sealed class Harness
     {
-        public IEncryptionService Encryption { get; } = Substitute.For<IEncryptionService>();
+        private IEncryptionService Encryption { get; } = Substitute.For<IEncryptionService>();
         public IPaxTrackingService Tracking { get; } = Substitute.For<IPaxTrackingService>();
         public PaxTrackingController Controller { get; }
-        public MemoryStream ResponseBody { get; } = new();
+        private MemoryStream ResponseBody { get; } = new();
         public DefaultHttpContext HttpContext { get; }
 
         public Harness(int? decryptsTo = 4242)
         {
             Encryption.DecryptId(Arg.Any<string>()).Returns(decryptsTo);
 
-            HttpContext = new DefaultHttpContext();
-            HttpContext.Response.Body = ResponseBody;
+            HttpContext = new DefaultHttpContext
+            {
+                Response =
+                {
+                    Body = ResponseBody
+                }
+            };
 
             Controller = new PaxTrackingController(Encryption, Tracking)
             {
@@ -99,16 +104,15 @@ public class PaxTrackingControllerTests
     public async Task Stream_sets_the_event_stream_headers()
     {
         var harness = new Harness();
-        using var cts = new CancellationTokenSource();
-        // Cancel shortly after the first poll: late enough that the SSE write
-        // still succeeds, early enough that the 10s idle delay is cut short
-        // instead of holding the test open.
-        harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                cts.CancelAfter(TimeSpan.FromMilliseconds(250));
-                return NewDto();
-            });
+        harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>()).Returns(NewDto());
+
+        // Stream writes the headers and the first event before it ever awaits the
+        // 10s idle delay, so the token only has to cut that delay short rather than
+        // arrive at any particular moment. Cancelling on a timer keeps the source
+        // out of the substitute's callback: the callback lives on the substitute and
+        // outlives this scope, so capturing a `using` variable there left it holding
+        // a disposed source (AccessToDisposedClosure).
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         await harness.Controller.Stream(Token, cts.Token);
 
@@ -122,13 +126,11 @@ public class PaxTrackingControllerTests
     public async Task Stream_writes_the_timeline_as_a_camelCase_sse_event()
     {
         var harness = new Harness();
-        using var cts = new CancellationTokenSource();
-        harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                cts.CancelAfter(TimeSpan.FromMilliseconds(250));
-                return NewDto();
-            });
+        harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>()).Returns(NewDto());
+
+        // See Stream_sets_the_event_stream_headers: the first write lands before the
+        // idle delay, so a timer cancels the loop without the callback capturing cts.
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         await harness.Controller.Stream(Token, cts.Token);
 
@@ -143,13 +145,12 @@ public class PaxTrackingControllerTests
     public async Task Stream_writes_nothing_while_the_job_has_no_timeline()
     {
         var harness = new Harness();
-        using var cts = new CancellationTokenSource();
         harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                cts.Cancel();
-                return (TrackingDto?)null;
-            });
+            .Returns((TrackingDto?)null);
+
+        // Nothing is written when the poll comes back empty, so the token only has to
+        // end the idle delay — again without the callback holding a disposed source.
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         await harness.Controller.Stream(Token, cts.Token);
 

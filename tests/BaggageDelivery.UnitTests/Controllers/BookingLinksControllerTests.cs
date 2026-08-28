@@ -16,14 +16,15 @@ namespace BaggageDelivery.UnitTests.Controllers;
 public class BookingLinksControllerTests
 {
     private const string Token = "ENCRYPTED-TOKEN";
+    private static readonly string[] Expected = ["+64211234567", "pax@example.com"];
 
     private sealed class Harness
     {
         public IEncryptionService Encryption { get; } = Substitute.For<IEncryptionService>();
-        public INotificationService Notifications { get; } = Substitute.For<INotificationService>();
-        public IPaxBookingService Bookings { get; } = Substitute.For<IPaxBookingService>();
+        private INotificationService Notifications { get; } = Substitute.For<INotificationService>();
+        private IPaxBookingService Bookings { get; } = Substitute.For<IPaxBookingService>();
         public ProblemDetailsFactory ProblemFactory { get; } = Substitute.For<ProblemDetailsFactory>();
-        public BookingLinksController Controller { get; }
+        private BookingLinksController Controller { get; }
 
         public Harness(string publicBaseUrl = "https://bags.example.com", string? jobNumber = "URG-4242")
         {
@@ -59,11 +60,12 @@ public class BookingLinksControllerTests
                 TestContext.Current.CancellationToken);
 
         public IReadOnlyList<(int JobId, string Recipient, BookingNotificationContext Context)> Sends =>
-            Notifications.ReceivedCalls()
+        [
+            .. Notifications.ReceivedCalls()
                 .Where(c => c.GetMethodInfo().Name == nameof(INotificationService.SendBookingLinkAsync))
                 .Select(c => c.GetArguments())
                 .Select(a => ((int)a[0]!, (string)a[1]!, (BookingNotificationContext)a[2]!))
-                .ToList();
+        ];
     }
 
     // ---- Configuration guard ------------------------------------------------
@@ -156,7 +158,7 @@ public class BookingLinksControllerTests
             new[] { NotificationChannel.Sms, NotificationChannel.Email },
             harness.Sends.Select(s => s.Context.Channel).ToArray());
         Assert.Equal(
-            new[] { "+64211234567", "pax@example.com" },
+            Expected,
             harness.Sends.Select(s => s.Recipient).ToArray());
     }
 

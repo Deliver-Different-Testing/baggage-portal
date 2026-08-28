@@ -12,7 +12,7 @@ import type { BookingSummary, ConfirmBookingRequest, TimeSlot } from '../api/cli
 const summary: BookingSummary = {
   bookingId: 1,
   jobId: 42,
-  jobNumber: 'URG-42',
+  fileReference: 'AKLNZ12345',
   airlineLabel: 'Test Air',
   supportPhone: '0800 267 5494',
   passengerName: 'Test Passenger',
@@ -82,13 +82,13 @@ describe('ConfirmedScreen', () => {
     ).toBeInTheDocument()
   })
 
-  it('narrates the booking reference and the chosen window', () => {
+  it('narrates the file reference and the chosen window', () => {
     renderConfirmed('token-abc-123')
 
     // The reference is set as a baggage tag, same as the confirm hero: label and
     // value are separate nodes because the helpline asks for the value alone.
-    expect(screen.getByText(/^booking reference$/i)).toBeInTheDocument()
-    expect(screen.getByText('URG-42')).toBeInTheDocument()
+    expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
+    expect(screen.getByText('AKLNZ12345')).toBeInTheDocument()
     expect(screen.getByText('Delivery window')).toBeInTheDocument()
     expect(screen.getByText('Today, Wed 10 Jun')).toBeInTheDocument()
     expect(screen.getByText('2:00 PM – 5:00 PM')).toBeInTheDocument()
@@ -240,32 +240,91 @@ describe('PaxMobile — Authority to Leave submit', () => {
     )
   }
 
-  it('narrates the urgent job number, not the job id', async () => {
+  it('gives every section a real heading, not body-weight text', async () => {
+    renderForm()
+
+    // The page had one heading (the hero h1) for an eight-field form, and set the
+    // section titles at the same size as the field labels beneath them.
+    await screen.findByRole('heading', { level: 2, name: /your details/i })
+    expect(screen.getByRole('heading', { level: 2, name: /delivery address/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: /delivery window/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: /authority to leave/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: /confirm your baggage delivery/i })).toBeInTheDocument()
+  })
+
+  it('shows what the page is for while the booking is still loading', async () => {
+    let release: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.use(
+      http.get('*/pax/:id/booking', async () => {
+        await held
+        return HttpResponse.json(booking())
+      }),
+    )
+
+    renderForm()
+
+    // A spinner on an empty page was the first thing a passenger saw after tapping
+    // the SMS link. The headline and body copy do not depend on the booking, so they
+    // render immediately and only the airline name and file reference are skeletoned.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /confirm your baggage delivery/i }),
+    ).toBeInTheDocument()
+
+    release?.()
+    expect(await screen.findByText('Test Air')).toBeInTheDocument()
+  })
+
+  it('offers a retry, not an unreachable support desk, when the booking will not load', async () => {
+    let attempts = 0
+    server.use(
+      http.get('*/pax/:id/booking', () => {
+        attempts += 1
+        return attempts === 1 ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(booking())
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    // The old state was a bare red Alert on an otherwise empty page telling the
+    // passenger to contact support, with no number and no booking loaded to get one
+    // from. Retrying is the action they actually have.
+    expect(await screen.findByText(/couldn't load your booking/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /try again/i }))
+
+    expect(await screen.findByText('Test Air')).toBeInTheDocument()
+  })
+
+  it('narrates the worldtracer file reference, not the job id', async () => {
     server.use(
       http.get('*/pax/:id/booking', () =>
-        HttpResponse.json(booking({ jobNumber: 'URG-179252' })),
+        HttpResponse.json(booking({ fileReference: 'AKLNZ179252' })),
       ),
     )
 
     renderForm()
 
     // Label and value are separate nodes on the tag, so they are matched apart.
-    expect(await screen.findByText('URG-179252')).toBeInTheDocument()
-    expect(screen.getByText(/^booking reference$/i)).toBeInTheDocument()
+    expect(await screen.findByText('AKLNZ179252')).toBeInTheDocument()
+    expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
     expect(screen.queryByText(/REF · 42/)).not.toBeInTheDocument()
   })
 
-  it('omits the reference line when the job carries no job number', async () => {
+  it('omits the reference line when the job carries no file reference', async () => {
     server.use(
       http.get('*/pax/:id/booking', () =>
-        HttpResponse.json(booking({ jobNumber: '' })),
+        HttpResponse.json(booking({ fileReference: '' })),
       ),
     )
 
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
-    expect(screen.queryByText(/booking reference/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/file reference/i)).not.toBeInTheDocument()
   })
 
   it('heads the slot picker "Delivery window" rather than "Delivery time"', async () => {
@@ -322,18 +381,44 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     // The number also sits in the footer sign-off, so match it on the empty-state
-    // line itself rather than page-wide.
+    // block itself rather than page-wide. The support sentence is its own node now
+    // — it used to be concatenated onto the end of the sentence above it — so this
+    // asserts on the block holding both.
     const message = await screen.findByText(/no delivery windows available for this booking yet/i)
-    expect(message).toHaveTextContent('0800 267 5494')
+    expect(message.parentElement).toHaveTextContent('0800 267 5494')
   })
 
-  it('tells the passenger to confirm before the chosen run departs', async () => {
+  it('names what the passenger loses if the chosen run departs', async () => {
     renderForm()
 
-    expect(
-      await screen.findByText(/make sure you confirm your booking before the chosen run time/i),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/confirm within 10 minutes/i)).not.toBeInTheDocument()
+    // States the stake rather than issuing an instruction: the old line read
+    // "Make sure you confirm your booking before the chosen run time".
+    expect(await screen.findByText(/time left to keep this window/i)).toBeInTheDocument()
+  })
+
+  it('escalates the run-start notice inside the last ten minutes', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      // slot departs at 02:00Z. Twelve minutes out is still just context...
+      vi.setSystemTime(new Date('2026-06-10T01:48:00Z'))
+      server.use(http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])))
+
+      renderForm()
+
+      const countdown = await screen.findByText('12:00')
+      const calm = countdown.parentElement as HTMLElement
+      expect(calm.style.backgroundColor).toBe('var(--dd-surface-container-high)')
+
+      // ...and two minutes later it is something to act on.
+      await act(async () => {
+        vi.advanceTimersByTime(150_000)
+      })
+
+      const urgent = (await screen.findByText('9:30')).parentElement as HTMLElement
+      expect(urgent.style.backgroundColor).toBe('var(--mantine-color-orange-light)')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('counts down to the start of the selected run, and retargets when a later one is picked', async () => {
@@ -907,6 +992,38 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(dialog.getByText(/someone will need to be there to take the bag/i)).toBeInTheDocument()
   })
 
+  it('reads the file reference back with the delivery details', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    await confirmAddress(user)
+    await openReview(user)
+
+    // The file the delivery is being booked against, so the passenger can check
+    // it matches the reference the airline gave them before anything is sent.
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.getByText(/^file reference$/i)).toBeInTheDocument()
+    expect(dialog.getByText('AKLNZ12345')).toBeInTheDocument()
+  })
+
+  it('omits the file reference from the read-back when the job carries none', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () => HttpResponse.json(booking({ fileReference: '' }))),
+    )
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
+    await confirmAddress(user)
+    await openReview(user)
+
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(dialog.queryByText(/file reference/i)).not.toBeInTheDocument()
+  })
+
   it('sends nothing when the passenger goes back to edit', async () => {
     const user = userEvent.setup()
     renderForm()
@@ -993,13 +1110,13 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(airline.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('sets the booking reference as a baggage tag under the task', async () => {
+  it('sets the file reference as a baggage tag under the task', async () => {
     renderForm()
 
     // The one token the passenger will be read back over the phone, and the
     // page's answer to the question they arrived with — does anyone have my bag.
-    const value = await screen.findByText('URG-42')
-    const label = screen.getByText(/^booking reference$/i)
+    const value = await screen.findByText('AKLNZ12345')
+    const label = screen.getByText(/^file reference$/i)
     const task = screen.getByRole('heading', { level: 1, name: /Confirm your baggage delivery/i })
 
     expect(task.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -1121,7 +1238,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     )
   })
 
-  it('puts Confirm delivery ahead of the way back out of the read-back', async () => {
+  it('orders the read-back footer the way Despatch does, and never reverses it in CSS', async () => {
     const user = userEvent.setup()
     renderForm()
 
@@ -1131,13 +1248,39 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await confirmAddress(user)
     await user.click(screen.getByRole('button', { name: /review delivery/i }))
 
-    // "Edit details" was a bare subtle button above the primary, which read as a
-    // stray link rather than the other half of the choice.
     const dialog = within(await screen.findByRole('dialog'))
     const confirm = dialog.getByRole('button', { name: /confirm delivery/i })
     const edit = dialog.getByRole('button', { name: /edit details/i })
 
-    expect(confirm.compareDocumentPosition(edit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Despatch's order: the way back, then the primary. Source order is the
+    // rendered order at every width — .dd-dialog-footer stacks it on a phone and
+    // lays it out as a right-aligned row from 576px, but never reverses it, so the
+    // visual and tab orders cannot drift apart. Asserted on the DOM because that
+    // is what fixes the tab order; jsdom does not apply index.css.
+    expect(edit.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // Both live in the footer that owns that layout.
+    const footer = confirm.closest('.dd-dialog-footer')
+    expect(footer).not.toBeNull()
+    expect(footer).toContainElement(edit)
+  })
+
+  it('carries the Despatch dialog header — a titled bar with its own close button', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /review delivery/i })).toBeEnabled(),
+    )
+    await confirmAddress(user)
+    await user.click(screen.getByRole('button', { name: /review delivery/i }))
+
+    const dialog = within(await screen.findByRole('dialog'))
+    // The title is a real h2, not Mantine's own Modal.Title slot.
+    expect(dialog.getByRole('heading', { level: 2, name: /check your delivery details/i })).toBeInTheDocument()
+    // The intro line moved from the body into the header as its subtitle.
+    expect(dialog.getByText(/we'll book this as soon as you confirm/i)).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: /close dialog/i })).toBeInTheDocument()
   })
 
   it('signs the confirm page off with the attribution alone', async () => {

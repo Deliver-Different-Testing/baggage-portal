@@ -23,6 +23,7 @@ import Check from 'lucide-react/dist/esm/icons/check.mjs'
 import CircleCheck from 'lucide-react/dist/esm/icons/circle-check.mjs'
 import ArrowRight from 'lucide-react/dist/esm/icons/arrow-right.mjs'
 import Unlink from 'lucide-react/dist/esm/icons/unlink.mjs'
+import AlertTriangle from 'lucide-react/dist/esm/icons/alert-triangle.mjs'
 
 const SIZE = 36
 const STROKE = 1.25
@@ -43,10 +44,9 @@ function tabler(Cmp: ComponentType<Record<string, unknown>>) {
 
 // Lucide icons expose stroke width via `strokeWidth` (`stroke` is the colour).
 function lucide(Cmp: ComponentType<Record<string, unknown>>) {
-  const Wrapped = ({ size = SIZE, ...rest }: IconProps) => (
-    <Cmp size={size} strokeWidth={STROKE} {...rest} />
+  return ({size = SIZE, ...rest}: IconProps) => (
+      <Cmp size={size} strokeWidth={STROKE} {...rest} />
   )
-  return Wrapped
 }
 
 // Transport / logistics — Tabler.
@@ -66,3 +66,4 @@ export const CheckIcon = lucide(Check)
 export const CheckCircleIcon = lucide(CircleCheck)
 export const ArrowRightIcon = lucide(ArrowRight)
 export const UnlinkIcon = lucide(Unlink)
+export const AlertIcon = lucide(AlertTriangle)

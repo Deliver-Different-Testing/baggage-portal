@@ -908,7 +908,7 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
-    public async Task GetSummary_returns_the_urgent_job_number_not_the_job_id_or_file_reference()
+    public async Task GetSummary_returns_the_worldtracer_file_reference_not_the_job_id_or_number()
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
@@ -916,7 +916,7 @@ public class PaxBookingServiceTests
 
         db.TucJobs.Add(new TucJob
         {
-            UcjbId = 179252, UcjbNumber = " URG-179252 ", UcjbClientRefa = "AKLA2633476"
+            UcjbId = 179252, UcjbNumber = "URG-179252", UcjbClientRefa = " AKLA2633476 "
         });
         await db.SaveChangesAsync(ct);
 
@@ -925,31 +925,31 @@ public class PaxBookingServiceTests
         var summary = await svc.GetSummaryAsync(179252, ct);
 
         Assert.NotNull(summary);
-        Assert.Equal("URG-179252", summary.JobNumber);
+        Assert.Equal("AKLA2633476", summary.FileReference);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task GetSummary_returns_an_empty_job_number_when_the_job_has_none(
-        string? jobNumber)
+    public async Task GetSummary_returns_an_empty_file_reference_when_the_job_has_none(
+        string? clientRefa)
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
-        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = jobNumber, UcjbClientRefa = "AKLNZ12345" });
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientRefa = clientRefa });
         await db.SaveChangesAsync(ct);
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
-        // The portal hides the booking-reference tag on empty rather than falling
-        // back to an internal id the passenger can't quote.
+        // The portal hides the file-reference tag on empty rather than falling back
+        // to the job number, which is not what the airline will ask for.
         Assert.NotNull(summary);
-        Assert.Equal(string.Empty, summary.JobNumber);
+        Assert.Equal(string.Empty, summary.FileReference);
     }
 
     [Fact]

@@ -8,13 +8,13 @@ using Xunit;
 
 namespace BaggageDelivery.IntegrationTests;
 
-// The passenger's Booking Reference has to survive the whole way to the wire: the
-// SPA reads `jobNumber` off this payload and hides the tag when it's missing, so a
+// The passenger's File Reference has to survive the whole way to the wire: the SPA
+// reads `fileReference` off this payload and hides the tag when it's missing, so a
 // renamed or dropped field is a silently blank reference on the confirm page.
 public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApiFactory>
 {
     [Fact]
-    public async Task Booking_serves_the_urgent_job_number_as_the_booking_reference()
+    public async Task Booking_serves_the_worldtracer_file_ref_as_the_file_reference()
     {
         const int jobId = 4401;
         await SeedJobAsync(jobId, "URG-4401", clientRefa: "AKLNZ12345");
@@ -25,15 +25,15 @@ public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixtu
             $"/api/v1/pax/{EncryptedId(jobId)}/booking",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal("URG-4401", payload.GetProperty("jobNumber").GetString());
-        // The WorldTracer file ref stays behind the airline-code derivation; it is
-        // no longer a field the passenger flow reads.
-        Assert.False(payload.TryGetProperty("reference", out _));
+        Assert.Equal("AKLNZ12345", payload.GetProperty("fileReference").GetString());
+        // The Urgent job number still reaches the passenger, but only through the
+        // notification email — it is not a field the confirm page reads.
+        Assert.False(payload.TryGetProperty("jobNumber", out _));
         Assert.Equal("NZ", payload.GetProperty("airlineCode").GetString());
     }
 
     [Fact]
-    public async Task Booking_serves_an_empty_job_number_when_the_job_has_none()
+    public async Task Booking_serves_an_empty_file_reference_when_the_job_has_none()
     {
         const int jobId = 4402;
         await SeedJobAsync(jobId, jobNumber: null, clientRefa: null);
@@ -44,7 +44,7 @@ public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixtu
             $"/api/v1/pax/{EncryptedId(jobId)}/booking",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(string.Empty, payload.GetProperty("jobNumber").GetString());
+        Assert.Equal(string.Empty, payload.GetProperty("fileReference").GetString());
     }
 
     private Task SeedJobAsync(int jobId, string? jobNumber, string? clientRefa) =>

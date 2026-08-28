@@ -1,5 +1,5 @@
-import { memo, type CSSProperties } from 'react'
-import { Box, Center, Container, Group, Stepper, Text, Title } from '@mantine/core'
+import { memo, type CSSProperties, type ReactNode } from 'react'
+import { Box, Center, Container, Group, Skeleton, Stepper, Text, Title } from '@mantine/core'
 import { LuggageIcon } from './Icon'
 import { PunchedTag } from './Docket'
 import { FlightPathBackdrop } from './FlightPathBackdrop'
@@ -19,17 +19,50 @@ const HERO_AIRLINE_STYLE: CSSProperties = {
   fontSize: 15,
   lineHeight: 1.2,
 }
-const HERO_TITLE_STYLE: CSSProperties = {
-  fontSize: tokens.type.hero,
-  lineHeight: 1.05,
-  color: 'inherit',
-  fontWeight: 700,
-  letterSpacing: '-0.03em',
-}
+const HERO_TITLE_STYLE: CSSProperties = { ...tokens.type.heroTitle, color: 'inherit' }
 const HERO_BODY_STYLE: CSSProperties = {
   color: onBrandScrim.bodyText,
   maxWidth: 400,
   fontSize: 15,
+}
+
+const HERO_TITLE = 'Confirm your baggage delivery'
+const HERO_BODY =
+  "Review your details below and pick a delivery window. We'll text you when our driver is on the way."
+
+/**
+ * The Ink-Blue band itself. Shared by the loaded hero and its skeleton so the two
+ * cannot drift in height or padding — the skeleton exists precisely so that nothing
+ * moves when the booking arrives.
+ */
+function HeroShell({ topRule, children }: { topRule?: string; children: ReactNode }) {
+  return (
+    <Box
+      px={tokens.hero.px}
+      pt={tokens.hero.pt}
+      pb={tokens.hero.pb}
+      style={
+        topRule ? { ...HERO_BOX_STYLE, borderTop: `3px solid ${topRule}` } : HERO_BOX_STYLE
+      }
+    >
+      <FlightPathBackdrop />
+      {/* Above the backdrop, which sits at z-index 0 inside the hero. */}
+      <Container size={tokens.hero.measure} px={0} style={{ position: 'relative', zIndex: 1 }}>
+        {children}
+      </Container>
+    </Box>
+  )
+}
+
+/** The delivery lifecycle, not a form wizard — no onStepClick, so every step is inert. */
+function HeroStepper() {
+  return (
+    <Stepper active={0} size="xs" className="pax-hero-stepper" mt="xl">
+      <Stepper.Step label="Confirm" />
+      <Stepper.Step label="In transit" />
+      <Stepper.Step label="Delivered" />
+    </Stepper>
+  )
 }
 
 /**
@@ -46,65 +79,92 @@ export const ConfirmHero = memo(function ConfirmHero({
   accent: AirlineAccent
 }) {
   return (
-    <Box
-      px={{ base: 20, sm: 32 }}
-      pt={{ base: 32, sm: 40 }}
-      pb={{ base: 48, sm: 56 }}
-      style={{
-        ...HERO_BOX_STYLE,
-        borderTop: `3px solid ${accent.accent}`,
-      }}
-    >
-      <FlightPathBackdrop />
-      {/* Above the backdrop, which sits at z-index 0 inside the hero. */}
-      <Container size={520} px={0} style={{ position: 'relative', zIndex: 1 }}>
-        <Group gap="sm" align="center" mb="lg" wrap="nowrap">
-          <Center
-            w={36}
-            h={36}
-            style={{ borderRadius: 12, backgroundColor: accent.accentTint, flexShrink: 0 }}
-          >
-            <LuggageIcon size={20} color={onBrandScrim.text} />
-          </Center>
-          <Box style={{ flex: 1, minWidth: 0 }}>
-            {/* Who the file sits with, not what the page is for — the identity
-                line above the task. */}
-            <Text style={HERO_AIRLINE_STYLE}>{summary.airlineLabel}</Text>
-          </Box>
-        </Group>
+    <HeroShell topRule={accent.accent}>
+      <Group gap="sm" align="center" mb="lg" wrap="nowrap">
+        <Center
+          w={36}
+          h={36}
+          style={{
+            borderRadius: tokens.radius.md,
+            backgroundColor: accent.accentTint,
+            flexShrink: 0,
+          }}
+        >
+          <LuggageIcon size={20} color={onBrandScrim.text} />
+        </Center>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          {/* Who the file sits with, not what the page is for — the identity
+              line above the task. */}
+          <Text style={HERO_AIRLINE_STYLE}>{summary.airlineLabel}</Text>
+        </Box>
+      </Group>
 
-        {/* The task carries the display type as well as the heading level. The
-            airline name led at 40px before, which told the passenger who sent
-            them here but never what the page wanted from them. */}
-        <Title order={1} style={HERO_TITLE_STYLE}>
-          Confirm your baggage delivery
-        </Title>
-        {/* The Urgent job number — the reference the passenger and the helpline
-            both quote. Jobs without one show nothing rather than an internal id. */}
-        {summary.jobNumber && (
-          <Box mt="md">
-            <PunchedTag
-              label="Booking Reference"
-              value={summary.jobNumber}
-              accent={accent.accent}
-              onScrim
-            />
-          </Box>
-        )}
-        <Text mt="md" style={HERO_BODY_STYLE}>
-          Review your details below and pick a delivery window. We'll text you when our driver
-          is on the way.
-        </Text>
+      {/* The task carries the display type as well as the heading level. The
+          airline name led at 40px before, which told the passenger who sent
+          them here but never what the page wanted from them. */}
+      <Title order={1} style={HERO_TITLE_STYLE}>
+        {HERO_TITLE}
+      </Title>
+      {/* The WorldTracer file reference — the reference the airline and the
+          helpline both quote. Jobs without one show nothing rather than an
+          internal id. */}
+      {summary.fileReference && (
+        <Box mt="md">
+          <PunchedTag
+            label="File reference"
+            value={summary.fileReference}
+            accent={accent.accent}
+            onScrim
+          />
+        </Box>
+      )}
+      <Text mt="md" style={HERO_BODY_STYLE}>
+        {HERO_BODY}
+      </Text>
 
-        {/* Delivery lifecycle, not a form wizard — no onStepClick, so Mantine
-            renders every step non-interactive. Stock Stepper styling otherwise;
-            index.css only re-points the palette for the Ink hero. */}
-        <Stepper active={0} size="xs" className="pax-hero-stepper" mt="xl">
-          <Stepper.Step label="Confirm" />
-          <Stepper.Step label="In transit" />
-          <Stepper.Step label="Delivered" />
-        </Stepper>
-      </Container>
-    </Box>
+      <HeroStepper />
+    </HeroShell>
   )
 })
+
+/**
+ * The hero while the booking is still in flight.
+ *
+ * It shows the real headline and the real body copy, because neither depends on the
+ * booking — only the airline name and the file reference do, and those are the only
+ * things skeletoned. A passenger arriving from an SMS link therefore reads what the
+ * page is for immediately, instead of watching a spinner on an empty screen and then
+ * having the whole page appear underneath them.
+ */
+export function ConfirmHeroSkeleton() {
+  return (
+    <HeroShell>
+      <Group gap="sm" align="center" mb="lg" wrap="nowrap">
+        <Center
+          w={36}
+          h={36}
+          style={{
+            borderRadius: tokens.radius.md,
+            backgroundColor: onBrandScrim.fill,
+            flexShrink: 0,
+          }}
+        >
+          <LuggageIcon size={20} color={onBrandScrim.text} />
+        </Center>
+        <Skeleton height={16} width={150} radius="sm" />
+      </Group>
+
+      <Title order={1} style={HERO_TITLE_STYLE}>
+        {HERO_TITLE}
+      </Title>
+      <Box mt="md">
+        <Skeleton height={46} width={210} radius={tokens.radius.tile} />
+      </Box>
+      <Text mt="md" style={HERO_BODY_STYLE}>
+        {HERO_BODY}
+      </Text>
+
+      <HeroStepper />
+    </HeroShell>
+  )
+}
