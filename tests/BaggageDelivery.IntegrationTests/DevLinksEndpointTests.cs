@@ -7,9 +7,6 @@ using Xunit;
 
 namespace BaggageDelivery.IntegrationTests;
 
-// PaxApiFactory forces ASPNETCORE_ENVIRONMENT=Development, so MapDevLinks registers
-// the route here. Outside Development it is never mapped — that 404 is what the SPA's
-// / route relies on to fall back to /expired.
 public class DevLinksEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApiFactory>
 {
     private sealed record DevLinksResponse(int JobId, string Token, string ConfirmUrl, string TrackUrl);
@@ -44,8 +41,6 @@ public class DevLinksEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApi
 
         Assert.NotNull(links);
 
-        // The pax pages are served by the Vite dev server, not by Kestrel, so the links
-        // must resolve against AppUrl (defaulting to :5173) rather than the API's origin.
         var paxBase = DevStartup.ResolvePaxBaseUrl(Environment.GetEnvironmentVariable("AppUrl"));
 
         Assert.Equal($"{paxBase}/c/{links.Token}", links.ConfirmUrl);

@@ -9,11 +9,6 @@ import { PaxMobile } from './PaxMobile'
 import { MantineTestProvider } from '../test/render'
 import type { BookingSummary, TimeSlot } from '../api/client'
 
-// Two probes standing in for everything on the page that owes nothing to what the
-// passenger is typing. Both are memo()'d like the components they replace, so a
-// counter only climbs when the parent hands them changed props — which is what
-// makes the real memo pay off. If either climbs mid-keystroke or mid-tick, the
-// page is re-rendering work it didn't need to.
 const footer = vi.hoisted(() => ({ renders: 0 }))
 vi.mock('../components/PoweredByFooter', async () => {
   const { memo } = await import('react')
@@ -25,9 +20,6 @@ vi.mock('../components/PoweredByFooter', async () => {
   }
 })
 
-// The hero probe sits *inside* the real ConfirmHero (the luggage glyph is the only
-// place this page uses it), so it counts renders the component's own memo let
-// through rather than renders of a stand-in.
 const hero = vi.hoisted(() => ({ renders: 0 }))
 vi.mock('../components/Icon', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../components/Icon')>()),
@@ -94,7 +86,6 @@ function renderForm() {
   )
 }
 
-// slot departs at 02:00Z, so ten minutes before it the countdown reads 10:00.
 const TEN_MINUTES_OUT = new Date('2026-06-10T01:50:00Z')
 
 describe('PaxMobile — run start countdown', () => {

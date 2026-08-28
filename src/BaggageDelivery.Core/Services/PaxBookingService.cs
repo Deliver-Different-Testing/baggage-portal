@@ -19,26 +19,14 @@ internal sealed class PaxBookingService(
     TimeProvider time,
     IDespatchCalendar calendar) : IPaxBookingService
 {
-    // Static tenant reference data — the Despatch connection is single-tenant per
-    // deployment, so a process-wide cache key is safe. TTL trades a stale window
-    // for not re-querying on every pax page load.
     private const string AtlOptionsCacheKey = "pax:atl-options";
-    // Per-client: a process-wide key would serve one airline's runs to another.
     private const string EcoRunsCacheKeyPrefix = "pax:eco-runs:";
     private const string BaggageFallbackCacheKey = "pax:baggage-fallback";
-    // Per-client and per-date: the roll-forward answer depends on the client's site
-    // calendar, and a holiday-driven roll must not survive into the next day.
     private const string NextBusinessDayCacheKeyPrefix = "pax:next-business-day:";
     private static readonly TimeSpan ReferenceDataTtl = TimeSpan.FromMinutes(30);
 
-    // Steve's ask: enough options that tomorrow is always visible, not just what's
-    // left of today.
     private const int TargetSlotCount = 8;
-    // A client with one run a day needs eight days to fill the list; the cap only
-    // exists so a calendar that never returns a business day can't spin.
     private const int MaxDaysWalked = 14;
-    // Same default despatchweb uses when a speed has no duration
-    // (Repositories/JobRepository.cs:4091).
     private const int DefaultWindowMinutes = 180;
 
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
@@ -78,9 +66,6 @@ internal sealed class PaxBookingService(
         var airlineCode = ExtractAirlineFromWorldTracerRef(job.ClientRefa)
             ?? (string.IsNullOrWhiteSpace(job.JobClientCode) ? job.ClientCode : job.JobClientCode);
         
-        // Excluded by LeaveNotHomeId, not by name: the rows are shared with
-        // despatchweb and a tenant rewording one must not be able to put it back
-        // in front of a passenger.
         var excludedAtlIds = despatchOptions.Value.ExcludedAtlOptions
             .Select(o => (int)o)
             .ToArray();
@@ -108,14 +93,8 @@ internal sealed class PaxBookingService(
 
         return new BookingSummary(
             JobId: jobId,
-            // The WorldTracer file reference, shown to the passenger as the File
-            // Reference. Empty when the job doesn't carry one — the portal hides the
-            // tag rather than showing the internal id behind the link.
             FileReference: (job.ClientRefa ?? string.Empty).Trim(),
             AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
-            // The airline's own line first — it's the one the passenger's baggage
-            // file is with. The tenant's number is the backstop for clients that
-            // carry no phone on tucClient.
             SupportPhone: FirstNonBlank(job.ClientPhone, despatchOptions.Value.SupportPhone),
             AirlineCode: string.IsNullOrWhiteSpace(airlineCode) ? null : airlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
@@ -163,12 +142,6 @@ internal sealed class PaxBookingService(
         };
     }
 
-    // DeliveryAddressLine8 is legacy free text ("New Zealand", "USA", "NZL", ...),
-    // but the pax portal round-trips this value straight back into a request that
-    // requires a canonical code. Resolve it here so the common case confirms
-    // without the passenger touching anything. An unresolvable value yields empty,
-    // which the portal surfaces as an empty Country field to fill in — we don't
-    // guess a country on the passenger's behalf.
     private static string ResolveStoredCountry(int jobId, string? line8, string defaultCountry)
     {
         if (string.IsNullOrWhiteSpace(line8))
@@ -185,11 +158,6 @@ internal sealed class PaxBookingService(
         return string.Empty;
     }
 
-    // Extracts the 2-letter IATA airline code from a WorldTracer file reference
-    // (ucjbClientRefa). Format is 3-letter station + 2-letter airline + sequence,
-    // e.g. "AKLNZ12345" -> "NZ". Returns null if the value isn't a WT ref (too
-    // short, or no two-letter airline at positions 4-5) so the caller falls back
-    // to the client-code chain.
     private static string? ExtractAirlineFromWorldTracerRef(string? refa)
     {
         if (string.IsNullOrWhiteSpace(refa))
@@ -209,8 +177,6 @@ internal sealed class PaxBookingService(
             : null;
     }
 
-    // Joins the street-number (L3) and street-name (L4) halves of a Despatch
-    // address into a single line, trimming and skipping empty parts.
     private static string CombineStreet(string? numberPart, string? streetPart)
     {
         var a = (numberPart ?? string.Empty).Trim();
@@ -223,8 +189,6 @@ internal sealed class PaxBookingService(
         return b.Length == 0 ? a : $"{a} {b}";
     }
 
-    // Resolves the tenant zone once per request — the slot loop converts up to
-    // sixteen wall-clock times and FindSystemTimeZoneById is not free.
     private static TimeZoneInfo? ResolveTimeZone(string? timeZoneCode)
     {
         if (string.IsNullOrWhiteSpace(timeZoneCode))
@@ -248,10 +212,6 @@ internal sealed class PaxBookingService(
         }
     }
 
-    // Despatch stores wall-clock time with no offset. Null when the zone is
-    // unresolvable, or when the local time doesn't exist because it falls in the
-    // DST spring-forward gap — ConvertTimeToUtc throws on those, and one unusable
-    // run must not take the whole timeslot list down with it.
     private static DateTime? LocalToUtc(DateTime local, TimeZoneInfo? timeZone)
     {
         if (timeZone is null)
@@ -283,10 +243,6 @@ internal sealed class PaxBookingService(
             .Select(j => new
             {
                 j.UcjbClient!.UcclId,
-                // ucjbSpeed is an FK to tucJobType.ucjtID, but no navigation is
-                // mapped here: legacy rows can point at a retired speed, and a
-                // correlated subquery yields null for those instead of dropping
-                // the job from the result.
                 WindowMinutes = db.TucJobTypes
                     .Where(t => t.UcjtId == j.UcjbSpeed)
                     .Select(t => t.Minutes)
@@ -310,8 +266,6 @@ internal sealed class PaxBookingService(
 
         var nowUtc = time.GetUtcNow().UtcDateTime;
         var today = TenantToday(nowUtc, timeZone);
-        // `?date=` means "the next windows from this date", so an anchor in the
-        // past would offer windows that have already been run.
         var anchor = localDate is { } supplied && supplied.Date > today ? supplied.Date : today;
         var window = TimeSpan.FromMinutes(
             job.WindowMinutes is > 0 ? job.WindowMinutes.Value : DefaultWindowMinutes);
@@ -321,8 +275,6 @@ internal sealed class PaxBookingService(
             : await BuildRunSlotsAsync(runs, job.UcclId, anchor, today, nowUtc, timeZone, window, ct);
     }
 
-    // Runs are per-client: tucClient.EconomyRun1..8, mirroring
-    // client isn't on run-based delivery and the caller should fall back.
     private async Task<IReadOnlyList<TimeOnly>> LoadClientRunsAsync(int clientId,
         CancellationToken ct)
     {
@@ -368,17 +320,10 @@ internal sealed class PaxBookingService(
         return cached ?? [];
     }
 
-    // Walks forward from the anchor, flattening (business day × run) in
-    // chronological order until there are TargetSlotCount windows. The two cases
-    // the single-day version handled specially fall out for free: a non-business
-    // anchor is skipped before the walk starts, and a day whose runs have all been
-    // filtered out simply contributes nothing.
     private async Task<IReadOnlyList<BookingTimeSlot>> BuildRunSlotsAsync(
         IReadOnlyList<TimeOnly> runs, int clientId, DateTime anchor, DateTime today,
         DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
     {
-        // Ceiling division: how many days this many runs need to fill the list,
-        // plus one for an anchor that is a holiday or already part-spent.
         await PrimeBusinessDayChainAsync(clientId, anchor,
             Math.Min(MaxDaysWalked, (TargetSlotCount + runs.Count - 1) / runs.Count + 1), ct);
 
@@ -416,9 +361,6 @@ internal sealed class PaxBookingService(
         return slots;
     }
 
-    // Mirrors the speed-38 else-branch of
-    // NET_stpBaggageJobBooking_OnHoldInsertJobAndChildren: clients without runs
-    // fall back to the global BaggageCutOff/BaggageRebook pair.
     private async Task<IReadOnlyList<BookingTimeSlot>> BuildFallbackSlotsAsync(
         int clientId, DateTime anchor, DateTime today, DateTime nowUtc, TimeZoneInfo? timeZone,
         TimeSpan window, CancellationToken ct)
@@ -440,7 +382,6 @@ internal sealed class PaxBookingService(
             return [];
         }
 
-        // One window a day on this path, so the walk needs a day per slot.
         await PrimeBusinessDayChainAsync(clientId, anchor,
             Math.Min(MaxDaysWalked, TargetSlotCount + 1), ct);
 
@@ -456,10 +397,6 @@ internal sealed class PaxBookingService(
         var slots = new List<BookingTimeSlot>(TargetSlotCount);
         for (var day = 0; day < MaxDaysWalked && slots.Count < TargetSlotCount; day++)
         {
-            // honourCurrentTime is false throughout: the cutoff above is the only
-            // "is today still bookable" test on this path, same as the stored proc.
-            // Comparing the rebook time against the clock as well would drop today
-            // for a passenger arriving after it, which the proc doesn't do.
             AddSlot(slots, date, run, today, nowUtc, timeZone, window, honourCurrentTime: false);
 
             if (slots.Count < TargetSlotCount)
@@ -493,16 +430,10 @@ internal sealed class PaxBookingService(
             Id: Guid.NewGuid(),
             RunUtc: runUtc,
             DayLabel: FormatDayLabel(date, today),
-            // The end is derived in local time, not from runUtc, so a window
-            // straddling a DST change still reads as the promise the passenger was
-            // given rather than shifting by an hour.
             Label: FormatWindowLabel(localStart, localStart.Add(window)),
             FirstAvailable: slots.Count == 0));
     }
-
-    // The answer is identical for every passenger of this client on this date, and
-    // holidays don't move intraday — without this a client with one run a day costs
-    // one UTL_AddBusinessDays round trip per window offered.
+    
     private async Task<DateTime> NextBusinessDayAsync(int clientId, DateTime date,
         CancellationToken ct)
     {
@@ -521,18 +452,10 @@ internal sealed class PaxBookingService(
     private static string BusinessDayKey(int clientId, DateTime date) =>
         string.Create(CultureInfo.InvariantCulture,
             $"{NextBusinessDayCacheKeyPrefix}{clientId}:{date:yyyy-MM-dd}");
-
-    // The walks below advance one business day at a time, and each hop that misses
-    // the cache is its own round trip — a client with one run a day pays eight of
-    // them to render one page. Resolve the whole chain in a single call up front
-    // and seed the keys the walk reads, so the loops themselves stay unchanged and
-    // simply hit cache. Anything the walk needs beyond `count` still falls through
-    // to a live hop, so this only ever changes the round-trip count.
+    
     private async Task PrimeBusinessDayChainAsync(int clientId, DateTime anchor, int count,
         CancellationToken ct)
     {
-        // The chain is seeded in one pass under one TTL, so a hit on its first link
-        // means the rest is there too.
         if (cache.TryGetValue(BusinessDayKey(clientId, anchor), out DateTime _))
         {
             return;
@@ -558,10 +481,7 @@ internal sealed class PaxBookingService(
 
     private static DateTime TenantToday(DateTime nowUtc, TimeZoneInfo? timeZone) =>
         timeZone is null ? nowUtc.Date : TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone).Date;
-
-    // Without the date the passenger can't tell whether an option is today or next
-    // week; without Today/Tomorrow they have to read a date to work out the
-    // obvious cases.
+    
     private static string FormatDayLabel(DateTime date, DateTime today)
     {
         var prefix = date == today
@@ -581,18 +501,9 @@ internal sealed class PaxBookingService(
         ArgumentNullException.ThrowIfNull(input);
 
         var leaveId = input.AtlOptionId;
-        var deliverByLocal = UtcToTenantLocal(input.DeliveryTimeUtc, despatchOptions.Value.TimeZone);
+        var startLocal = UtcToTenantLocal(input.DeliveryTimeUtc, despatchOptions.Value.TimeZone);
+        var startDateLocal = startLocal?.Date;
 
-        // Write back using the canonical Despatch DeliveryAddressLine convention
-        // (see BuildAddressDto). The pax form captures a single combined street, so
-        // it goes in L4 (street name) with L3 (number) cleared — CombineStreet on
-        // read reproduces it. L2 (building) is the "Extra delivery information"
-        // field, so it round-trips; L1 (company) is deliberately left untouched
-        // because the passenger is never shown it. For US, L5=city; otherwise
-        // L5=suburb, L6=city.
-        // Normalise before deriving the column layout: a stale client (the booking
-        // GET is service-worker cached for 30 minutes) can still post the legacy
-        // free-text country we used to emit.
         if (!CountryCodes.TryToIso2(input.Address.Country, out var country))
         {
             throw new PaxAddressValidationException(
@@ -621,7 +532,9 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.DeliveryAddressLine8, country)
                     .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
                     .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)
-                    .SetProperty(j => j.DeliverByTime, deliverByLocal)
+                    .SetProperty(j => j.DeliverByTime, startLocal)
+                    .SetProperty(j => j.UcjbDate, j => startDateLocal ?? j.UcjbDate)
+                    .SetProperty(j => j.UcjbTime, j => startLocal ?? j.UcjbTime)
                     .SetProperty(j => j.UcjbStatus, (int)JobStatus.New),
                 ct);
 
@@ -633,14 +546,16 @@ internal sealed class PaxBookingService(
         
         try
         {
-            await db.JobDeliveryJourneys.AddAsync(new JobDeliveryJourney
+            var journey = new JobDeliveryJourney
             {
                 JobId = input.JobId,
                 ChangeType = nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking),
                 UpdatedAt = time.GetUtcNow().UtcDateTime,
                 UpdatedByType = nameof(DeliveryJourneyUpdatedByType.System),
                 Comments = "Baggage delivery booking created by passenger via self-service link"
-            }, ct);
+            };
+            
+            await db.JobDeliveryJourneys.AddAsync(journey, ct);
             await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

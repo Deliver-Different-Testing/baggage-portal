@@ -50,8 +50,6 @@ public class DevStartupTests
     [Fact]
     public void BuildLinks_reports_an_encryption_failure_instead_of_throwing()
     {
-        // The real failure mode: BaggageDeliveryEncryptionKey/IV missing or wrong length,
-        // which must degrade to a warning/503 rather than take the endpoint down.
         var encryptor = Substitute.For<IEncryptionService>();
         encryptor.EncryptId(Arg.Any<int>()).Returns(_ => throw new InvalidOperationException("no key"));
 

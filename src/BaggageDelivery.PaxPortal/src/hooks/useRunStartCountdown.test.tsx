@@ -42,8 +42,6 @@ describe('useRunStartCountdown', () => {
     const onExpire = vi.fn()
     renderHook(() => useRunStartCountdown(runIn(20 * 60_000), onExpire))
 
-    // A throttled tab fires far fewer ticks than the elapsed wall clock. Counting
-    // ticks would leave a departed run selected; measuring Date.now() drops it.
     act(() => {
       vi.setSystemTime(Date.now() + 30 * 60_000)
       vi.advanceTimersByTime(1000)
@@ -72,8 +70,6 @@ describe('useRunStartCountdown', () => {
     act(() => void vi.advanceTimersByTime(10_000))
     expect(onExpire).toHaveBeenCalledTimes(1)
 
-    // The passenger picks a later window: the countdown must come back to life
-    // rather than stay parked on the run that just departed.
     rerender({ target: runIn(10_000 + 60_000) })
     act(() => void vi.advanceTimersByTime(1000))
 
@@ -106,8 +102,6 @@ describe('useRunStartCountdown', () => {
 
 describe('formatCountdown', () => {
   it.each([
-    // Runs on a later business day are a day or more out, so the countdown has to
-    // read as a date-scale wait rather than a four-digit minute count.
     [50 * 60 * 60_000, '2d 02h'],
     [24 * 60 * 60_000, '1d 00h'],
     [(2 * 60 + 5) * 60_000 + 9_000, '2:05:09'],

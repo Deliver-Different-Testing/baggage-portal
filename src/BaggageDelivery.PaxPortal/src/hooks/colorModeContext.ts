@@ -1,8 +1,3 @@
-/**
- * DFRNT color-mode context + hook. Split from the provider so Vite's react-refresh
- * "only export components" rule stays happy (the provider component lives in
- * ColorModeProvider.tsx). Defaults to the OS theme ('system').
- */
 import { createContext, useContext } from 'react'
 import type { Md3Mode } from '../styles/md3'
 

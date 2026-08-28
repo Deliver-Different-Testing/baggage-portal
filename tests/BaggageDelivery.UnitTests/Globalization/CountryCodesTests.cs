@@ -36,8 +36,6 @@ public class CountryCodesTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("Wakanda")]
-    // An unassigned two-letter code must not pass through — otherwise junk gets
-    // persisted to DeliveryAddressLine8 and the normalisation is cosmetic.
     [InlineData("XX")]
     [InlineData("QQ")]
     public void TryToIso2_returns_false_for_unrecognised(string? input)
@@ -81,8 +79,6 @@ public class CountryCodesTests
     public void IsUnitedStates_is_false_for_everything_else(string? input) =>
         Assert.False(CountryCodes.IsUnitedStates(input));
 
-    // Canary: the ISO-3 tail is derived from RegionInfo, which is empty under
-    // InvariantGlobalization or an ICU-less base image. Fail CI, not production.
     [Fact]
     public void Country_table_is_populated_from_region_info() =>
         Assert.True(CountryCodes.KnownCountryCount >= 200,

@@ -42,13 +42,9 @@ public sealed class AddressLookupService(
         var client = httpClientFactory.CreateClient("HereMaps");
 
         var effectiveCountries = countryCodes is { Count: > 0 } ? countryCodes : [DefaultCountryCode];
-        // `at` is a single bias point — anchor on the first configured country.
         var primary = effectiveCountries[0];
         var at = CountryCoordinates.GetValueOrDefault(primary, DefaultCoordinates);
      
-        // Drop entries that don't resolve rather than passing them through —
-        // HereMaps rejects a malformed `in` filter outright, which would turn a
-        // config typo into a silently empty autocomplete.
         var iso3List = string.Join(',', effectiveCountries
             .Select(CountryCodes.ToIso3)
             .Where(c => c is not null));
@@ -151,8 +147,6 @@ public sealed class AddressLookupService(
         };
     }
 
-    // HereMaps returns ISO-3. Emit ISO-2 or empty — never an unmapped passthrough,
-    // which the pax portal would post back as an unresolvable country.
     private static string ToIso2(string countryCode) =>
         CountryCodes.TryToIso2(countryCode, out var iso2) ? iso2 : string.Empty;
 }

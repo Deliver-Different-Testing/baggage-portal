@@ -14,18 +14,10 @@ using Microsoft.Extensions.Hosting;
 
 namespace BaggageDelivery.IntegrationTests;
 
-// Boots the real API pipeline (auth, antiforgery, MVC filters) against a SQLite
-// in-memory Despatch schema. Mirrors UnitTests/Helpers/InMemoryDb.cs: the same
-// getdate/getutcdate stubs and filtered-index stripping, and the same NoTracking
-// behaviour production uses — see the EF Core section in CLAUDE.md.
 public sealed class PaxApiFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection;
 
-    // Program.cs reads configuration during service registration (AddInfrastructure,
-    // AddAppAuthentication), which runs before WebApplicationFactory's
-    // ConfigureAppConfiguration delegates are applied under minimal hosting. Environment
-    // variables are the only source available that early.
     static PaxApiFactory()
     {
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", Environments.Development);
@@ -58,18 +50,13 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
                 .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
                 .ReplaceService<IModelCustomizer, SqliteModelCustomizer>());
 
-            // Keeps the antiforgery key ring off the filesystem and out of AWS SSM.
             services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
 
-            // UTL_IsBusinessDay / UTL_AddBusinessDays are SQL Server scalar UDFs
-            // with no SQLite equivalent — the interface exists for exactly this.
             services.RemoveAll<IDespatchCalendar>();
             services.AddSingleton<IDespatchCalendar, WeekdayCalendar>();
         });
     }
 
-    // Weekdays are business days; holidays are the real calendar's job, not this
-    // fixture's.
     private sealed class WeekdayCalendar : IDespatchCalendar
     {
         public Task<bool> IsBusinessDayAsync(DateTime localDate, int clientId, CancellationToken ct) =>
@@ -108,9 +95,6 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
             date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday);
     }
 
-    // Owns the scope so the context can't outlive it. EnsureCreated is idempotent —
-    // the SQLite connection is held open for the factory's lifetime, so the schema
-    // survives between calls.
     public async Task SeedAsync(Func<BaggageDeliveryContext, Task> seed)
     {
         using var scope = Services.CreateScope();
@@ -128,8 +112,6 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
         }
     }
 
-    // AddDbContextPool registers several closed generics over the context type
-    // (options, pool, scoped lease). Strip every one before swapping in SQLite.
     private static void RemoveDbContextRegistrations(IServiceCollection services)
     {
         var doomed = services
@@ -145,9 +127,6 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
         }
     }
 
-    // JobDeliveryJourney carries SQL Server filtered indexes whose predicates use
-    // bracket quoting SQLite can't parse, so EnsureCreated would fail. The covering
-    // behaviour isn't what these tests exercise.
     private sealed class SqliteModelCustomizer(ModelCustomizerDependencies dependencies)
         : RelationalModelCustomizer(dependencies)
     {

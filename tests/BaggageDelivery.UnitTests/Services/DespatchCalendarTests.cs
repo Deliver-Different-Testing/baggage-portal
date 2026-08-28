@@ -5,10 +5,6 @@ using Xunit;
 
 namespace BaggageDelivery.UnitTests.Services;
 
-// The pax service tests use a fake calendar, so nothing else proves the
-// scaffolded UTL_* DbFunctions actually translate. These build the real queries
-// against the SqlServer provider and read the generated SQL — no connection is
-// opened, so an untranslatable expression fails here instead of in production.
 public class DespatchCalendarTests
 {
     private static BaggageDeliveryContext SqlServerContext() =>
@@ -26,7 +22,6 @@ public class DespatchCalendarTests
         var sql = calendar.IsBusinessDayQuery(new DateTime(2026, 6, 13), clientId: 77).ToQueryString();
 
         Assert.Contains("UTL_IsBusinessDay", sql);
-        // The SiteID argument must come off the client row, not be hardcoded.
         Assert.Contains("SiteID", sql, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -48,15 +43,11 @@ public class DespatchCalendarTests
         using var db = SqlServerContext();
         var calendar = new DespatchCalendar(db);
 
-        // One IQueryable for the whole walk, so this is one round trip by
-        // construction — what needs proving is that it translates at all.
         var sql = calendar.NextBusinessDaysQuery(3, new DateTime(2026, 6, 13), clientId: 77)
             .ToQueryString();
 
         Assert.Contains("UTL_AddBusinessDays", sql);
         Assert.Contains("SiteID", sql, StringComparison.OrdinalIgnoreCase);
-        // The offsets arrive as an unordered set, so the walk order has to be
-        // restored in SQL rather than assumed.
         Assert.Contains("ORDER BY", sql, StringComparison.OrdinalIgnoreCase);
     }
 }

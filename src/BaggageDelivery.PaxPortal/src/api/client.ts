@@ -8,9 +8,6 @@ export const apiClient = axios.create({
   headers: { 'X-Requested-With': 'XMLHttpRequest' },
 })
 
-// ASP.NET Core antiforgery is a pair: an HttpOnly cookie token the browser holds
-// and a request token we must echo in a header. GET /antiforgery/token issues both,
-// putting the request token in the readable XSRF-TOKEN cookie.
 export const ANTIFORGERY_TOKEN_PATH = '/antiforgery/token'
 
 function readXsrfCookie(): string | null {
@@ -25,9 +22,6 @@ function readXsrfCookie(): string | null {
 
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 
-// Fetched lazily rather than on page load so the token can't go stale between
-// mount and submit, and so an evicted cookie recovers on its own. Concurrent
-// mutations share one in-flight request.
 let tokenRequest: Promise<unknown> | null = null
 
 async function ensureXsrfToken(forceRefresh = false): Promise<string | null> {
@@ -41,7 +35,6 @@ async function ensureXsrfToken(forceRefresh = false): Promise<string | null> {
   try {
     await tokenRequest
   } catch {
-    // Let the mutation proceed and surface the server's own error.
     return null
   }
   return readXsrfCookie()
@@ -67,9 +60,6 @@ apiClient.interceptors.response.use(
       return Promise.reject({ ...error, normalisedKind: 'not_found' })
     }
 
-    // A rejected antiforgery token yields a bare 400 with no body; model-validation
-    // failures always carry a ProblemDetails payload. Re-mint once and retry — this
-    // is the recovery path when the server's key ring no longer matches our cookie.
     const config = error.config as RetriableConfig | undefined
     if (error.response?.status === 400 && config && !config.xsrfRetried && !error.response.data) {
       config.xsrfRetried = true
@@ -98,11 +88,9 @@ export type AddressDto = {
 export type BookingSummary = {
   bookingId: number
   jobId: number
-  /** The WorldTracer file reference, shown as the File Reference. Empty to hide the tag. */
   fileReference: string
   airlineLabel: string
   airlineCode?: string | null
-  /** "Need help? Call …" — the client's own phone, or the tenant's support line. Empty to hide. */
   supportPhone: string
   passengerName: string
   passengerPhone?: string | null
@@ -122,9 +110,7 @@ export type AtlOption = {
 export type TimeSlot = {
   id: string
   runUtc: string
-  /** Date line, e.g. `Tomorrow, Fri 15 Aug`. Rendered server-side in the tenant's timezone. */
   dayLabel: string
-  /** Delivery window, e.g. `9:00 AM – 12:00 PM`. */
   label: string
   firstAvailable: boolean
 }
@@ -139,8 +125,6 @@ export type ConfirmBookingRequest = {
   passengerEmail?: string | null
 }
 
-// GET /api/v1/dev/links — mapped by the API in Development only. Outside
-// Development the route does not exist, and the 404 is what sends / to /expired.
 export type DevLinks = {
   jobId: number
   token: string

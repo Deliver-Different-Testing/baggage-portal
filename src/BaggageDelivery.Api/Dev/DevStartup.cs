@@ -5,14 +5,6 @@ namespace BaggageDelivery.Api.Dev;
 
 public static class DevStartup
 {
-    // Dev-only magic links: mints the encrypted pax token for a known tucJob so a
-    // developer can exercise /c (confirmation) and /t (tracking) without going
-    // through IM's BDO ingest flow. Surfaced two ways — logged at startup by
-    // LogTestMagicLinks, and served by GET /api/v1/dev/links for the SPA's
-    // landing page on /. Both go through BuildLinks so they can't drift.
-    //
-    // Configurable via DevTesting:JobId or DevTesting__JobId env var.
-    // Default matches the agreed test job (67).
     public const string DefaultPaxBaseUrl = "http://baggagedelivery.local.deliverdifferent.com:5173";
 
     private const int DefaultJobId = 67;
@@ -21,8 +13,6 @@ public static class DevStartup
 
     internal sealed record DevLinksResult(DevLinks? Links, string? Error, Exception? Exception = null);
 
-    // The pax flow is served by the Vite dev server, not by Kestrel, so the links
-    // must point at AppUrl (the SPA origin) rather than at the API's own address.
     internal static string ResolvePaxBaseUrl(string? appUrl) =>
         string.IsNullOrWhiteSpace(appUrl) ? DefaultPaxBaseUrl : appUrl.TrimEnd('/');
 
@@ -81,9 +71,6 @@ public static class DevStartup
             Log.Information("  Pax tracking:     {TrackUrl}", result.Links.TrackUrl);
         }
 
-        // Only mapped in Development, so the route genuinely does not exist in any
-        // other environment — the SPA's / route relies on that 404 to fall back to
-        // /expired, which is the production behaviour.
         public void MapDevLinks()
         {
             if (!app.Environment.IsDevelopment())
@@ -91,8 +78,6 @@ public static class DevStartup
                 return;
             }
 
-            // Resolved through IServiceProvider rather than as a handler parameter so a
-            // missing IEncryptionService yields the 503 below instead of a binding failure.
             app.MapGet("/api/v1/dev/links", (IConfiguration configuration, IServiceProvider services) =>
                 {
                     var result = BuildLinks(

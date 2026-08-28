@@ -10,8 +10,6 @@ describe('apiClient antiforgery handling', () => {
   const server = setupServer(
     http.get('*/antiforgery/token', () => {
       tokenRequests += 1
-      // jsdom won't apply Set-Cookie from msw, so seed the cookie directly —
-      // the browser equivalent of the API's readable companion cookie.
       document.cookie = 'XSRF-TOKEN=request-token-abc'
       return new HttpResponse(null, { status: 204 })
     }),
@@ -76,7 +74,6 @@ describe('apiClient antiforgery handling', () => {
       http.post('*/pax/:id/booking/confirm', ({ request }) => {
         attempts += 1
         sentTokenHeaders.push(request.headers.get('X-XSRF-TOKEN'))
-        // Antiforgery rejection is a bare 400 with no body.
         return attempts === 1
           ? new HttpResponse(null, { status: 400 })
           : HttpResponse.json({ status: 'Released', releasedAtUtc: '2026-06-10T00:00:00Z' })

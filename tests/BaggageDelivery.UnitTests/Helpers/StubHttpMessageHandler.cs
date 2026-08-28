@@ -3,9 +3,6 @@ using System.Text;
 
 namespace BaggageDelivery.UnitTests.Helpers;
 
-// Serves canned responses to HttpClient-backed clients without touching the
-// network, and records the URLs it was asked for so query-string construction
-// can be asserted.
 internal sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
     : HttpMessageHandler
 {

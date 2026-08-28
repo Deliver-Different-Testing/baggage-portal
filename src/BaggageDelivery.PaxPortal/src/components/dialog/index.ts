@@ -1,8 +1,3 @@
-/**
- * The DFRNT dialog design language, ported from despatchweb's
- * `components/dialogs/shared/mantine`. Dialogs compose
- * <DialogShell> + <DialogHeader> + <DialogFooter>.
- */
 export { DialogShell } from './DialogShell'
 export { DialogHeader } from './DialogHeader'
 export { DialogFooter } from './DialogFooter'

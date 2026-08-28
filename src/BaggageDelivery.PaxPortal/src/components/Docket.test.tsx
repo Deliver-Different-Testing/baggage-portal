@@ -10,8 +10,6 @@ function renderIn(ui: React.ReactNode) {
 
 describe('Eyebrow', () => {
   it('renders every micro-label to the one spec', () => {
-    // Six hand-tuned variants had drifted across the hero, the review dialog, the
-    // ETA card and the slot rows before this component existed.
     renderIn(<Eyebrow>Booking reference</Eyebrow>)
 
     expect(screen.getByText('Booking reference')).toHaveStyle({
@@ -23,8 +21,6 @@ describe('Eyebrow', () => {
   })
 
   it('lifts the label off the page grey when it sits on the Ink hero', () => {
-    // The page-level dimmed grey is mixed for a light body background and loses
-    // its contrast entirely on Ink Blue.
     renderIn(<Eyebrow tone="onScrim">Baggage tracking</Eyebrow>)
 
     expect(screen.getByText('Baggage tracking')).toHaveStyle({
@@ -42,8 +38,6 @@ describe('DocketTile', () => {
     )
 
     expect(screen.getByText('2:00 PM – 5:00 PM')).toBeInTheDocument()
-    // Round = you touch it, square = it's printed. A window the passenger has
-    // already chosen is printed.
     expect(screen.getByText('Delivery window').parentElement).toHaveStyle({
       borderRadius: `${tokens.radius.tile}px`,
     })
@@ -64,8 +58,6 @@ describe('DocketTile', () => {
 
 describe('PunchedTag', () => {
   it('keeps the label and the value as separate nodes', () => {
-    // The helpline asks the passenger to read the reference back on its own, so
-    // the value has to be selectable without dragging the label along with it.
     renderIn(<PunchedTag label="Booking reference" value="URG-179252" />)
 
     expect(screen.getByText(/^booking reference$/i)).toBeInTheDocument()
@@ -81,8 +73,6 @@ describe('PunchedTag', () => {
   })
 
   it('spends the airline colour on the punch and the divider only', () => {
-    // Airline colour is identity, DFRNT cyan is affordance — the tag's ground and
-    // its value stay neutral so the reference keeps its contrast for every carrier.
     const { container } = renderIn(
       <PunchedTag label="Booking reference" value="URG-42" accent="#008c95" onScrim />,
     )

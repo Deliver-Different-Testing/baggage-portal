@@ -10,22 +10,13 @@ public sealed class DespatchOptions
 
     public string[] Countries { get; set; } = ["NZ"];
 
-    // Shown to the passenger as "Need help? Call …" when the job's client has no
-    // phone of its own on tucClient. Optional — the portal hides the line rather
-    // than printing a dead "Need help?".
     public string SupportPhone { get; set; } = string.Empty;
 
-    // Authority-to-Leave handoff points the passenger flow must never offer.
-    // Matched on tblJobLeaveNotHome.LeaveNotHomeId, so a tenant rewording the row
-    // can't reintroduce it. A suitcase does not fit in a letter box.
     public LeaveNotHomeOption[] ExcludedAtlOptions { get; set; } =
     [
         LeaveNotHomeOption.LetterBox,
         LeaveNotHomeOption.Other
     ];
 
-    // Selected when the passenger switches Authority to Leave on — the confirm
-    // page arrives with it off. Deployments whose tblJobLeaveNotHome carries no
-    // such row fall back to the first surviving option.
     public LeaveNotHomeOption DefaultAtlOption { get; set; } = LeaveNotHomeOption.FrontDoor;
 }

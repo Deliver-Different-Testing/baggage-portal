@@ -71,7 +71,6 @@ public sealed class PaxBookingController(
                     Latitude = body.Address.Latitude,
                     Longitude = body.Address.Longitude
                 },
-                // Non-null by [Required] + [ApiController]'s automatic 400.
                 DeliveryTimeUtc: body.DeliveryTimeUtc!.Value,
                 AtlOptionId: body.AtlOptionId,
                 AccessNotes: body.AccessNotes,

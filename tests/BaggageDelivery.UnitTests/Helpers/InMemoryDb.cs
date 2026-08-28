@@ -10,9 +10,6 @@ internal static class InMemoryDb
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         connection.Open();
-        // tucJob has columns defaulting to getdate()/getutcdate() in the SQL Server
-        // schema. SQLite has no such functions, so EnsureCreated bakes the literal
-        // names into the CREATE TABLE and INSERTs would fail. Register stubs.
         connection.CreateFunction("getdate", () => DateTime.UtcNow);
         connection.CreateFunction("getutcdate", () => DateTime.UtcNow);
 
@@ -33,8 +30,6 @@ internal static class InMemoryDb
         {
             base.OnModelCreating(modelBuilder);
 
-            // Strip SQL Server-only filtered indexes that EnsureCreated can't
-            // translate to SQLite. The covering query behavior isn't what we test.
             foreach (var entityType in modelBuilder.Model.GetEntityTypes())
             {
                 foreach (var ix in entityType.GetIndexes().Where(i => i.GetFilter() is not null).ToList())

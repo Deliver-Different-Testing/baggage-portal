@@ -10,9 +10,6 @@ using Xunit;
 
 namespace BaggageDelivery.IntegrationTests;
 
-// Runs against the real clock, so these assert the shape of the contract rather
-// than literal dates: eight dated windows, in order, spanning more than one day.
-// The label arithmetic itself is pinned in PaxBookingServiceTests.
 public partial class PaxTimeslotsEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApiFactory>
 {
     private const int ClientId = 991;
@@ -36,8 +33,6 @@ public partial class PaxTimeslotsEndpointTests(PaxApiFactory factory) : IClassFi
         Assert.NotNull(slots);
         Assert.Equal(8, slots.Length);
 
-        // Both halves of the option are populated: the SPA renders dayLabel above
-        // label, so an empty dayLabel is a blank line on the passenger's phone.
         Assert.All(slots, s =>
         {
             Assert.False(string.IsNullOrWhiteSpace(s.DayLabel));
@@ -46,7 +41,6 @@ public partial class PaxTimeslotsEndpointTests(PaxApiFactory factory) : IClassFi
 
         Assert.True(slots[0].FirstAvailable);
         Assert.Single(slots, s => s.FirstAvailable);
-        // Four runs a day, so eight windows can't fit on one date.
         Assert.True(slots.Select(s => s.DayLabel).Distinct().Count() > 1);
         Assert.Equal(slots.Select(s => s.RunUtc).Order(), slots.Select(s => s.RunUtc));
     }
@@ -74,8 +68,6 @@ public partial class PaxTimeslotsEndpointTests(PaxApiFactory factory) : IClassFi
         Assert.Equal("[]", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
-    // The SQLite database is shared across the class fixture, so the client and
-    // job type are seeded once and every job hangs off them.
     private Task SeedRunClientJobAsync(int jobId) => factory.SeedAsync(async db =>
     {
         var ct = TestContext.Current.CancellationToken;

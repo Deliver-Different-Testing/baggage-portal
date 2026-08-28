@@ -2,9 +2,6 @@ import { Box, Card, Container, Grid, Group, Stack, Text, Title } from '@mantine/
 
 type NodeKind = 'action' | 'system' | 'api' | 'decision'
 
-// Categorical lane/node colours drawn from the DFRNT accent ramps (no literal hex;
-// no purple/teal — reflex-blue and stone stand in for the old WorldTracer teal and
-// Passenger/decision purple).
 const NODE_COLOURS: Record<NodeKind, string> = {
   action: 'var(--mantine-color-orange-6)',
   system: 'var(--mantine-color-green-6)',

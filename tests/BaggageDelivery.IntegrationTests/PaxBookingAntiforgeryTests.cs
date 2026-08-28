@@ -21,9 +21,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         var response = await client.PostAsJsonAsync($"/api/v1/pax/{EncryptedId(4242)}/booking/confirm",
             ConfirmBody(), TestContext.Current.CancellationToken);
 
-        // Regression guard: [ValidateAntiForgeryToken] used to throw
-        // InvalidOperationException because AddControllers doesn't register the
-        // ViewFeatures filter, so every confirm returned 500 before reaching the action.
         Assert.NotEqual(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -47,9 +44,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
             c => c.StartsWith($"{RequestTokenCookie}=", StringComparison.Ordinal));
         Assert.DoesNotContain("httponly", requestToken, StringComparison.OrdinalIgnoreCase);
 
-        // The two halves of an ASP.NET Core antiforgery token are distinct values.
-        // Echoing the cookie token back as the header — what the SPA used to do —
-        // can never validate.
         Assert.NotEqual(CookieValue(cookieToken), CookieValue(requestToken));
     }
 
@@ -59,8 +53,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         const int jobId = 4243;
         await SeedJobAsync(jobId);
 
-        // HandleCookies is on by default, so the antiforgery cookie set by the
-        // token call is replayed on the confirm POST.
         var client = factory.CreateClient();
 
         var tokenResponse = await client.GetAsync("/api/v1/antiforgery/token",
@@ -83,12 +75,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
     }
 
     [Theory]
-    // Regression guard for the reported production 400: AddressDto.Country used to
-    // require exactly 2 characters, but the booking GET seeds the pax form from the
-    // legacy free-text tucJob.DeliveryAddressLine8 and the form posts it back
-    // unchanged — with no country field for the passenger to correct.
-    // The SQLite database is shared across the class fixture, so each row seeds a
-    // distinct job.
     [InlineData("New Zealand", 4244)]
     [InlineData("NZL", 4246)]
     [InlineData("NZ", 4247)]
@@ -145,8 +131,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        // Still keyed on Address.Country so the SPA's handling is unchanged, but the
-        // message now names the remedy instead of restating a length rule.
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("Address.Country", body, StringComparison.Ordinal);
         Assert.Contains("search", body, StringComparison.OrdinalIgnoreCase);
@@ -176,11 +160,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
 
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        // The SPA drops the key entirely when a stale-shaped cached timeslot has no
-        // runUtc. DeliveryTimeUtc used to be a non-nullable DateTime, so [Required]
-        // passed on the missing value, default(DateTime) reached the tucJob UPDATE,
-        // and SQL Server rejected 0001-01-01 for a `datetime` column — a 500 with an
-        // empty body, which the passenger saw as a blank response.
         Assert.NotEqual(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
@@ -224,8 +203,6 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         passengerEmail = "jane@example.com"
     };
 
-    // Mirrors what the SPA actually posts when selectedSlot.runUtc is undefined:
-    // JSON.stringify omits the key rather than sending null.
     private static object ConfirmBodyWithoutDeliveryTime() => new
     {
         address = new

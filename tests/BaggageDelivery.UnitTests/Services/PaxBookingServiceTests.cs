@@ -17,10 +17,11 @@ public class PaxBookingServiceTests
     private static IOptions<DespatchOptions> DespatchOpts(
         string supportPhone = "",
         LeaveNotHomeOption[]? excludedAtlOptions = null,
-        LeaveNotHomeOption defaultAtlOption = LeaveNotHomeOption.FrontDoor) =>
+        LeaveNotHomeOption defaultAtlOption = LeaveNotHomeOption.FrontDoor,
+        string timeZone = "Pacific/Auckland") =>
         Options.Create(new DespatchOptions
         {
-            TimeZone = "Pacific/Auckland",
+            TimeZone = timeZone,
             SupportPhone = supportPhone,
             ExcludedAtlOptions = excludedAtlOptions ?? [LeaveNotHomeOption.LetterBox],
             DefaultAtlOption = defaultAtlOption
@@ -33,15 +34,10 @@ public class PaxBookingServiceTests
             AllowLeave = true, Sequence = sequence, CreatedBy = "test", LastModifiedBy = "test"
         };
 
-    // Fresh cache per service so reference-data caching can't leak between tests.
     private static MemoryCache NewCache() => new(new MemoryCacheOptions());
 
-    // The real calendar calls UTL_IsBusinessDay / UTL_AddBusinessDays, which
-    // don't exist on SQLite. Weekends are non-business unless stated otherwise.
     private sealed class FakeCalendar(params DateTime[] extraNonBusinessDays) : IDespatchCalendar
     {
-        // The service is expected to batch its day-walk: one NextBusinessDays call
-        // per timeslot request, and no per-hop AddBusinessDays round trips.
         public int NextBusinessDaysCalls { get; private set; }
 
         public int AddBusinessDaysCalls { get; private set; }
@@ -118,9 +114,6 @@ public class PaxBookingServiceTests
         DateTime? At(int i) => i < runs.Length ? new DateTime(1900, 1, 1).Add(runs[i]) : null;
     }
 
-    // tucJob.ucjbSpeed is FK'd to tucJobType.ucjtID, so a job cannot be inserted
-    // without its speed row present. Tests that care about the window length add
-    // their own tucJobType first; this fills a blank one in for the rest.
     private static void AddJob(BaggageDeliveryContext db, int jobId, int clientId,
         int? speed = BaggageSpeed)
     {
@@ -135,8 +128,6 @@ public class PaxBookingServiceTests
         });
     }
 
-    // tucJob.ucjbSpeed points at tucJobType.ucjtID; Minutes is how long the
-    // promised window runs for.
     private const int BaggageSpeed = 38;
 
     private static TucJobType NewJobType(int speedId, int? minutes) => new()
@@ -160,8 +151,6 @@ public class PaxBookingServiceTests
         var ct = TestContext.Current.CancellationToken;
         var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
-        // One run a day means eight windows span eight separate business days —
-        // the worst case for a walk that asks the database one hop at a time.
         db.TucClients.Add(NewClient(77, economyRuns: true, new TimeSpan(9, 0, 0)));
         db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         AddJob(db, 4242, 77);
@@ -175,7 +164,6 @@ public class PaxBookingServiceTests
         Assert.Equal(8, slots.Count);
         Assert.Equal(1, calendar.NextBusinessDaysCalls);
         Assert.Equal(0, calendar.AddBusinessDaysCalls);
-        // Wednesday the 10th through Friday the 19th, weekends skipped.
         Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
         Assert.Equal("Fri 19 Jun", slots[7].DayLabel);
     }
@@ -185,8 +173,6 @@ public class PaxBookingServiceTests
     {
         await using var db = InMemoryDb.NewContext();
         var ct = TestContext.Current.CancellationToken;
-        // 2026-06-09 12:00 UTC = 2026-06-10 00:00 Pacific/Auckland (NZST UTC+12),
-        // so every run on the 10th is still ahead of "now".
         var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
@@ -198,7 +184,6 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        // Four runs a day, so the eighth window is on Thursday the 11th.
         Assert.Equal(8, slots.Count);
         Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
         Assert.Equal("9:00 AM – 12:00 PM", slots[0].Label);
@@ -232,8 +217,6 @@ public class PaxBookingServiceTests
     }
 
     [Theory]
-    // No speed on the job at all, and a speed whose job type has no Minutes —
-    // both land on the three-hour default rather than a zero-length window.
     [InlineData(null, null)]
     [InlineData(BaggageSpeed, null)]
     public async Task GetTimeslots_falls_back_to_a_three_hour_window_without_a_speed_duration(
@@ -262,8 +245,6 @@ public class PaxBookingServiceTests
         var ct = TestContext.Current.CancellationToken;
         var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
-        // One run a day, so eight windows span eight business days and step over
-        // two weekends.
         db.TucClients.Add(NewClient(77, economyRuns: true, new TimeSpan(9, 0, 0)));
         db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         AddJob(db, 4242, 77);
@@ -297,14 +278,11 @@ public class PaxBookingServiceTests
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
         var first = await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct);
-        // Same service instance, so a process-wide run cache would leak client 77
-        // into this call.
         var second = await svc.GetTimeslotsAsync(4243, new DateTime(2026, 6, 10), ct);
 
         Assert.Equal("12:30 PM – 3:30 PM", first[1].Label);
         Assert.Equal("7:00 AM – 10:00 AM", second[0].Label);
         Assert.Equal("7:00 PM – 10:00 PM", second[1].Label);
-        // Two runs a day, so the eighth window is four days out.
         Assert.Equal("Mon 15 Jun", second[7].DayLabel);
     }
 
@@ -313,7 +291,6 @@ public class PaxBookingServiceTests
     {
         await using var db = InMemoryDb.NewContext();
         var ct = TestContext.Current.CancellationToken;
-        // 2026-06-10 01:00 UTC = 2026-06-10 13:00 NZ, so 9:00 and 12:30 are gone.
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 1, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
@@ -339,7 +316,6 @@ public class PaxBookingServiceTests
     {
         await using var db = InMemoryDb.NewContext();
         var ct = TestContext.Current.CancellationToken;
-        // 2026-06-10 08:00 UTC = 2026-06-10 20:00 NZ — past the 5pm final run.
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 8, 0, 0, DateTimeKind.Utc));
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
@@ -351,7 +327,6 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        // Thursday the 11th, whole day offered again.
         Assert.Equal(8, slots.Count);
         Assert.Equal("Tomorrow, Thu 11 Jun", slots[0].DayLabel);
         Assert.Equal(new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
@@ -372,12 +347,8 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        // 2026-06-13 is a Saturday.
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 13), ct);
 
-        // Monday the 15th, every run available because the roll-forward resets
-        // the time-of-day comparison. Neither today nor tomorrow, so the label is
-        // a bare date even though the anchor was "now".
         Assert.Equal(8, slots.Count);
         Assert.Equal("Mon 15 Jun", slots[0].DayLabel);
         Assert.Equal(new DateTime(2026, 6, 14, 21, 0, 0, DateTimeKind.Utc), slots[0].RunUtc);
@@ -404,8 +375,6 @@ public class PaxBookingServiceTests
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
-        // NZ-local 00:00 is before the 14:00 cutoff, so the rebook time stands today,
-        // then repeats on each of the next seven business days.
         Assert.Equal(8, slots.Count);
         Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
         Assert.Equal("10:00 AM – 1:00 PM", slots[0].Label);
@@ -420,7 +389,6 @@ public class PaxBookingServiceTests
     {
         await using var db = InMemoryDb.NewContext();
         var ct = TestContext.Current.CancellationToken;
-        // 2026-06-10 06:00 UTC = 18:00 NZ, past the 14:00 cutoff.
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 6, 0, 0, DateTimeKind.Utc));
 
         db.TblEcoSettings.Add(new TblEcoSetting
@@ -455,7 +423,6 @@ public class PaxBookingServiceTests
             BaggageCutOff = new DateTime(1900, 1, 1, 14, 0, 0),
             BaggageRebook = new DateTime(1900, 1, 1, 10, 0, 0)
         });
-        // Runs are configured, but the client isn't opted in to run-based delivery.
         db.TucClients.Add(NewClient(77, economyRuns: false, StandardRuns));
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
@@ -565,9 +532,6 @@ public class PaxBookingServiceTests
         Assert.Equal((int)JobStatus.New, job.UcjbStatus);
         Assert.Equal(5, job.DeliverToLeaveId);
 
-        // Canonical Despatch address columns: extra delivery information → L2,
-        // combined street → L4 (L3 cleared), suburb → L5, city → L6, postcode →
-        // L7, country → L8. Company (L1) is left untouched by the pax edit.
         Assert.Equal("Acme Co", job.DeliveryAddressLine1);
         Assert.Equal("Apartment 4B, ring the buzzer", job.DeliveryAddressLine2);
         Assert.Null(job.DeliveryAddressLine3);
@@ -657,6 +621,77 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
+    public async Task Confirm_books_the_job_onto_the_start_of_the_selected_window()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4250,
+            UcjbNumber = "TEST-4250",
+            UcjbDate = new DateTime(2026, 6, 1, 0, 0, 0),
+            UcjbTime = new DateTime(2026, 6, 1, 14, 30, 0),
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        // 2026-06-10T21:00Z is 09:00 on 11 June in Pacific/Auckland (NZST).
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4250,
+            Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
+            DeliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: null,
+            PassengerEmail: null), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4250, ct);
+        Assert.Equal(new DateTime(2026, 6, 11, 0, 0, 0), job.UcjbDate);
+        Assert.Equal(new DateTime(2026, 6, 11, 9, 0, 0), job.UcjbTime);
+        Assert.Equal(new DateTime(2026, 6, 11, 9, 0, 0), job.DeliverByTime);
+    }
+
+    [Fact]
+    public async Task Confirm_leaves_the_booked_date_untouched_when_the_tenant_timezone_is_unresolved()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4251,
+            UcjbNumber = "TEST-4251",
+            UcjbDate = new DateTime(2026, 6, 1, 0, 0, 0),
+            UcjbTime = new DateTime(2026, 6, 1, 14, 30, 0),
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(timeZone: ""), NewCache(), time, NewCalendar());
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4251,
+            Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
+            DeliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: null,
+            PassengerEmail: null), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4251, ct);
+        Assert.Equal(new DateTime(2026, 6, 1, 0, 0, 0), job.UcjbDate);
+        Assert.Equal(new DateTime(2026, 6, 1, 14, 30, 0), job.UcjbTime);
+        Assert.Null(job.DeliverByTime);
+    }
+
+    [Fact]
     public async Task Confirm_throws_when_tucJob_does_not_exist()
     {
         await using var db = InMemoryDb.NewContext();
@@ -685,8 +720,6 @@ public class PaxBookingServiceTests
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
-        // Production Category sentinel for "all categories" is "All," (trailing
-        // comma); other/null categories are excluded.
         db.TblJobLeaveNotHomes.AddRange(
             new TblJobLeaveNotHome { LeaveNotHomeId = 1, Name = "Front porch", Smsname = "porch", Category = "All,", AllowLeave = true, Sequence = 2, CreatedBy = "test", LastModifiedBy = "test" },
             new TblJobLeaveNotHome { LeaveNotHomeId = 2, Name = "Back door", Smsname = "door", Category = "All,", AllowLeave = false, Sequence = 1, CreatedBy = "test", LastModifiedBy = "test" },
@@ -699,8 +732,6 @@ public class PaxBookingServiceTests
         var summary = await svc.GetSummaryAsync(7, ct);
 
         Assert.NotNull(summary);
-        // Highest sequence first; "Back door" excluded (AllowLeave false),
-        // "With neighbour" excluded (wrong category).
         Assert.Equal(["Garage", "Front porch"], summary.AtlOptions.Select(o => o.Name));
         Assert.Equal([4, 1], summary.AtlOptions.Select(o => o.Id));
     }
@@ -713,8 +744,6 @@ public class PaxBookingServiceTests
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
-        // The row is named nothing like "Letter box" — the exclusion is on the id,
-        // which is what a tenant renaming the option cannot move.
         db.TblJobLeaveNotHomes.AddRange(
             NewAtlOption(LeaveNotHomeOption.LetterBox, "Mailslot by the gate", 5),
             NewAtlOption(LeaveNotHomeOption.FrontDoor, "Front door", 4),
@@ -787,8 +816,6 @@ public class PaxBookingServiceTests
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
-        // Front door is deliberately not first in the list — the default is the
-        // configured option, not whatever the ordering happens to surface.
         db.TblJobLeaveNotHomes.AddRange(
             NewAtlOption(LeaveNotHomeOption.Reception, "Reception", 9),
             NewAtlOption(LeaveNotHomeOption.FrontDoor, "Front door", 4));
@@ -879,8 +906,6 @@ public class PaxBookingServiceTests
         {
             UcjbId = 7,
             UcjbNumber = "JOB-7",
-            // Canonical Despatch convention: L3=street number, L4=street name,
-            // L5=suburb (non-US), L6=city (non-US), L7=postcode, L8=country.
             DeliveryAddressLine3 = "12",
             DeliveryAddressLine4 = "Queen St",
             DeliveryAddressLine5 = "CBD",
@@ -946,8 +971,6 @@ public class PaxBookingServiceTests
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
-        // The portal hides the file-reference tag on empty rather than falling back
-        // to the job number, which is not what the airline will ask for.
         Assert.NotNull(summary);
         Assert.Equal(string.Empty, summary.FileReference);
     }
@@ -986,7 +1009,6 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
-        // WorldTracer file ref: station(3) + airline(2) + sequence -> "NZ".
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientRefa = "AKLNZ12345" });
         await db.SaveChangesAsync(ct);
 
@@ -1026,7 +1048,6 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
-        // Too short / no two-letter airline at positions 4-5 -> not a WT ref.
         db.TucJobs.Add(new TucJob
         {
             UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientRefa = "AK12345", UcjbClientCode = "QF"
@@ -1059,7 +1080,6 @@ public class PaxBookingServiceTests
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
-        // The airline the passenger flew with beats the courier's own line.
         Assert.NotNull(summary);
         Assert.Equal("0800 267 5494", summary.SupportPhone);
     }
@@ -1103,7 +1123,6 @@ public class PaxBookingServiceTests
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
-        // The portal drops the "Need help?" line rather than printing a dead prompt.
         Assert.NotNull(summary);
         Assert.Equal(string.Empty, summary.SupportPhone);
     }
@@ -1174,7 +1193,6 @@ public class PaxBookingServiceTests
     }
 
     [Theory]
-    // DeliveryAddressLine8 is legacy free text, not a validated ISO-2 code.
     [InlineData("New Zealand", "NZ")]
     [InlineData("NEW ZEALAND", "NZ")]
     [InlineData("NZL", "NZ")]
@@ -1221,8 +1239,6 @@ public class PaxBookingServiceTests
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
-        // Empty is the signal the pax portal uses to force an address re-selection
-        // through the search — we don't silently guess the tenant default here.
         Assert.NotNull(summary);
         Assert.Equal(string.Empty, summary.DeliveryAddress.Country);
     }
@@ -1239,7 +1255,6 @@ public class PaxBookingServiceTests
             UcjbId = 7,
             UcjbNumber = "JOB-7",
             DeliveryAddressLine4 = "5th Ave",
-            // US convention: L5 is the city, there is no suburb line.
             DeliveryAddressLine5 = "New York",
             DeliveryAddressLine8 = "United States of America"
         });
@@ -1348,8 +1363,6 @@ public class PaxBookingServiceTests
         var summary = await svc.GetSummaryAsync(4242, ct);
         Assert.NotNull(summary);
 
-        // Exactly what the pax portal posts back when the passenger only picks a
-        // timeslot: the address object it was handed, untouched.
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
             Address: summary.DeliveryAddress,

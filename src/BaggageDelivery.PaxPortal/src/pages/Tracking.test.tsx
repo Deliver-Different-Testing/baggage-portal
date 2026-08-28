@@ -8,8 +8,6 @@ import { Tracking } from './Tracking'
 import { MantineTestProvider } from '../test/render'
 import type { TrackingTimeline } from '../api/client'
 
-// The page formats in the viewer's own locale and zone, so the expectations are
-// built with the same Intl options rather than hard-coded strings.
 const TIME_FMT: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' }
 const LONG_DATE_FMT: Intl.DateTimeFormatOptions = {
   weekday: 'long',
@@ -23,12 +21,6 @@ const ETA_END = '2026-06-10T05:00:00Z'
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 
-// Pinned, not the wall clock: the page shows bare clock time only while an event
-// falls on the same local day as now, and a day-and-time stamp otherwise. Built
-// in local time so it lands at midday in whatever zone the runner uses — a suite
-// run just after local midnight (CI runs in UTC) would push the "2h ago" event
-// onto the previous day, and a run in early January would push the week-old one
-// into the previous year.
 const NOW = new Date(2026, 5, 10, 12, 0, 0)
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * HOUR_MS).toISOString()
 
@@ -73,8 +65,6 @@ function renderTracking() {
 
 describe('Tracking', () => {
   beforeEach(() => {
-    // shouldAdvanceTime keeps MSW and React Query's async resolution moving while
-    // the clock the page reads stays anchored to NOW.
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(NOW)
   })
@@ -108,8 +98,6 @@ describe('Tracking', () => {
   it('writes known statuses out in English rather than splitting the enum', async () => {
     renderTracking()
 
-    // Splitting PascalCase title-cases every word, so the passenger was reading
-    // "Out For Delivery" and "At Depot".
     expect(await screen.findByText('Out for delivery')).toBeInTheDocument()
     expect(screen.getByText('At our depot')).toBeInTheDocument()
     expect(screen.queryByText('Out For Delivery')).not.toBeInTheDocument()
@@ -129,8 +117,6 @@ describe('Tracking', () => {
 
     renderTracking()
 
-    // Readable, and never a raw enum name — in the hero badge as well as the
-    // timeline entry, which is why both matches are expected here.
     expect(await screen.findAllByText('Held At Customs')).toHaveLength(2)
   })
 
@@ -142,8 +128,6 @@ describe('Tracking', () => {
     const items = screen.getAllByText(/^(Out for delivery|At our depot)$/)
     expect(items[0]).toHaveTextContent('Out for delivery')
 
-    // "2h ago" is the gloss; the hour it happened is the fact, so both are shown
-    // with the clock time leading.
     expect(screen.getByText(new Date(timeline.events[0].atUtc).toLocaleTimeString(undefined, TIME_FMT)))
       .toBeInTheDocument()
     expect(screen.getByText('2h ago')).toBeInTheDocument()

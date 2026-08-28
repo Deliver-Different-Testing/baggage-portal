@@ -30,8 +30,6 @@ public class PaxAddressControllerTests
         }
     }
 
-    // ---- Autocomplete -------------------------------------------------------
-
     [Fact]
     public async Task Autocomplete_with_an_undecryptable_id_is_not_found()
     {
@@ -81,8 +79,6 @@ public class PaxAddressControllerTests
             Arg.Is<IReadOnlyList<string>?>(c => c != null && c.SequenceEqual(new[] { "AU", "NZ" })),
             Arg.Any<CancellationToken>());
     }
-
-    // ---- Lookup -------------------------------------------------------------
 
     [Fact]
     public async Task Lookup_with_an_undecryptable_id_is_not_found()
