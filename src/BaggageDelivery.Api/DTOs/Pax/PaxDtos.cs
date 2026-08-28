@@ -4,7 +4,7 @@ namespace BaggageDelivery.Api.DTOs.Pax;
 
 public sealed record BookingSummaryDto(
     int JobId,
-    string JobNumber,
+    string FileReference,
     string AirlineLabel,
     string? AirlineCode,
     string SupportPhone,

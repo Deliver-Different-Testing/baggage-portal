@@ -4,9 +4,10 @@ namespace BaggageDelivery.Core.Services;
 
 public sealed record BookingSummary(
     int JobId,
-    // The Urgent job number (tucJob.ucjbNumber) — the reference ops and the
-    // passenger both quote. Empty when the job carries none.
-    string JobNumber,
+    // The WorldTracer file reference (tucJob.ucjbClientRefa) — the reference the
+    // airline and the helpline both quote. Empty when the job carries none, and
+    // the portal then shows no reference at all.
+    string FileReference,
     string AirlineLabel,
     string? AirlineCode,
     // The number behind "Need help? Call …": the client's own phone, or the

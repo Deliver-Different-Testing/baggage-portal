@@ -48,7 +48,6 @@ internal sealed class PaxBookingService(
             .Where(j => j.UcjbId == jobId)
             .Select(j => new
             {
-                JobNumber = j.UcjbNumber,
                 j.DeliverByTime,
                 j.DeliverToContact,
                 j.DeliverToPhone,
@@ -109,10 +108,10 @@ internal sealed class PaxBookingService(
 
         return new BookingSummary(
             JobId: jobId,
-            // The Urgent job number, shown to the passenger as the Booking Reference.
-            // Empty when the job doesn't carry one — the portal hides the tag rather
-            // than showing the internal id behind the link.
-            JobNumber: (job.JobNumber ?? string.Empty).Trim(),
+            // The WorldTracer file reference, shown to the passenger as the File
+            // Reference. Empty when the job doesn't carry one — the portal hides the
+            // tag rather than showing the internal id behind the link.
+            FileReference: (job.ClientRefa ?? string.Empty).Trim(),
             AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
             // The airline's own line first — it's the one the passenger's baggage
             // file is with. The tenant's number is the backstop for clients that

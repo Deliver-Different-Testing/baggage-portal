@@ -1,9 +1,17 @@
 /* App-level global styles. Mantine's styles.css + dfrntCssVariablesResolver own the
    colour surfaces (body background = var(--mantine-color-body)); this file only sets
-   the brand typeface and rendering niceties. */
+   rendering niceties.
+
+   Deliberately no font-family. Mantine's own `body` rule already applies
+   var(--mantine-font-family) from the theme, and this file is imported after
+   @mantine/core/styles.css — so a family declared here wins at equal specificity.
+   The value that used to sit here was quoted as '"Plus Jakarta Sans Variable"', a
+   string containing literal double quotes that can never match a family name, and
+   its fallback 'Plus Jakarta Sans' is not a face @fontsource-variable registers
+   (it registers only the "Variable" name). Body therefore resolved to system UI —
+   and because Mantine's reset sets `button { font: inherit }`, every Button
+   rendered in the system font while Text and Title rendered in Plus Jakarta Sans. */
 body {
-  font-family: '"Plus Jakarta Sans Variable"', 'Plus Jakarta Sans', -apple-system,
-    BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
@@ -63,7 +71,9 @@ textarea.mantine-Input-input[data-disabled] {
   align-items: center;
   gap: 12px;
   padding: 14px;
-  border-radius: var(--mantine-radius-md);
+  /* One step in from the panel that holds them (md/12px). Matching the outer
+     radius on an inner box makes the nesting read as a mistake. */
+  border-radius: var(--mantine-radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
   transition:
@@ -110,12 +120,6 @@ textarea.mantine-Input-input[data-disabled] {
 }
 .pax-stagger > *:nth-child(n + 6) {
   animation-delay: 200ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pax-stagger > * {
-    animation: none;
-  }
 }
 
 /* Live/current-step pulse ring (Tracking header dot + current timeline bullet). */
@@ -177,4 +181,54 @@ textarea.mantine-Input-input[data-disabled] {
 
 .pax-hero-stepper .mantine-Stepper-stepLabel {
   white-space: nowrap;
+}
+
+/* Dialog footer (see components/dialog/DialogFooter). Despatch right-aligns a
+   Cancel/Confirm pair, which suits a dispatch console. On a phone the pair goes
+   full width and stacks instead.
+
+   Deliberately NOT column-reverse. Painting the primary on top would put the
+   visual order at odds with the DOM and tab order on the one platform this app
+   is actually for, which is the reordering trap WCAG calls out under Meaningful
+   Sequence and Focus Order. Stacked in source order the primary lands at the
+   bottom of the sheet — nearest the thumb, and the same place iOS and Material
+   put it — so nothing is lost by keeping the orders identical. */
+.dd-dialog-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  padding: var(--mantine-spacing-md) var(--mantine-spacing-lg);
+  border-top: 1px solid var(--dd-outline-variant);
+  background-color: var(--dd-surface-container);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.dd-dialog-footer > * {
+  width: 100%;
+}
+
+@media (min-width: 36em) {
+  .dd-dialog-footer {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .dd-dialog-footer > * {
+    width: auto;
+    min-width: 100px;
+  }
+}
+
+/* One reduced-motion guard for the whole file, placed after every animation it
+   switches off — a guard written before .pax-pulse would lose to it at equal
+   specificity. The infinite pulse matters here more than the one-shot stagger:
+   a 320ms entrance that plays once is far less of a problem for a
+   motion-sensitive passenger than a ring that never stops. */
+@media (prefers-reduced-motion: reduce) {
+  .pax-stagger > *,
+  .pax-pulse {
+    animation: none;
+  }
 }

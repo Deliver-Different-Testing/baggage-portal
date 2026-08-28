@@ -98,8 +98,8 @@ export type AddressDto = {
 export type BookingSummary = {
   bookingId: number
   jobId: number
-  /** The Urgent job number, shown as the Booking Reference. Empty to hide the tag. */
-  jobNumber: string
+  /** The WorldTracer file reference, shown as the File Reference. Empty to hide the tag. */
+  fileReference: string
   airlineLabel: string
   airlineCode?: string | null
   /** "Need help? Call …" — the client's own phone, or the tenant's support line. Empty to hide. */

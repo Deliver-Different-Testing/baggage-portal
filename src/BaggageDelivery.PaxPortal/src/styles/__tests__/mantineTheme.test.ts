@@ -18,6 +18,55 @@ describe('dfrntTheme', () => {
     expect(dfrntTheme.components?.Button?.defaultProps).toMatchObject({ radius: 9999 })
   })
 
+  it('declares the brand family without nesting one quote style inside another', () => {
+    // Regression guard. index.css carried the family as '"Plus Jakarta Sans
+    // Variable"' — a CSS string containing literal double quotes, which can never
+    // match a family name. Because index.css is imported after @mantine/core's
+    // stylesheet it beat Mantine's own body rule, and since Mantine's reset sets
+    // `button { font: inherit }` every Button fell back to the system UI font while
+    // Text and Title rendered in Plus Jakarta Sans.
+    const families = [dfrntTheme.fontFamily, dfrntTheme.headings?.fontFamily]
+    for (const family of families) {
+      expect(family).toBeTruthy()
+      expect(family).toContain('Plus Jakarta Sans Variable')
+      expect(family).not.toMatch(/'"|"'/)
+    }
+  })
+
+  it('sizes form controls for a thumb, not a mouse', () => {
+    // Mantine's `sm` default is a 36px control at 14px type. iOS Safari zooms the
+    // viewport whenever a focused input is under 16px, and 36px is under the
+    // 44px/48px minimum touch target — on a passenger's phone, both.
+    for (const control of ['TextInput', 'Textarea', 'Select', 'Autocomplete', 'Checkbox', 'Radio'] as const) {
+      expect(dfrntTheme.components?.[control]?.defaultProps).toMatchObject({ size: 'md' })
+    }
+  })
+
+  it('carries one spec for the full-width primary button', () => {
+    // The action bar, the review dialog's confirm and the track link each had their
+    // own inline override, so one role rendered at three sizes and two weights.
+    expect(tokens.button.primary).toEqual({
+      minHeight: 56,
+      fontSize: 16,
+      fontWeight: 700,
+      letterSpacing: '0.01em',
+    })
+  })
+
+  it('gives section headings a step of their own above body copy', () => {
+    // They were plain body-weight `Text`, which left them the same size as the field
+    // labels underneath and gave the page no heading between the h1 and the inputs.
+    expect(tokens.type.sectionTitle.fontSize).toBeGreaterThan(16)
+    expect(tokens.type.sectionTitle.fontWeight).toBeGreaterThanOrEqual(600)
+  })
+
+  it('states the hero H1 line-height so the two heroes cannot drift', () => {
+    // The confirmed screen set the other three properties by hand and omitted
+    // lineHeight, so at 40px the success headline led looser than the one it replaced.
+    expect(tokens.type.heroTitle.lineHeight).toBe(1.05)
+    expect(tokens.type.heroTitle.fontSize).toBe(tokens.type.hero)
+  })
+
   it('separates the printed radius from the touchable ones', () => {
     // The docket motif rests on this: 2px means "this is a fact", everything the
     // passenger can press keeps a soft corner or a pill.

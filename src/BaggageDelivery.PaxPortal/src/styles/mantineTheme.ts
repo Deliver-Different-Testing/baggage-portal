@@ -132,6 +132,9 @@ export const codeBlockPalette = {
  * reference, the chosen window, the ETA, a docket line. Keeping the two apart is what
  * makes the baggage-tag motif read as a system rather than a one-off ornament.
  */
+/** The H1 size, shared by `type.hero` and the full `type.heroTitle` spec below. */
+const HERO_SIZE = 'clamp(32px, 8vw, 40px)';
+
 export const tokens = {
   radius: { xs: 4, sm: 8, md: 12, lg: 16, xl: 28, full: 9999, tile: 2 },
   /**
@@ -140,7 +143,30 @@ export const tokens = {
    * single spec for the uppercase micro-label role, which had six.
    */
   type: {
-    hero: 'clamp(32px, 8vw, 40px)',
+    hero: HERO_SIZE,
+    /**
+     * The whole H1 treatment, not just its size. The confirm hero and the confirmed
+     * screen set the same four properties by hand and the confirmed one omitted
+     * `lineHeight`, so at 40px the success headline led visibly looser than the
+     * headline it replaced.
+     */
+    heroTitle: {
+      fontSize: HERO_SIZE,
+      lineHeight: 1.05,
+      fontWeight: 700,
+      letterSpacing: '-0.03em',
+    } as const,
+    /**
+     * Section headings inside a card. The confirm form set these as plain body-weight
+     * `Text`, which left them the same size as the field labels underneath and gave
+     * the page no heading between the H1 and the inputs. One step up, one weight up.
+     */
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: 600,
+      lineHeight: 1.3,
+      letterSpacing: '-0.01em',
+    } as const,
     figure: 'clamp(24px, 6vw, 28px)',
     // `as const` so `textTransform` keeps its literal type and the object can be
     // spread straight into a `CSSProperties`.
@@ -149,6 +175,35 @@ export const tokens = {
       fontWeight: 700,
       letterSpacing: '0.12em',
       textTransform: 'uppercase',
+    } as const,
+  },
+  /**
+   * The Ink-Blue hero shell. Shared by the confirm hero and the confirmed screen so
+   * the two do not drift: they had different vertical padding and lifted their
+   * content column by different amounts, which read as the page shifting under the
+   * passenger at the exact moment it was confirming their booking.
+   */
+  hero: {
+    px: { base: 20, sm: 32 },
+    pt: { base: 32, sm: 40 },
+    pb: { base: 48, sm: 56 },
+    /** How far the content column lifts into the hero above it. */
+    overlap: { base: -28, sm: -32 },
+    /** The measure of the passenger flow's content column. */
+    measure: 520,
+  },
+  /**
+   * The full-width primary. One spec, because the three most important buttons in
+   * the flow — the action bar, the review dialog's confirm, the track link — each
+   * carried their own inline override (56/16/700, 52/–/700, –/–/600), so the same
+   * role rendered at three sizes and two weights.
+   */
+  button: {
+    primary: {
+      minHeight: 56,
+      fontSize: 16,
+      fontWeight: 700,
+      letterSpacing: '0.01em',
     } as const,
   },
   duration: { instant: 100, fast: 150, normal: 200, slow: 350 },
@@ -238,19 +293,28 @@ export const dfrntTheme = createTheme({
         },
       },
     },
+    // The 28px corner is the DFRNT dialog language (ported from Despatch's
+    // `dialogs/shared/mantine`), so a raw Modal matches one built with
+    // <DialogShell>. See components/dialog/styles.ts.
     Modal: {
-      defaultProps: { radius: 'lg', centered: true },
+      defaultProps: { radius: 'xl', centered: true },
       styles: { content: { backgroundColor: 'var(--dd-surface-container-high)' } },
     },
     // The tick and the dot are Ink on cyan, stated rather than inferred. Cyan is a
     // light colour (relative luminance ~0.48) — a white glyph on it is about 1.9:1
     // and effectively invisible at checkbox size.
-    Checkbox: { defaultProps: { iconColor: 'var(--dd-on-brand-fill)' } },
-    Radio: { defaultProps: { iconColor: 'var(--dd-on-brand-fill)' } },
-    TextInput: { defaultProps: { radius: 'sm' } },
-    Textarea: { defaultProps: { radius: 'sm' } },
-    Select: { defaultProps: { radius: 'sm' } },
-    Autocomplete: { defaultProps: { radius: 'sm' } },
+    // size 'md' on every form control rather than Mantine's 'sm' default. This is
+    // ergonomics, not taste: 'sm' is a 36px control at 14px type, and iOS Safari
+    // zooms the viewport whenever a focused input is under 16px — so the page
+    // visibly jumped on the first tap into the passenger's name field. 36px also
+    // sits under the 44px/48px minimum touch target. 'md' is 42px at 16px. Set
+    // here, not at the call sites, so a field added later cannot opt back out.
+    Checkbox: { defaultProps: { size: 'md', iconColor: 'var(--dd-on-brand-fill)' } },
+    Radio: { defaultProps: { size: 'md', iconColor: 'var(--dd-on-brand-fill)' } },
+    TextInput: { defaultProps: { size: 'md', radius: 'sm' } },
+    Textarea: { defaultProps: { size: 'md', radius: 'sm' } },
+    Select: { defaultProps: { size: 'md', radius: 'sm' } },
+    Autocomplete: { defaultProps: { size: 'md', radius: 'sm' } },
     Menu: {
       defaultProps: { radius: 'sm', shadow: 'md' },
       styles: { dropdown: { backgroundColor: 'var(--dd-surface-container-high)' } },

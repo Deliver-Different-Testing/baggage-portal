@@ -10,7 +10,7 @@ import type { AddressAutocompleteProps } from './AddressAutocompleteProps'
 export const AddressAutocomplete = memo(function AddressAutocomplete({
   bookingId,
   label = 'Search address',
-  placeholder = 'Start typing an address...',
+  placeholder = 'Start typing an address…',
   onAddressSelect,
 }: AddressAutocompleteProps) {
   const { setInputValue, suggestions, isLoading, getDetails } = useAddressSearch({
