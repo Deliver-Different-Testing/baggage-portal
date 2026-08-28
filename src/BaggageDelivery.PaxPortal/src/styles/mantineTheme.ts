@@ -1,17 +1,3 @@
-/**
- * DFRNT Mantine theme — the single source of truth for the brand. Portable copy
- * from the IntegrationManager AdminPortal (src/styles/mantineTheme.ts). Only
- * dependency is `@mantine/core` and the sibling `./md3`.
- *
- * Built 1:1 from the Feb 2026 DFRNT brand guidelines:
- *   Ink Blue  #0d0c2c  — shell (AppBar + sidebar) in both modes, dark-mode page bg
- *   Cyan      #3bc7f4  — primary interactive (buttons, links, active nav, focus)
- *   Light Grey#f4f2f1  — light-mode page background
- * Secondary accents: Reflex Blue #2a4eff, Purple #824ae0, Green #13b964 (success),
- * Orange #fe811a (warning), Red #dc3246 (error).
- *
- * Typography: Plus Jakarta Sans for UI and display headings. Lozenge (pill) buttons.
- */
 import {
   createTheme,
   v8CssVariablesResolver,
@@ -20,78 +6,63 @@ import {
 } from '@mantine/core';
 import { getMd3Scheme } from './md3';
 
-// ---------------------------------------------------------------------------
-// Brand ramps (0 lightest → 9 darkest). Light ends use the guideline tints
-// (20% / 40%); dark ends are hand-tuned. Regenerate precisely with
-// @mantine/colors-generator from the six seed hexes if needed.
-// ---------------------------------------------------------------------------
 const brand: MantineColorsTuple = [
   '#e7f8fe', '#d8f4fd', '#b1e9fb', '#82dcf8', '#5bd1f5',
   '#3bc7f4', '#1eb2e6', '#1590c0', '#0f6f96', '#0a4d69',
-]; // Cyan — primary
+];
 
 const ink: MantineColorsTuple = [
   '#ecebf1', '#cfced5', '#a8a7b6', '#83829a', '#6e6d80',
   '#4f4e66', '#35334f', '#211f40', '#141233', '#0d0c2c',
-]; // Ink Blue — shell / neutral-dark
+];
 
 const reflex: MantineColorsTuple = [
   '#eaeeff', '#d4dcff', '#aab8ff', '#7d92ff', '#5670ff',
   '#2a4eff', '#233fd6', '#1b31a8', '#132279', '#0b134a',
-]; // #2a4eff — info / links
+];
 
 const grape: MantineColorsTuple = [
   '#f3edfc', '#e6dbf9', '#cdb7f3', '#b088ec', '#9865e5',
   '#824ae0', '#6c3bbe', '#552e95', '#3f226e', '#291546',
-]; // #824ae0 — accent
+];
 
 const green: MantineColorsTuple = [
   '#e5f8ee', '#d0f1e0', '#a1e3c1', '#5fd199', '#2ec27a',
   '#13b964', '#0f9d55', '#0b7d44', '#085e33', '#053f22',
-]; // #13b964 — success
+];
 
 const orange: MantineColorsTuple = [
   '#fff3e6', '#ffe6d1', '#ffcda3', '#ffab63', '#fe9333',
   '#fe811a', '#e06d10', '#b3560b', '#853f08', '#582905',
-]; // #fe811a — warning
+];
 
 const red: MantineColorsTuple = [
   '#fdeaec', '#f8d6da', '#f1adb5', '#e97b88', '#e25062',
   '#dc3246', '#bb2a3c', '#93212f', '#6c1823', '#460f16',
-]; // #dc3246 — error
+];
 
-// A warm-grey neutral ramp for the light surfaces (Light Grey #f4f2f1 family).
 const gray: MantineColorsTuple = [
   '#ffffff', '#f8f7f7', '#f4f2f1', '#e7e5e4', '#d6d3d1',
   '#a8a29e', '#78716c', '#57534e', '#44403c', '#292524',
 ];
 
-// Mantine's `dark` tuple drives every default surface/text role in dark mode
-// (`--mantine-color-body` = dark[7], default component bg = dark[6], border = dark[4],
-// text = dark[0], dimmed = dark[2]). We map it 1:1 onto the DFRNT charcoal ladder in
-// md3.ts so raw Mantine roles resolve to our tones instead of Mantine's generic charcoal.
 const D = getMd3Scheme(true, 'dark');
 const dark: MantineColorsTuple = [
-  D.onSurface,                // 0 text          #E6E1E9
-  D.onSurfaceVariant,         // 1               #CAC4D0
-  D.outline,                  // 2 dimmed        #939099
-  '#6f6c75',                  // 3 (interpolated between outline and outline-variant)
-  D.outlineVariant,           // 4 border        #56535c
-  D.surfaceContainerHighest,  // 5 hover         #4c4952
-  D.surfaceContainerHigh,     // 6 default bg     #413f47
-  D.surface,                  // 7 body / page   #2c2a30
-  D.surfaceDim,               // 8               #28262c
-  D.surfaceContainerLowest,   // 9 deepest       #252429
+  D.onSurface,
+  D.onSurfaceVariant,
+  D.outline,
+  '#6f6c75',
+  D.outlineVariant,
+  D.surfaceContainerHighest,
+  D.surfaceContainerHigh,
+  D.surface,
+  D.surfaceDim,
+  D.surfaceContainerLowest,
 ];
 
-// ---------------------------------------------------------------------------
-// DFRNT design tokens — framework-free constants consumed across the app.
-// ---------------------------------------------------------------------------
-
-/** Fixed Ink-Blue shell (AppBar + sidebar) — brand navy in both colour modes. */
 export const sidebarColors = {
-  appBar: ink[9],           // #0d0c2c
-  bg: ink[8],               // #141233 — drawer panel, one tier lighter than the bar
+  appBar: ink[9],
+  bg: ink[8],
   border: 'rgba(255, 255, 255, 0.10)',
   textPrimary: 'rgba(255, 255, 255, 0.95)',
   textSecondary: 'rgba(255, 255, 255, 0.60)',
@@ -99,9 +70,7 @@ export const sidebarColors = {
   hoverBg: 'rgba(255, 255, 255, 0.08)',
 };
 
-/** White-based overlays for content on the fixed Ink-Blue scrim (hero, shell, dialog headers). */
 export const onBrandScrim = {
-  /** The Ink-Blue hero itself — the ground every alpha below is mixed against. */
   heroBg: 'var(--mantine-color-ink-9)',
   text: '#fff',
   bodyText: 'rgba(255,255,255,0.85)',
@@ -115,7 +84,6 @@ export const onBrandScrim = {
   border: 'rgba(255,255,255,0.4)',
 };
 
-/** Theme-aware palette for code / terminal blocks (on Ink Blue). */
 export const codeBlockPalette = {
   background: '#141233',
   backgroundError: '#2e1a1a',
@@ -124,43 +92,18 @@ export const codeBlockPalette = {
   textError: '#f1adb5',
 };
 
-/**
- * Radius / type / duration / shadow tokens (MD3 corner scale).
- *
- * The radius scale is semantic, not decorative: `full` and `sm`–`lg` are for things
- * the passenger *touches*, `tile` (2px) is for things that are *printed* — the file
- * reference, the chosen window, the ETA, a docket line. Keeping the two apart is what
- * makes the baggage-tag motif read as a system rather than a one-off ornament.
- */
-/** The H1 size, shared by `type.hero` and the full `type.heroTitle` spec below. */
 const HERO_SIZE = 'clamp(32px, 8vw, 40px)';
 
 export const tokens = {
   radius: { xs: 4, sm: 8, md: 12, lg: 16, xl: 28, full: 9999, tile: 2 },
-  /**
-   * The display scale. `hero`/`figure` replace the near-identical clamps that had
-   * drifted across the hero, the ETA card and the confirmed screen; `eyebrow` is the
-   * single spec for the uppercase micro-label role, which had six.
-   */
   type: {
     hero: HERO_SIZE,
-    /**
-     * The whole H1 treatment, not just its size. The confirm hero and the confirmed
-     * screen set the same four properties by hand and the confirmed one omitted
-     * `lineHeight`, so at 40px the success headline led visibly looser than the
-     * headline it replaced.
-     */
     heroTitle: {
       fontSize: HERO_SIZE,
       lineHeight: 1.05,
       fontWeight: 700,
       letterSpacing: '-0.03em',
     } as const,
-    /**
-     * Section headings inside a card. The confirm form set these as plain body-weight
-     * `Text`, which left them the same size as the field labels underneath and gave
-     * the page no heading between the H1 and the inputs. One step up, one weight up.
-     */
     sectionTitle: {
       fontSize: 18,
       fontWeight: 600,
@@ -168,8 +111,6 @@ export const tokens = {
       letterSpacing: '-0.01em',
     } as const,
     figure: 'clamp(24px, 6vw, 28px)',
-    // `as const` so `textTransform` keeps its literal type and the object can be
-    // spread straight into a `CSSProperties`.
     eyebrow: {
       fontSize: 10,
       fontWeight: 700,
@@ -177,27 +118,13 @@ export const tokens = {
       textTransform: 'uppercase',
     } as const,
   },
-  /**
-   * The Ink-Blue hero shell. Shared by the confirm hero and the confirmed screen so
-   * the two do not drift: they had different vertical padding and lifted their
-   * content column by different amounts, which read as the page shifting under the
-   * passenger at the exact moment it was confirming their booking.
-   */
   hero: {
     px: { base: 20, sm: 32 },
     pt: { base: 32, sm: 40 },
     pb: { base: 48, sm: 56 },
-    /** How far the content column lifts into the hero above it. */
     overlap: { base: -28, sm: -32 },
-    /** The measure of the passenger flow's content column. */
     measure: 520,
   },
-  /**
-   * The full-width primary. One spec, because the three most important buttons in
-   * the flow — the action bar, the review dialog's confirm, the track link — each
-   * carried their own inline override (56/16/700, 52/–/700, –/–/600), so the same
-   * role rendered at three sizes and two weights.
-   */
   button: {
     primary: {
       minHeight: 56,
@@ -215,7 +142,6 @@ export const tokens = {
   },
 };
 
-/** Back-compat brand token object (semantic hex, for the rare non-Mantine consumer). */
 export const brandColors = {
   mainDark: ink[9],
   mainHighlight: brand[5],
@@ -232,9 +158,6 @@ export const brandColors = {
   info: reflex[5],
 };
 
-// ---------------------------------------------------------------------------
-// theme.other typing — access via `theme.other.shell` / `.scrim` / `.tokens` etc.
-// ---------------------------------------------------------------------------
 declare module '@mantine/core' {
   export interface MantineThemeOther {
     shell: typeof sidebarColors;
@@ -244,9 +167,6 @@ declare module '@mantine/core' {
   }
 }
 
-// ---------------------------------------------------------------------------
-// The theme
-// ---------------------------------------------------------------------------
 export const dfrntTheme = createTheme({
   primaryColor: 'brand',
   primaryShade: { light: 5, dark: 4 },
@@ -264,17 +184,8 @@ export const dfrntTheme = createTheme({
   defaultRadius: 'md',
   radius: { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '28px' },
   components: {
-    Button: { defaultProps: { radius: 9999 } }, // lozenge
+    Button: { defaultProps: { radius: 9999 } },
     ActionIcon: { defaultProps: { radius: 9999 } },
-    // Cards/paper sit one tonal tier above the page in both schemes (elevation by
-    // tone, not shadow) — the surface vars flip per colour-scheme via the resolver
-    // below. Applied as a class-based `styles.root`, NOT a `bg` defaultProp, so a
-    // component's own inline `style={{ background }}` still wins — hero cards paint
-    // a dark Ink scrim that way and must not be overpainted white in light mode.
-    //
-    // The hairline carries the separation the tone step can't: in light mode a card
-    // is #ffffff on a #f4f2f1 page, which is a ~3% step and reads as no edge at all.
-    // A flat outline suits the no-gradient house style better than a drop shadow.
     Card: {
       defaultProps: { radius: 'md' },
       styles: {
@@ -293,22 +204,10 @@ export const dfrntTheme = createTheme({
         },
       },
     },
-    // The 28px corner is the DFRNT dialog language (ported from Despatch's
-    // `dialogs/shared/mantine`), so a raw Modal matches one built with
-    // <DialogShell>. See components/dialog/styles.ts.
     Modal: {
       defaultProps: { radius: 'xl', centered: true },
       styles: { content: { backgroundColor: 'var(--dd-surface-container-high)' } },
     },
-    // The tick and the dot are Ink on cyan, stated rather than inferred. Cyan is a
-    // light colour (relative luminance ~0.48) — a white glyph on it is about 1.9:1
-    // and effectively invisible at checkbox size.
-    // size 'md' on every form control rather than Mantine's 'sm' default. This is
-    // ergonomics, not taste: 'sm' is a 36px control at 14px type, and iOS Safari
-    // zooms the viewport whenever a focused input is under 16px — so the page
-    // visibly jumped on the first tap into the passenger's name field. 36px also
-    // sits under the 44px/48px minimum touch target. 'md' is 42px at 16px. Set
-    // here, not at the call sites, so a field added later cannot opt back out.
     Checkbox: { defaultProps: { size: 'md', iconColor: 'var(--dd-on-brand-fill)' } },
     Radio: { defaultProps: { size: 'md', iconColor: 'var(--dd-on-brand-fill)' } },
     TextInput: { defaultProps: { size: 'md', radius: 'sm' } },
@@ -321,7 +220,6 @@ export const dfrntTheme = createTheme({
     },
     Tooltip: { defaultProps: { radius: 'sm', color: 'ink' } },
     Badge: { defaultProps: { radius: 'sm' } },
-    // Thicker tab targets than Mantine's thin default — comfortable, easier to hit.
     Tabs: { styles: { tab: { paddingBlock: 14, fontWeight: 500 } } },
   },
   other: {
@@ -332,18 +230,6 @@ export const dfrntTheme = createTheme({
   },
 });
 
-/**
- * Bridges the DFRNT surface ladder (md3.ts, the single source of truth) into Mantine's
- * CSS variables per colour-scheme. Passed to `<MantineProvider cssVariablesResolver>`.
- *
- * `--mantine-color-body` sets the page/`AppShell.Main` background; the `--dd-surface-*`
- * custom vars back the Card/Paper/Menu/Modal surface defaults declared above, so a single
- * scheme flip repaints page → cards → menus with the intended tones.
- *
- * Layered on top of `v8CssVariablesResolver`: Mantine 9 made `variant="light"` fills
- * solid, and the DFRNT look wants the 8.x translucent tint (flat alpha, per the brand
- * rules) on light-variant surfaces such as the Alerts in PaxMobile.
- */
 export const dfrntCssVariablesResolver: CSSVariablesResolver = (theme) => {
   const light = getMd3Scheme(true, 'light');
   const dk = getMd3Scheme(true, 'dark');
@@ -352,40 +238,27 @@ export const dfrntCssVariablesResolver: CSSVariablesResolver = (theme) => {
     variables: { ...v8.variables },
     light: {
       ...v8.light,
-      '--mantine-color-body': light.surface, // #f4f2f1 page
+      '--mantine-color-body': light.surface,
       '--dd-surface': light.surface,
-      '--dd-surface-container': light.surfaceContainerLowest, // #ffffff cards
-      '--dd-surface-container-high': light.surfaceContainerLowest, // #ffffff menus/dialogs
-      '--dd-outline-variant': light.outlineVariant, // #e7e5e4 — card + docket hairlines
-      // Content sitting ON brand cyan. Both are stated explicitly rather than left to
-      // Mantine's `-contrast` / `-light-color` vars: under v8CssVariablesResolver
-      // `--mantine-color-brand-light-color` resolves to brand[5] — the same cyan as
-      // the tint behind it — so anything relying on it was cyan-on-cyan.
-      '--dd-on-brand-fill': ink[9], // #0d0c2c on the solid cyan fill (~8:1)
-      '--dd-on-brand-tint': brand[8], // #0f6f96 on the pale cyan tint (~5:1)
-      // Disabled inputs (e.g. saved delivery address) read as a locked summary,
-      // not greyed-out placeholder text — keep the value legible. See index.css
-      // for the paired opacity/-webkit-text-fill-color override.
-      '--mantine-color-disabled-color': gray[7], // #57534e — readable locked text
+      '--dd-surface-container': light.surfaceContainerLowest,
+      '--dd-surface-container-high': light.surfaceContainerLowest,
+      '--dd-outline-variant': light.outlineVariant,
+      '--dd-on-brand-fill': ink[9],
+      '--dd-on-brand-tint': brand[8],
+      '--mantine-color-disabled-color': gray[7],
     },
     dark: {
       ...v8.dark,
-      '--mantine-color-body': dk.surface, // #2c2a30 page
+      '--mantine-color-body': dk.surface,
       '--dd-surface': dk.surface,
-      '--dd-surface-container': dk.surfaceContainer, // #37353c cards
-      '--dd-surface-container-high': dk.surfaceContainerHigh, // #413f47 menus/dialogs
-      '--dd-outline-variant': dk.outlineVariant, // #56535c — card + docket hairlines
-      // Cyan stays a light colour in dark mode (the fill steps to brand[4]), so the
-      // fill still takes Ink content; only the tint flips, because there the ground
-      // is translucent cyan over charcoal.
-      '--dd-on-brand-fill': ink[9], // #0d0c2c on the solid cyan fill
-      '--dd-on-brand-tint': brand[2], // #b1e9fb on cyan-over-charcoal (~7:1)
-      // Mantine's dark defaults are near-invisible on the charcoal ladder:
-      // error = red[8] (#6c1823) and disabled text = dark[3] (#6f6c75) at 0.6
-      // opacity. Lift both so validation messages and locked field values read.
-      '--mantine-color-error': red[3], // #e97b88 — legible error red on charcoal
-      '--mantine-color-disabled': dk.surfaceDim, // #28262c — inset locked field
-      '--mantine-color-disabled-color': dk.onSurfaceVariant, // #cac4d0 — readable
+      '--dd-surface-container': dk.surfaceContainer,
+      '--dd-surface-container-high': dk.surfaceContainerHigh,
+      '--dd-outline-variant': dk.outlineVariant,
+      '--dd-on-brand-fill': ink[9],
+      '--dd-on-brand-tint': brand[2],
+      '--mantine-color-error': red[3],
+      '--mantine-color-disabled': dk.surfaceDim,
+      '--mantine-color-disabled-color': dk.onSurfaceVariant,
     },
   };
 };

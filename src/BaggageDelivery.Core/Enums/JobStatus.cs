@@ -1,9 +1,5 @@
 namespace BaggageDelivery.Core.Enums;
 
-// Integer values for tucJob.UcjbStatus. Mirror of DespatchWeb.Enums.JobStatus
-// — keep names in sync so cross-repo grep continues to work. Only the values
-// BaggageDelivery sets or compares against are listed here; despatchweb owns
-// the canonical set.
 public enum JobStatus
 {
     New = 0,

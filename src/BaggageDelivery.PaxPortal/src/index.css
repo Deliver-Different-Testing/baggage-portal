@@ -1,28 +1,9 @@
-/* App-level global styles. Mantine's styles.css + dfrntCssVariablesResolver own the
-   colour surfaces (body background = var(--mantine-color-body)); this file only sets
-   rendering niceties.
-
-   Deliberately no font-family. Mantine's own `body` rule already applies
-   var(--mantine-font-family) from the theme, and this file is imported after
-   @mantine/core/styles.css — so a family declared here wins at equal specificity.
-   The value that used to sit here was quoted as '"Plus Jakarta Sans Variable"', a
-   string containing literal double quotes that can never match a family name, and
-   its fallback 'Plus Jakarta Sans' is not a face @fontsource-variable registers
-   (it registers only the "Variable" name). Body therefore resolved to system UI —
-   and because Mantine's reset sets `button { font: inherit }`, every Button
-   rendered in the system font while Text and Title rendered in Plus Jakarta Sans. */
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
 }
 
-/* Disabled inputs (e.g. delivery address after the passenger hits Save) are a
-   locked, read-back summary — not an inert placeholder. Mantine fades them to
-   opacity 0.6, and WebKit forces its own washed-out text-fill, which together
-   make the entered value hard to read in dark mode. Restore full contrast while
-   the muted bg + not-allowed cursor keep the field clearly non-editable. The
-   text/bg colours come from the theme resolver's --mantine-color-disabled* vars. */
 input.mantine-Input-input:disabled,
 textarea.mantine-Input-input:disabled,
 input.mantine-Input-input[data-disabled],
@@ -32,17 +13,11 @@ textarea.mantine-Input-input[data-disabled] {
   -webkit-text-fill-color: var(--mantine-color-disabled-color);
 }
 
-/* Thin, tonal scrollbars that read in both colour schemes. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--mantine-color-dimmed) transparent;
 }
 
-/* The floating confirm button (PaxMobile). No band, no rule: this is one control,
-   and a full-width strip of chrome behind it drew a hard edge across the page and
-   made the button look docked to a toolbar rather than offered. The button carries
-   its own lift instead. Safe-area padding stays here so it never sits under the
-   home indicator. */
 .pax-action-bar {
   position: fixed;
   left: 0;
@@ -54,8 +29,6 @@ textarea.mantine-Input-input[data-disabled] {
   pointer-events: none;
 }
 
-/* The button is the only thing here that should take a tap — the padding around it
-   is transparent and the page scrolls underneath. */
 .pax-action-bar button {
   pointer-events: auto;
   box-shadow:
@@ -63,16 +36,11 @@ textarea.mantine-Input-input[data-disabled] {
     0 2px 6px -2px rgba(13, 12, 44, 0.2);
 }
 
-/* Delivery-window rows. Colours stay inline (they depend on selection); the chrome
-   lives here so the focus ring is a real rule rather than an inline `outline: none`,
-   which is what left the one decision on the page unusable by keyboard. */
 .pax-slot {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px;
-  /* One step in from the panel that holds them (md/12px). Matching the outer
-     radius on an inner box makes the nesting read as a mistake. */
   border-radius: var(--mantine-radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
@@ -86,8 +54,6 @@ textarea.mantine-Input-input[data-disabled] {
   outline-offset: 2px;
 }
 
-/* The one orchestrated moment: the confirm form's cards settle in behind the hero,
-   40ms apart, once. Everything else on the page is static. */
 @keyframes pax-rise {
   from {
     opacity: 0;
@@ -122,7 +88,6 @@ textarea.mantine-Input-input[data-disabled] {
   animation-delay: 200ms;
 }
 
-/* Live/current-step pulse ring (Tracking header dot + current timeline bullet). */
 @keyframes pax-pulse {
   0% {
     box-shadow: 0 0 0 0 currentColor;
@@ -141,15 +106,6 @@ textarea.mantine-Input-input[data-disabled] {
   animation: pax-pulse 2s ease-out infinite;
 }
 
-/* Hero Stepper (PaxMobile confirm screen). Mantine's own Stepper structure does the
-   work — a soft filled circle, a brand ring on the step in progress, a brand fill
-   once complete. The only thing the theme can't supply is the palette: this sits on
-   the fixed Ink Blue hero and has to read white-on-ink in both colour schemes.
-
-   The icon FILL has to be restated, not just the icon text. Mantine paints an
-   upcoming step's circle from the scheme's own surface — near-white in light mode —
-   so forcing the numeral white left steps 2 and 3 as white-on-white. Give upcoming
-   steps a white-alpha fill of their own and the numerals read in both schemes. */
 .pax-hero-stepper {
   --stepper-outline-color: rgba(255, 255, 255, 0.18);
 }
@@ -164,8 +120,6 @@ textarea.mantine-Input-input[data-disabled] {
   border-color: rgba(255, 255, 255, 0.28);
 }
 
-/* The step in progress keeps its brand ring; the completed state keeps the brand
-   fill Mantine gives it. Both already carry their own contrast on the Ink hero. */
 .pax-hero-stepper .mantine-Stepper-stepIcon[data-progress],
 .pax-hero-stepper .mantine-Stepper-stepIcon[data-completed] {
   background-color: var(--mantine-color-brand-filled);
@@ -173,8 +127,6 @@ textarea.mantine-Input-input[data-disabled] {
   color: var(--mantine-color-brand-contrast);
 }
 
-/* Default separator margin is spacing-md a side, which pushes three steps past the
-   edge of a 360px phone. */
 .pax-hero-stepper .mantine-Stepper-separator {
   margin-inline: var(--mantine-spacing-xs);
 }
@@ -183,16 +135,6 @@ textarea.mantine-Input-input[data-disabled] {
   white-space: nowrap;
 }
 
-/* Dialog footer (see components/dialog/DialogFooter). Despatch right-aligns a
-   Cancel/Confirm pair, which suits a dispatch console. On a phone the pair goes
-   full width and stacks instead.
-
-   Deliberately NOT column-reverse. Painting the primary on top would put the
-   visual order at odds with the DOM and tab order on the one platform this app
-   is actually for, which is the reordering trap WCAG calls out under Meaningful
-   Sequence and Focus Order. Stacked in source order the primary lands at the
-   bottom of the sheet — nearest the thumb, and the same place iOS and Material
-   put it — so nothing is lost by keeping the orders identical. */
 .dd-dialog-footer {
   display: flex;
   flex-direction: column;
@@ -221,11 +163,6 @@ textarea.mantine-Input-input[data-disabled] {
   }
 }
 
-/* One reduced-motion guard for the whole file, placed after every animation it
-   switches off — a guard written before .pax-pulse would lose to it at equal
-   specificity. The infinite pulse matters here more than the one-shot stagger:
-   a 320ms entrance that plays once is far less of a problem for a
-   motion-sensitive passenger than a ring that never stops. */
 @media (prefers-reduced-motion: reduce) {
   .pax-stagger > *,
   .pax-pulse {

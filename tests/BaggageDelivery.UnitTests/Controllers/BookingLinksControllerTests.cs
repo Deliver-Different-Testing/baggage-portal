@@ -68,15 +68,12 @@ public class BookingLinksControllerTests
         ];
     }
 
-    // ---- Configuration guard ------------------------------------------------
-
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("/")]
     public async Task Unconfigured_public_base_url_is_a_problem_and_mints_nothing(string publicBaseUrl)
     {
-        // "/" matters: TrimEnd('/') reduces it to empty, which is still unusable.
         var harness = new Harness(publicBaseUrl);
 
         var result = await harness.Mint();
@@ -88,8 +85,6 @@ public class BookingLinksControllerTests
         Assert.Empty(harness.Sends);
         harness.Encryption.DidNotReceive().EncryptId(Arg.Any<int>());
     }
-
-    // ---- URL construction ---------------------------------------------------
 
     [Theory]
     [InlineData("https://bags.example.com")]
@@ -117,8 +112,6 @@ public class BookingLinksControllerTests
 
         harness.Encryption.Received(1).EncryptId(987);
     }
-
-    // ---- Channel routing ----------------------------------------------------
 
     [Fact]
     public async Task Sms_channel_sends_one_sms_to_the_phone()
@@ -209,8 +202,6 @@ public class BookingLinksControllerTests
         Assert.Empty(harness.Sends);
     }
 
-    // ---- Notification content defaults --------------------------------------
-
     [Fact]
     public async Task Passes_the_supplied_passenger_and_airline_through()
     {
@@ -223,13 +214,9 @@ public class BookingLinksControllerTests
         Assert.Equal("Air New Zealand", context.AirlineLabel);
     }
 
-    // ---- Booking reference --------------------------------------------------
-
     [Fact]
     public async Task Quotes_the_urgent_job_number_over_the_callers_own_reference()
     {
-        // The portal shows ucjbNumber as the Booking Reference, so the message that
-        // sends the passenger there has to quote the same value.
         var harness = new Harness(jobNumber: " URG-4242 ");
 
         await harness.Mint(jobId: 4242, reference: "AKLNZ12345");

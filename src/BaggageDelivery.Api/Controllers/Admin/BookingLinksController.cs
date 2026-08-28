@@ -42,10 +42,6 @@ public sealed class BookingLinksController(
 
         var passengerName = body.PassengerName ?? DefaultPassenger;
         var airline = body.AirlineLabel ?? DefaultAirline;
-        // The portal shows tucJob.ucjbNumber as the Booking Reference, so the
-        // message carrying the link quotes the same value. The caller's own
-        // reference is the fallback for a JobId Despatch doesn't know — the link
-        // is minted against a soft reference and the job may not exist yet.
         var jobNumber = await bookings.GetJobNumberAsync(body.JobId, ct);
         var reference = !string.IsNullOrWhiteSpace(jobNumber)
             ? jobNumber.Trim()

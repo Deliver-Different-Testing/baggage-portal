@@ -8,9 +8,6 @@ using Xunit;
 
 namespace BaggageDelivery.IntegrationTests;
 
-// The passenger's File Reference has to survive the whole way to the wire: the SPA
-// reads `fileReference` off this payload and hides the tag when it's missing, so a
-// renamed or dropped field is a silently blank reference on the confirm page.
 public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApiFactory>
 {
     [Fact]
@@ -26,8 +23,6 @@ public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixtu
             TestContext.Current.CancellationToken);
 
         Assert.Equal("AKLNZ12345", payload.GetProperty("fileReference").GetString());
-        // The Urgent job number still reaches the passenger, but only through the
-        // notification email — it is not a field the confirm page reads.
         Assert.False(payload.TryGetProperty("jobNumber", out _));
         Assert.Equal("NZ", payload.GetProperty("airlineCode").GetString());
     }

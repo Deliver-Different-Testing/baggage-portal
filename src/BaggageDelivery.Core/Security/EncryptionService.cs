@@ -6,9 +6,6 @@ using Serilog;
 
 namespace BaggageDelivery.Core.Security;
 
-// Mirror of inboundagent EncryptionService: AES-256-CBC with a deterministic IV
-// (same input → same output). Keeps the URL shape stable across notifications,
-// matching the InboundAgent customer-link model.
 public sealed class EncryptionService : IEncryptionService
 {
     private readonly byte[] _key;

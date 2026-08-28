@@ -7,11 +7,6 @@ using Xunit;
 
 namespace BaggageDelivery.UnitTests.DTOs;
 
-// tucJob columns are narrower than they look and nobody re-reads the scaffolded
-// model when adding a MaxLength. A DTO limit wider than its column turns
-// passenger input into a SqlException at ExecuteUpdateAsync time — a 500 the
-// passenger sees as a failed confirm. Pin the pairs ConfirmAsync actually writes
-// against the EF model, so a re-scaffold that narrows a column fails here.
 public class ConfirmBookingRequestLengthTests
 {
     public static TheoryData<string, string> WrittenColumns() => new()
@@ -60,14 +55,9 @@ public class ConfirmBookingRequestLengthTests
             + $"tucJob.{jobProperty}, which holds {column}.");
     }
 
-    // Country is deliberately exempt: requests carry legacy free text ("New
-    // Zealand") that CountryCodes normalises to ISO-2 before it reaches a column.
     [Fact]
     public void Country_is_normalised_before_it_reaches_a_column_so_it_stays_unconstrained() => Assert.True(MaxLengthOf(typeof(AddressDto), nameof(AddressDto.Country)) > 2);
 
-    // These are positional records, so the attribute lands on the primary
-    // constructor parameter rather than the generated property. MVC's model
-    // metadata reads it from there; plain property reflection would see nothing.
     private static int? MaxLengthOf(Type type, string propertyName) =>
         type.GetConstructors()
             .SelectMany(c => c.GetParameters())

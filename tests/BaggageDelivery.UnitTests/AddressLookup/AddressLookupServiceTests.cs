@@ -20,8 +20,6 @@ public class AddressLookupServiceTests
     private static string DecodedUrl(StubHttpMessageHandler handler) =>
         Uri.UnescapeDataString(handler.LastUrl?.ToString() ?? string.Empty);
 
-    // ---- API key guard -----------------------------------------------------
-
     [Fact]
     public async Task Autocomplete_without_api_key_returns_empty_without_calling_HereMaps()
     {
@@ -45,8 +43,6 @@ public class AddressLookupServiceTests
         Assert.Null(detail);
         Assert.Empty(handler.RequestedUrls);
     }
-
-    // ---- Country bias / filter construction --------------------------------
 
     [Fact]
     public async Task Autocomplete_defaults_to_NZ_when_no_countries_configured()
@@ -98,8 +94,6 @@ public class AddressLookupServiceTests
     [Fact]
     public async Task Autocomplete_drops_country_codes_that_do_not_resolve()
     {
-        // A config typo must not produce a malformed `in` filter, which HereMaps
-        // rejects outright and would silently empty the autocomplete.
         var handler = StubHttpMessageHandler.Json(HttpStatusCode.OK, """{ "items": [] }""");
 
         await NewService(handler)
@@ -120,8 +114,6 @@ public class AddressLookupServiceTests
         Assert.Contains("apiKey=test-key", url);
         Assert.Contains("limit=10", url);
     }
-
-    // ---- Autocomplete response handling ------------------------------------
 
     [Fact]
     public async Task Autocomplete_non_success_returns_empty()
@@ -210,8 +202,6 @@ public class AddressLookupServiceTests
     [Fact]
     public async Task Autocomplete_emits_empty_country_for_an_unmappable_code()
     {
-        // Never pass an unmapped code through — the pax portal would post it back
-        // as an unresolvable country.
         var handler = StubHttpMessageHandler.Json(HttpStatusCode.OK, """
                                                                      {
                                                                        "items": [{
@@ -251,8 +241,6 @@ public class AddressLookupServiceTests
 
         Assert.Equal("5", Assert.Single(results).Id);
     }
-
-    // ---- Lookup ------------------------------------------------------------
 
     [Fact]
     public async Task Lookup_requests_the_address_id_with_country_and_street_detail()

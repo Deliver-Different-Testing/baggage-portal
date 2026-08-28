@@ -19,12 +19,6 @@ describe('dfrntTheme', () => {
   })
 
   it('declares the brand family without nesting one quote style inside another', () => {
-    // Regression guard. index.css carried the family as '"Plus Jakarta Sans
-    // Variable"' — a CSS string containing literal double quotes, which can never
-    // match a family name. Because index.css is imported after @mantine/core's
-    // stylesheet it beat Mantine's own body rule, and since Mantine's reset sets
-    // `button { font: inherit }` every Button fell back to the system UI font while
-    // Text and Title rendered in Plus Jakarta Sans.
     const families = [dfrntTheme.fontFamily, dfrntTheme.headings?.fontFamily]
     for (const family of families) {
       expect(family).toBeTruthy()
@@ -34,17 +28,12 @@ describe('dfrntTheme', () => {
   })
 
   it('sizes form controls for a thumb, not a mouse', () => {
-    // Mantine's `sm` default is a 36px control at 14px type. iOS Safari zooms the
-    // viewport whenever a focused input is under 16px, and 36px is under the
-    // 44px/48px minimum touch target — on a passenger's phone, both.
     for (const control of ['TextInput', 'Textarea', 'Select', 'Autocomplete', 'Checkbox', 'Radio'] as const) {
       expect(dfrntTheme.components?.[control]?.defaultProps).toMatchObject({ size: 'md' })
     }
   })
 
   it('carries one spec for the full-width primary button', () => {
-    // The action bar, the review dialog's confirm and the track link each had their
-    // own inline override, so one role rendered at three sizes and two weights.
     expect(tokens.button.primary).toEqual({
       minHeight: 56,
       fontSize: 16,
@@ -54,28 +43,21 @@ describe('dfrntTheme', () => {
   })
 
   it('gives section headings a step of their own above body copy', () => {
-    // They were plain body-weight `Text`, which left them the same size as the field
-    // labels underneath and gave the page no heading between the h1 and the inputs.
     expect(tokens.type.sectionTitle.fontSize).toBeGreaterThan(16)
     expect(tokens.type.sectionTitle.fontWeight).toBeGreaterThanOrEqual(600)
   })
 
   it('states the hero H1 line-height so the two heroes cannot drift', () => {
-    // The confirmed screen set the other three properties by hand and omitted
-    // lineHeight, so at 40px the success headline led looser than the one it replaced.
     expect(tokens.type.heroTitle.lineHeight).toBe(1.05)
     expect(tokens.type.heroTitle.fontSize).toBe(tokens.type.hero)
   })
 
   it('separates the printed radius from the touchable ones', () => {
-    // The docket motif rests on this: 2px means "this is a fact", everything the
-    // passenger can press keeps a soft corner or a pill.
     expect(tokens.radius.tile).toBe(2)
     expect(tokens.radius.tile).toBeLessThan(tokens.radius.sm)
   })
 
   it('carries one eyebrow spec for every micro-label', () => {
-    // Six hand-tuned variants had drifted across the pages before this existed.
     expect(tokens.type.eyebrow).toEqual({
       fontSize: 10,
       fontWeight: 700,
@@ -85,8 +67,6 @@ describe('dfrntTheme', () => {
   })
 
   it('gives cards a hairline so they separate from the page', () => {
-    // Light mode puts a #ffffff card on a #f4f2f1 page — a ~3% step that reads as
-    // no edge at all without this.
     expect(dfrntTheme.components?.Card?.styles).toMatchObject({
       root: { border: '1px solid var(--dd-outline-variant)' },
     })
@@ -94,8 +74,6 @@ describe('dfrntTheme', () => {
 })
 
 describe('dfrntCssVariablesResolver', () => {
-  // The resolver composes Mantine's v8CssVariablesResolver, so it needs the same
-  // fully merged theme MantineProvider hands it — not a bare stub object.
   const vars = dfrntCssVariablesResolver(mergeMantineTheme(DEFAULT_THEME, dfrntTheme))
 
   it('maps the page surface per colour scheme (warm grey light, charcoal dark)', () => {
@@ -109,13 +87,10 @@ describe('dfrntCssVariablesResolver', () => {
   })
 
   it('lifts the dark error colour off Mantine near-invisible red[8] default', () => {
-    // red[8] (#6c1823) is unreadable on the charcoal page; we use a light red.
     expect(vars.dark['--mantine-color-error']).toBe('#e97b88')
   })
 
   it('keeps light-variant fills translucent (Mantine 9 made them solid)', () => {
-    // The Alerts in PaxMobile use variant="light"; the DFRNT look wants the 8.x
-    // alpha tint, which is why v8CssVariablesResolver is layered underneath.
     expect(vars.light['--mantine-color-red-light']).toMatch(/^rgba\(/)
     expect(vars.dark['--mantine-color-orange-light']).toMatch(/^rgba\(/)
   })
@@ -132,17 +107,12 @@ describe('dfrntCssVariablesResolver', () => {
   })
 
   it('puts Ink on the solid cyan fill in both schemes', () => {
-    // Cyan is a light colour (relative luminance ~0.48). A white glyph on it is
-    // about 1.9:1, which is what made the checkbox tick disappear.
     expect(vars.light['--dd-on-brand-fill']).toBe('#0d0c2c')
     expect(vars.dark['--dd-on-brand-fill']).toBe('#0d0c2c')
     expect(contrastRatio('#0d0c2c', '#3bc7f4')).toBeGreaterThanOrEqual(4.5)
   })
 
   it('flips the on-tint colour per scheme rather than trusting -light-color', () => {
-    // Under v8CssVariablesResolver `--mantine-color-brand-light-color` resolves to
-    // brand[5] — the same cyan as the tint behind it. Anything that read from it
-    // was cyan on cyan, so the tint carries its own token.
     expect(vars.light['--dd-on-brand-tint']).toBe('#0f6f96')
     expect(vars.dark['--dd-on-brand-tint']).toBe('#b1e9fb')
   })
@@ -157,14 +127,12 @@ describe('dfrntCssVariablesResolver', () => {
   })
 })
 
-// Every code in airlineBranding.ts — the palette rules below must hold for all of them.
 const AIRLINE_CODES = [
   'NZ', 'QF', 'VA', 'JQ', 'ZL', 'AA', 'DL', 'UA', 'WN', 'B6', 'AS', 'F9', 'G4', 'NK', 'SQ',
   'NH', 'JL', 'KE', 'CI', 'BR', 'TG', 'MH', 'PR', 'VN', 'GA', 'CX', 'EK', 'QR', 'EY', 'FJ',
   'LA', 'AC', 'HA', 'BA', 'LH',
 ]
 
-// The Ink-Blue hero, the only ground an airline accent is ever painted on.
 const INK_HERO = '#0d0c2c'
 
 function relativeLuminance(hex: string): number {
@@ -183,10 +151,6 @@ function contrastRatio(a: string, b: string): number {
 
 describe('airlineAccent', () => {
   it('never recolours the DFRNT brand ramp', () => {
-    // The whole point of the split: affordance (buttons, focus rings, selection)
-    // stays cyan for every carrier, so "what can I press" never changes meaning
-    // between airlines. The earlier airlineThemeOverride regenerated colors.brand
-    // and had this exactly backwards.
     expect(dfrntTheme.colors?.brand?.[5]).toBe('#3bc7f4')
     for (const code of AIRLINE_CODES) {
       expect(airlineAccent(getAirlineBrand(code)).accent).not.toBe(
@@ -204,14 +168,11 @@ describe('airlineAccent', () => {
   })
 
   it('keeps the seed hex wherever the seed is already legible', () => {
-    // Brand fidelity is the point — we only step off the carrier's own colour when
-    // it would otherwise vanish. Spirit's yellow and Qantas red both clear Ink.
     expect(airlineAccent(getAirlineBrand('NK')).accent).toBe('#fff200')
     expect(airlineAccent(getAirlineBrand('QF')).accent).toBe('#e0001b')
   })
 
   it('steps near-black carriers up until they clear the Ink hero', () => {
-    // Lufthansa #05164d against #0d0c2c is ~1.2:1 — invisible as a rule on the hero.
     const lh = airlineAccent(getAirlineBrand('LH'))
     expect(lh.accent).not.toBe('#05164d')
     expect(contrastRatio('#05164d', INK_HERO)).toBeLessThan(3)
@@ -223,7 +184,6 @@ describe('airlineAccent', () => {
   })
 
   it('carries a dark contrast text for light airline brands (Spirit NK)', () => {
-    // Data-level guard: the yellow Spirit brand must not use white text.
     expect(getAirlineBrand('NK').contrastText.toLowerCase()).not.toBe('#ffffff')
   })
 })

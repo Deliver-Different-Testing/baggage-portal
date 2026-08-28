@@ -49,7 +49,6 @@ public sealed class PaxTrackingController(
 
         try
         {
-            // 5-minute idle limit; client reconnects via EventSource.
             for (var i = 0; i < 30 && !ct.IsCancellationRequested; i++)
             {
                 var dto = await tracking.GetTimelineAsync(jobId.Value, ct);

@@ -4,9 +4,6 @@ using System.Globalization;
 
 namespace BaggageDelivery.Core.Globalization;
 
-// Resolves the free-text country values held in legacy Despatch address columns
-// (tucJob.DeliveryAddressLine8 is nvarchar(255) and contains "New Zealand",
-// "USA", "NZL", "NZ", ...) to a canonical ISO-3166-1 alpha-2 code.
 public static class CountryCodes
 {
     private static readonly FrozenDictionary<string, string> Iso2ToIso3;
@@ -39,8 +36,6 @@ public static class CountryCodes
             }
             catch (ArgumentException)
             {
-                // Not every specific culture has a region (e.g. neutral-ish or
-                // custom cultures) — RegionInfo throws rather than returning null.
                 continue;
             }
 
@@ -59,7 +54,6 @@ public static class CountryCodes
             aliases[Normalise(region.EnglishName)] = iso2;
         }
 
-        // Curated entries win over anything RegionInfo produced.
         foreach (var (alias, iso2) in CuratedAliases)
         {
             aliases[alias] = iso2;
@@ -75,8 +69,6 @@ public static class CountryCodes
     {
         if (!string.IsNullOrWhiteSpace(value))
         {
-            // An unassigned two-letter code such as "XX" must not pass through, so
-            // membership in the table is the test — not the string's length.
             return Aliases.TryGetValue(Normalise(value), out iso2);
         }
 

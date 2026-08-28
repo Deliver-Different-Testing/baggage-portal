@@ -67,18 +67,11 @@ import {onBrandScrim, tokens} from '../styles/mantineTheme'
 import {airlineAccent} from '../styles/airlineAccent'
 import {getAirlineBrand} from '../styles/airlineBranding'
 
-// Widths of the tucJob columns these fields are written to, mirrored from
-// ConfirmBookingRequest. Longer input is rejected by the API, not truncated.
 const ACCESS_NOTES_MAX = 120
 const PASSENGER_EMAIL_MAX = 100
 const ADDRESS_LINE2_MAX = 200
-// The fields that live inside the collapsed address editor. An error on one of
-// them is an error the passenger can neither see nor fix, so it opens the editor.
 const ADDRESS_FIELD_KEYS = ['line1', 'suburb', 'city', 'postCode', 'country']
 
-// Which validation keys belong to which card. The chip on each section header is
-// driven straight off the `fieldErrors` map the form already builds, so completion
-// state can never disagree with what submitting the form would actually say.
 const SECTION_FIELDS = {
     details: ['passengerName', 'passengerPhone', 'passengerEmail'],
     address: [...ADDRESS_FIELD_KEYS, 'addressConfirmed'],
@@ -88,12 +81,6 @@ const SECTION_FIELDS = {
 
 const ERROR_COLOR = 'var(--mantine-color-red-6)'
 
-/**
- * The confirm page while the booking is loading. The Ink hero renders for real
- * (see ConfirmHeroSkeleton) and the panel below it is blocked out at the height it
- * will occupy, so the page keeps its shape instead of flashing an empty surface and
- * then snapping a full form into place.
- */
 function ConfirmSkeleton() {
     return (
         <Box mih="100vh" pb={{base: 112, sm: 128}}>
@@ -125,25 +112,8 @@ function showError(message: string) {
     notifications.show({color: 'red', message, autoClose: 4000})
 }
 
-/** Below this, the run leaving stops being context and becomes the thing to act on. */
 const RUN_URGENT_MS = 10 * 60_000
 
-/**
- * The strip under the window list: what the deadline is for, and how long is left.
- *
- * The countdown ticks once a second, so the whole strip lives inside this memo
- * rather than only the number. Owning the tick here keeps each second to this
- * subtree — otherwise the hero, all eight inputs, the ATL list and the review
- * dialog re-render every second while the passenger is still reading the page.
- * `onExpire` must be stable (useCallback).
- *
- * The strip is neutral, not yellow, while the run is still a way off: a run that
- * has not left yet is information rather than a warning, and
- * --mantine-color-yellow-light over the charcoal ladder mixes to a muddy olive.
- * Inside the last ten minutes it genuinely is a warning — miss it and the chosen
- * window is dropped from under the passenger — so it escalates to orange, the same
- * tint the offline alert already uses.
- */
 const RunStartNotice = memo(({
                                  targetUtc,
                                  onExpire,
@@ -173,10 +143,6 @@ const RunStartNotice = memo(({
             }}
         >
             <ClockIcon size={14}/>
-            {/* Names the stake rather than giving an instruction. The line read "Make sure
-          you confirm your booking before the chosen run time", which is longer, tells
-          the passenger what to do instead of what they lose, and was set in the
-          quietest style in the card. */}
             <Text
                 size="xs"
                 c={urgent ? undefined : 'dimmed'}
@@ -208,8 +174,6 @@ export function PaxMobile() {
         retry: false,
     })
 
-    // Timeslots depend only on the URL id, not the booking response — fetch them
-    // in parallel with the booking instead of waiting for ConfirmForm to mount.
     const slots = useQuery({
         queryKey: ['pax', 'timeslots', id],
         queryFn: () => getTimeslots(id ?? ''),
@@ -225,10 +189,6 @@ export function PaxMobile() {
     }
 
     if (!booking.data) {
-        // The same shell TokenExpired uses, rather than a bare red Alert on an otherwise
-        // empty page. The old copy also told the passenger to contact support without
-        // giving them any way to — and at this point there is no booking loaded, so there
-        // is no support number to offer. Retrying is the action they actually have.
         return (
             <FullPageMessage
                 icon={<AlertIcon size={36} color={ERROR_COLOR}/>}
@@ -256,34 +216,20 @@ function ConfirmForm({
     slots: UseQueryResult<TimeSlot[]>
 }) {
     const [address, setAddress] = useState<AddressDto>(summary.deliveryAddress)
-    // Almost every bag goes to the address already on the booking, so the page opens
-    // on that address to be read and ticked rather than on a form to be filled in.
-    // Editing is the exception path and lives behind Edit. The tick stays either
-    // way: a wrong address puts the bag on a stranger's doorstep, so signing it off
-    // is a deliberate act.
     const [addressConfirmed, setAddressConfirmed] = useState(false)
     const [editingAddress, setEditingAddress] = useState(false)
     const [passengerName, setPassengerName] = useState(summary.passengerName ?? '')
     const [passengerPhone, setPassengerPhone] = useState(summary.passengerPhone ?? '')
     const [passengerEmail, setPassengerEmail] = useState(summary.passengerEmail ?? '')
     const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
-    // Authority to leave starts off: leaving a suitcase unattended is a decision the
-    // passenger opts into, not one they have to notice and undo. Switching it on
-    // lands on the handoff point the server resolved, so the portal never has to
-    // know a LeaveNotHomeId or match on a display name.
     const defaultAtlOptionId = summary.defaultAtlOptionId ?? null
     const [atlOptionId, setAtlOptionId] = useState<number | null>(null)
     const [accessNotes, setAccessNotes] = useState('')
     const [confirmed, setConfirmed] = useState(false)
     const [submitAttempted, setSubmitAttempted] = useState(false)
-    // The server resolves the country to an ISO-2 code and is the only thing that
-    // can tell us a spelling is unrecognisable — surface its message on the field
-    // rather than the generic retry toast.
     const [serverCountryError, setServerCountryError] = useState<string | null>(null)
     const [reviewOpen, {open: openReview, close: closeReview}] = useDisclosure(false)
 
-    // The carrier's colour, for the hero only — see `airlineAccent`. Memoized because
-    // ConfirmHero is memoized and a fresh object every keystroke would defeat it.
     const accent = useMemo(
         () => airlineAccent(getAirlineBrand(summary.airlineCode)),
         [summary.airlineCode],
@@ -303,14 +249,8 @@ function ConfirmForm({
         [slots.data, effectiveSlotId],
     )
 
-    // Stable identity so the memoized SlotOption rows aren't invalidated each render.
     const handleSelectSlot = useCallback((id: string) => setSelectedSlotId(id), [])
 
-    // A page left open long enough outlives the run it has selected. Once that run
-    // has departed, pull a fresh list and drop the selection so defaultSlotId
-    // re-selects whatever is genuinely first available now. A review dialog left
-    // open across the boundary would be reading back a window that no longer
-    // exists, so it closes with it.
     const {refetch: refetchSlots} = slots
     const handleRunStartPassed = useCallback(() => {
         setSelectedSlotId(null)
@@ -318,15 +258,11 @@ function ConfirmForm({
         void refetchSlots()
     }, [closeReview, refetchSlots])
 
-    // Ticking the box is the passenger saying they are done with the address, so it
-    // closes the editor behind them; unticking leaves it as it was.
     const handleAddressConfirmedChange = useCallback((value: boolean) => {
         setAddressConfirmed(value)
         if (value) setEditingAddress(false)
     }, [])
 
-    // Reaching for Edit withdraws the sign-off — the address they ticked is not the
-    // one they are about to type.
     const handleToggleAddressEdit = useCallback(() => {
         setEditingAddress((editing) => {
             if (!editing) setAddressConfirmed(false)
@@ -334,7 +270,6 @@ function ConfirmForm({
         })
     }, [])
 
-    // Stable identity so the memoized AddressAutocomplete isn't re-rendered on every keystroke.
     const handleAddressSelect = useCallback(
         (detail: AddressDetail) => {
             setServerCountryError(null)
@@ -350,7 +285,6 @@ function ConfirmForm({
         [],
     )
 
-    // Preserve the backend ordering (Sequence descending, then Name).
     const atlOptions = summary.atlOptions
 
     const fieldErrors: { [key: string]: string } = {}
@@ -373,9 +307,6 @@ function ConfirmForm({
     if (!addressConfirmed) {
         fieldErrors.addressConfirmed = 'Please confirm your delivery address is correct.'
     }
-    // Guard runUtc, not just the slot: a slot cached in the pre-runUtc shape still
-    // matches by id, and JSON.stringify drops the undefined deliveryTimeUtc so the
-    // server saw no delivery time at all.
     if (!selectedSlot?.runUtc) fieldErrors.slot = 'Please pick a delivery window.'
 
     const selectedAtlOption = atlOptions.find((o) => o.id === atlOptionId)
@@ -389,10 +320,6 @@ function ConfirmForm({
 
     const addressFieldInvalid = ADDRESS_FIELD_KEYS.some((key) => fieldErrors[key])
 
-    // Section completeness, read straight off the same validation the submit gate uses.
-    // Shown from the start rather than only after a failed submit: most of these fields
-    // arrive prefilled, and a passenger who can see three ticks already knows the page
-    // is asking them for one thing, not four.
     const sectionDone = (section: keyof typeof SECTION_FIELDS): SectionStatus =>
         SECTION_FIELDS[section].every((key) => !fieldErrors[key]) ? 'complete' : 'incomplete'
 
@@ -400,12 +327,9 @@ function ConfirmForm({
         mutationFn: (body: Parameters<typeof confirmBooking>[1]) => confirmBooking(bookingId, body),
         onSuccess: () => {
             setConfirmed(true)
-            // The success screen links straight to /t/:id — warm that route's lazy chunk now.
             void import('./Tracking')
         },
         onError: (err) => {
-            // Field errors and the address gate both live behind the scrim — drop the
-            // dialog so the passenger can see and fix what failed.
             closeReview()
 
             const response = (err as {
@@ -421,24 +345,17 @@ function ConfirmForm({
             const countryError = errors?.['Address.Country']?.[0]
             if (countryError) {
                 setServerCountryError(countryError)
-                // Reopen the gate and the editor: the passenger can't fix a field they
-                // can't see.
                 setAddressConfirmed(false)
                 setEditingAddress(true)
                 showError(countryError)
                 return
             }
 
-            // Any other validation failure (a missing delivery time, an over-long
-            // note) still says what went wrong rather than collapsing into "try
-            // again", which the passenger can only respond to by trying again.
             const firstError = errors && Object.values(errors).flat().find(Boolean)
             showError(firstError ?? 'Could not submit your confirmation. Please try again.')
         },
     })
 
-    // Validation gates the review, not the send, so the docket never reads a
-    // half-filled booking back to the passenger.
     function review() {
         setSubmitAttempted(true)
         if (Object.keys(fieldErrors).length > 0) {
@@ -450,9 +367,6 @@ function ConfirmForm({
     }
 
     function submit() {
-        // Re-checked here, not just in review(): a background refetch can retire the
-        // held window while the dialog is open, and the docket would be reading back
-        // a time that no longer exists.
         if (!selectedSlot?.runUtc) {
             closeReview()
             showError('Please pick a delivery window.')
@@ -496,15 +410,7 @@ function ConfirmForm({
                 style={{position: 'relative', zIndex: 1}}
             >
                 <Stack gap="md" px={{base: 12, sm: 0}}>
-                    {/* One panel with keyline dividers, not four bordered cards. Four boxes on a
-              shaded page read as a settings screen — the same reason the section icons
-              were dropped for status chips — and they nested three deep, since the
-              address gate and every delivery-window row carry a border of their own.
-              `overflow: hidden` so the primary section's keyline is clipped by the
-              card radius rather than poking out of the corner. */}
                     <Card p={0} style={{overflow: 'hidden'}}>
-                        {/* The stagger moves here with the sections it animates; it used to sit on
-                the Stack, whose children are now the panel and the offline alert. */}
                         <Box className="pax-stagger">
                             <FormSection title="Your details" status={sectionDone('details')}>
                                 <Stack gap="xs">
@@ -550,9 +456,6 @@ function ConfirmForm({
                                         onToggleEdit={handleToggleAddressEdit}
                                         error={showFieldError('addressConfirmed')}
                                     />
-                                    {/* Mantine keeps a collapsed Collapse mounted, so the fields stay in
-                      the DOM but out of the accessibility tree — which is what keeps the
-                      compact state compact for a screen reader too. */}
                                     <Collapse expanded={editingAddress}>
                                         <Stack gap="sm" pt="xs">
                                             <AddressAutocomplete bookingId={bookingId}
@@ -567,9 +470,6 @@ function ConfirmForm({
                                                 required
                                                 error={showFieldError('line1')}
                                             />
-                                            {/* The buzzer number, the gate code, the unit round the back — what
-                          the driver needs and the street address has nowhere to put. Out
-                          of sight until the passenger asks to edit, and never required. */}
                                             <TextInput
                                                 label="Extra delivery information"
                                                 placeholder="Apartment number, gate code, where to find the door"
@@ -629,9 +529,6 @@ function ConfirmForm({
                                 </Stack>
                             </FormSection>
 
-                            {/* The one decision on the page, so it carries the weight: the only card
-                  with the primary emphasis and the only place a brand tint means
-                  "chosen" rather than "here". */}
                             <Divider/>
 
                             <FormSection title="Delivery window" status={sectionDone('window')} emphasis="primary">
@@ -648,10 +545,6 @@ function ConfirmForm({
                                         {showFieldError('slot')}
                                     </Text>
                                 )}
-                                {/* Without these two the card renders as an empty box when the
-                    timeslots call fails or comes back with nothing, which reads as
-                    the page being broken rather than as something the passenger can
-                    act on. */}
                                 {slots.isError && (
                                     <Stack gap="xs" align="flex-start">
                                         <Text size="sm">
@@ -667,9 +560,6 @@ function ConfirmForm({
                                         <Text size="sm">
                                             There are no delivery windows available for this booking yet.
                                         </Text>
-                                        {/* Its own node, not a tail concatenated into the sentence above:
-                        the support line is the passenger's only way forward here and
-                        was inseparable from the first sentence for styling. */}
                                         {summary.supportPhone && (
                                             <Text size="sm">
                                                 Call {summary.supportPhone} and we&apos;ll arrange one with you.
@@ -721,8 +611,6 @@ function ConfirmForm({
                                             value={accessNotes}
                                             onChange={(e) => setAccessNotes(e.currentTarget.value)}
                                             error={showFieldError('accessNotes')}
-                                            // Matches tucJob.ucjbToSpecial. A hard cap with no counter reads
-                                            // as the field being broken, so show the remaining room.
                                             maxLength={ACCESS_NOTES_MAX}
                                             description={`${accessNotes.length}/${ACCESS_NOTES_MAX}`}
                                             autosize
@@ -742,18 +630,9 @@ function ConfirmForm({
                     )}
                 </Stack>
 
-                {/* No support number here: the confirm flow has one job, and a phone number
-            at the bottom of it is an invitation to stop and call instead. The
-            empty-window state and the confirmed screen still carry it, where it is
-            the passenger's only way forward. */}
                 <PoweredByFooter/>
             </Container>
 
-            {/* A floating button, not a docked bar — see .pax-action-bar in index.css. The
-          band of chrome it used to sit on drew a hard edge across the page for a
-          single control. "Review" and not "confirm": this step only opens the
-          read-back, and a passenger who reads "confirm" on it expects the booking to
-          be made when they tap. */}
             <Box px="md" className="pax-action-bar">
                 <Container size={tokens.hero.measure} px={0}>
                     <Button
@@ -789,11 +668,6 @@ function ConfirmForm({
     )
 }
 
-/**
- * The read-back between tapping the bar button and the POST. Deliberately not
- * shaped like the form behind it — no inputs, no section icons — so it reads as
- * the record about to be filed rather than one more step to fill in.
- */
 export function ConfirmReviewModal({
                                        opened,
                                        onClose,
@@ -828,13 +702,10 @@ export function ConfirmReviewModal({
             opened={opened}
             onClose={onClose}
             label="Check your delivery details"
-            // A tap outside mid-flight would hide a request the passenger can't retry.
             closeOnClickOutside={!submitting}
             closeOnEscape={!submitting}
             transitionProps={{transition: 'pop', duration: tokens.duration.fast}}
         >
-            {/* The intro line is the header's subtitle rather than the first thing in
-          the body — it says what the dialog is for, which is the header's job. */}
             <DialogHeader
                 icon={<DocketIcon size={22}/>}
                 title="Check your delivery details"
@@ -846,8 +717,6 @@ export function ConfirmReviewModal({
             <Box p="lg" bg={dialogContentBg}>
                 <Stack gap="md">
                     {slot && (
-                        // The one field with real consequences, stamped at 2px against the
-                        // pill buttons and the 28px shell.
                         <DocketTile label="Delivery window" variant="tint">
                             <Text
                                 fw={700}
@@ -859,9 +728,6 @@ export function ConfirmReviewModal({
                         </DocketTile>
                     )}
 
-                    {/* Despatch's section Paper holds the docket. The container takes the
-              12px corner of the design language; the printed lines inside keep
-              their own 2px, so the motif survives the port. */}
                     <Paper {...sectionPaperProps}>
                         <Stack gap="md">
                             <DeliveryDocket
@@ -882,8 +748,6 @@ export function ConfirmReviewModal({
                 onCancel={onClose}
                 onConfirm={onConfirm}
                 confirmLabel="Confirm delivery"
-                // Not "Cancel": this is the way back to the form, not a way to abandon
-                // the booking, and the passenger has typed into that form.
                 cancelLabel="Edit details"
                 confirmDisabled={!online}
                 submitting={submitting}
@@ -892,9 +756,6 @@ export function ConfirmReviewModal({
     )
 }
 
-// Memoized for the same reason as SlotOption: the list is fixed for the booking, so
-// it shouldn't re-render behind every keystroke in the fields above it. `onSelect`
-// is the raw setState, which React keeps stable.
 const AtlOptionList = memo(({
                                 options,
                                 selectedId,
@@ -921,11 +782,6 @@ const AtlOptionList = memo(({
     </Radio.Group>
 ))
 
-/**
- * The address as it stands, and one tick to sign it off. This is the whole
- * address step for the bags going where the booking already says — the fields sit
- * behind the Edit control for the rest.
- */
 function AddressGate({
                          address,
                          confirmed,
@@ -947,10 +803,6 @@ function AddressGate({
             py={10}
             style={{
                 borderRadius: 'var(--mantine-radius-sm)',
-                // The panel stays neutral once ticked. Tinting it cyan put a cyan checkbox
-                // on a cyan ground, and the control that carries the whole sign-off was the
-                // hardest thing on the card to see. A brand rule down the edge marks it
-                // signed off instead, and the box keeps a surface to stand out against.
                 backgroundColor: 'var(--dd-surface-container-high)',
                 border: `1px solid ${
                     error
@@ -970,8 +822,6 @@ function AddressGate({
         >
             <Group gap="sm" align="flex-start" wrap="nowrap">
                 <Box style={{flex: 1, minWidth: 0}}>
-                    {/* Read first, tick second. While the fields are open they are the
-              address, and repeating it above them is noise. */}
                     {!editing && (
                         <>
                             {addressLines(address).map((line, i) => (
@@ -979,9 +829,6 @@ function AddressGate({
                                     {line}
                                 </Text>
                             ))}
-                            {/* Deane's review: the delivery instructions are what the driver
-                  needs, so they are read back here rather than only in the
-                  editor the passenger has no reason to open. */}
                             <ExtraDeliveryInfo value={address.line2}/>
                         </>
                     )}
@@ -1010,13 +857,6 @@ const STATUS_LABEL: Record<SectionStatus, string> = {
     optional: 'off',
 }
 
-/**
- * The 32px slot on each section header. It used to hold a glyph that restated the
- * title in a picture — a person beside "Your details", a pin beside "Delivery
- * address" — which is decoration, and four identical tinted squares down the left
- * edge read as a settings page. It now carries state instead, so the column of chips
- * is something the passenger can scan to see what is left.
- */
 function SectionStatusChip({title, status}: { title: string; status: SectionStatus }) {
     const complete = status === 'complete'
     return (
@@ -1036,8 +876,6 @@ function SectionStatusChip({title, status}: { title: string; status: SectionStat
             {complete ? (
                 <CheckIcon size={18}/>
             ) : (
-                // A dash for a section that is switched off, an empty box for one still to
-                // do — an empty box on an optional section reads as an outstanding task.
                 status === 'optional' && (
                     <Box w={10} h={2} style={{backgroundColor: 'var(--mantine-color-dimmed)'}}/>
                 )
@@ -1046,11 +884,6 @@ function SectionStatusChip({title, status}: { title: string; status: SectionStat
     )
 }
 
-/**
- * One section of the confirm panel. Not a Card: the four sections share a single
- * card and are separated by keyline dividers, so this contributes padding and a
- * header, not a box.
- */
 function FormSection({
                          title,
                          subtitle,
@@ -1071,13 +904,7 @@ function FormSection({
             p="lg"
             style={
                 emphasis === 'primary'
-                    ? // The one decision on the page, marked on the section rather than on its
-                      // title. `emphasis` used to change only the heading's weight and size,
-                      // which is not something a passenger can see against three sibling
-                      // headings. A brand rule down the edge is the same device the address
-                      // gate already uses for a signed-off address. Deliberately not a tinted
-                      // ground: the selected window row inside is itself brand-tinted, and a
-                      // tint on a tint is the cyan-on-cyan problem the address gate documents.
+                    ?
                     {boxShadow: 'inset 3px 0 0 0 var(--mantine-color-brand-filled)'}
                     : undefined
             }
@@ -1085,9 +912,6 @@ function FormSection({
             <Group gap="sm" align="center" mb="md" wrap="nowrap">
                 <SectionStatusChip title={title} status={status}/>
                 <Box style={{flex: 1, minWidth: 0}}>
-                    {/* A real h2. These were plain `Text`, which left the page with one
-              heading (the hero h1) for an eight-field form, and set the section
-              titles at the same size as the field labels beneath them. */}
                     <Title order={2} style={tokens.type.sectionTitle}>
                         {title}
                     </Title>
@@ -1104,12 +928,6 @@ function FormSection({
     )
 }
 
-/**
- * The window list as a real radio group. Selection follows focus with the arrow keys,
- * per the WAI-ARIA radiogroup pattern, and only the selected row is in the tab order
- * so the list is one tab stop rather than one per window. `effectiveSlotId` always
- * resolves once the slots load, so exactly one row is always tabbable.
- */
 const SlotList = memo(({
                            slots,
                            selectedId,
@@ -1125,8 +943,6 @@ const SlotList = memo(({
         const target = slots[index]
         if (!target) return
         onSelect(target.id)
-        // Focus has to follow the selection or the next arrow press comes from the old
-        // row and the caret appears to jump back.
         ref.current?.querySelectorAll<HTMLElement>('[role="radio"]')[index]?.focus()
     }
 
@@ -1175,10 +991,6 @@ const SlotList = memo(({
     )
 })
 
-// Memoized so typing in the form's text fields (which re-renders ConfirmForm on every
-// keystroke) doesn't re-render every slot in the list. `onSelect` takes the slot id so
-// ConfirmForm can pass one stable handler to all rows instead of a per-row closure —
-// without that, the changing prop identity would defeat the memo.
 const SlotOption = memo(({
                              slot,
                              selected,
@@ -1191,10 +1003,7 @@ const SlotOption = memo(({
     <Box
         role="radio"
         aria-checked={selected}
-        // Roving tab index: the group is one tab stop, the arrow keys move within it.
         tabIndex={selected ? 0 : -1}
-        // Chrome (focus ring, transition) lives in index.css — see .pax-slot. The
-        // previous inline `outline: none` left the list with no visible focus at all.
         className="pax-slot"
         onClick={() => onSelect(slot.id)}
         onKeyDown={(e) => {
@@ -1230,10 +1039,6 @@ const SlotOption = memo(({
             )}
         </Center>
         <Box style={{flex: 1, minWidth: 0}}>
-            {/* Date above window, as in the mock — a time on its own leaves the
-            passenger guessing which day it belongs to. The window carries the
-            weight though: the day is context, the hours are the decision, and
-            this is the one decision on the page. */}
             <Text size="xs" c="dimmed">
                 {slot.dayLabel}
             </Text>
@@ -1241,9 +1046,6 @@ const SlotOption = memo(({
                 {slot.label}
             </Text>
             {slot.firstAvailable && (
-                // Brand-toned, not green: a second accent inside an already brand-tinted
-                // row reads as two competing signals in sixty pixels. Deep cyan, not the
-                // brand fill — cyan on a cyan tint at 10px is about 1.9:1.
                 <Text style={{...tokens.type.eyebrow, color: 'var(--dd-on-brand-tint)'}}>
                     First available
                 </Text>
@@ -1274,13 +1076,7 @@ export function ConfirmedScreen({
     accessNotes: string
 }) {
     return (
-        // Flex column so the sign-off lands on the bottom edge rather than floating
-        // above a few hundred pixels of blank surface.
         <Box mih="100vh" style={{display: 'flex', flexDirection: 'column'}}>
-            {/* The Ink hero, same as the confirm screen it replaces. A full-bleed green
-          band introduced a fourth brand colour at the most memorable moment and
-          discarded the airline theme with it; the tick and the badge carry the
-          success on their own. */}
             <Box
                 px={tokens.hero.px}
                 pt={tokens.hero.pt}
@@ -1330,15 +1126,9 @@ export function ConfirmedScreen({
                 px={{base: 12, sm: 0}}
                 mt={tokens.hero.overlap}
                 pb={48}
-                // width:100% because Container centres itself with auto inline margins,
-                // and an auto cross-axis margin opts a flex item out of stretching.
                 style={{position: 'relative', flex: 1, width: '100%'}}
             >
                 <Stack gap="md">
-                    {/* The docket. This is the passenger's only record of what they just
-              submitted and the screen they are most likely to screenshot, so it is
-              set as the thing it is — a printed receipt, at 2px against the pill
-              button below it — rather than as a tick and a headline. */}
                     <Card p="lg">
                         <Stack gap="md">
                             {summary.fileReference && (

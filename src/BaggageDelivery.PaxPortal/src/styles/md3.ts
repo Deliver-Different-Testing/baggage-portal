@@ -1,32 +1,18 @@
-/**
- * DFRNT surface ladder + semantic scheme builder — framework-free, portable.
- *
- * This is the single source of truth for DFRNT's colour roles and the dark
- * charcoal surface ladder (shared verbatim with the Hub app's LESS
- * `.dd-dark-scheme()` ramp — keep the two in sync). Copied from the
- * IntegrationManager AdminPortal (src/styles/md3.ts). No dependencies.
- *
- * `getMd3Scheme(_isUsCustomer, mode)` always returns the DFRNT scheme; the first
- * arg is retained only for signature compatibility with older callers.
- */
-
 export type Md3Mode = 'light' | 'dark';
 export type Brand = 'dfrnt' | 'urgent';
 
-/** Brand seeds — DFRNT Cyan is the single brand primary (Feb 2026 guidelines). */
 export const SEEDS: Record<Brand, string> = {
-  dfrnt: '#3bc7f4', // DFRNT brand cyan
-  urgent: '#3bc7f4', // single brand — retained key for type compat only
+  dfrnt: '#3bc7f4',
+  urgent: '#3bc7f4',
 };
 
-// Primary palette — DFRNT brand cyan (#3bc7f4).
 export const dfrntPrimaryPalette = {
   50: '#e7f8fe',
   100: '#d8f4fd',
   200: '#b1e9fb',
   300: '#82dcf8',
   400: '#5bd1f5',
-  500: '#3bc7f4', // Main color
+  500: '#3bc7f4',
   600: '#1eb2e6',
   700: '#1590c0',
   800: '#0f6f96',
@@ -37,7 +23,6 @@ export const dfrntPrimaryPalette = {
   A700: '#1590c0',
 };
 
-// Retained amber ramp for signature compat only — not used by the DFRNT scheme.
 export const urgentPrimaryPalette = {
   50: '#fef9e7',
   100: '#fcefc4',
@@ -55,18 +40,17 @@ export const urgentPrimaryPalette = {
   A700: '#ffc107',
 };
 
-// Accent palette — warm grays (neutral / secondary / surfaces).
 export const accentPalette = {
-  50: '#fafaf9', // Warm white
-  100: '#f5f5f4', // Very light warm gray
-  200: '#e7e5e4', // Light warm gray
-  300: '#d6d3d1', // Medium-light warm gray
-  400: '#a8a29e', // Medium warm gray
-  500: '#78716c', // Balanced warm gray — MAIN COLOR
-  600: '#57534e', // Dark warm gray — TOOLBAR COLOR
-  700: '#44403c', // Darker warm gray
-  800: '#292524', // Very dark warm gray
-  900: '#1c1917', // Deepest warm gray
+  50: '#fafaf9',
+  100: '#f5f5f4',
+  200: '#e7e5e4',
+  300: '#d6d3d1',
+  400: '#a8a29e',
+  500: '#78716c',
+  600: '#57534e',
+  700: '#44403c',
+  800: '#292524',
+  900: '#1c1917',
 };
 
 const RAMPS: Record<Brand, typeof dfrntPrimaryPalette> = {
@@ -103,20 +87,15 @@ export interface Md3Scheme {
 
 const N = accentPalette;
 
-// Cool soft-charcoal dark tiers — the canonical DFRNT dark surface ladder, shared
-// with the Hub app (its `.dd-dark-scheme()` --dd-surface* ramp was ported from these
-// values). A gentle warm-neutral mid-charcoal lifted well clear of near-black. The
-// container ladder stays monotonic (lowest → highest gets progressively lighter),
-// preserving tonal elevation.
 const darkSurface = {
-  dim: '#28262c', // distinct dim floor (darkest)
+  dim: '#28262c',
   containerLowest: '#252429',
-  base: '#2c2a30', // surface / page background
+  base: '#2c2a30',
   containerLow: '#312f36',
-  container: '#37353c', // elevated surface — cards / paper in dark
-  containerHigh: '#413f47', // menus / popovers in dark
+  container: '#37353c',
+  containerHigh: '#413f47',
   containerHighest: '#4c4952',
-  bright: '#56535c', // Hub --dd-surface-variant (lightest neutral fill)
+  bright: '#56535c',
 };
 
 function buildScheme(brand: Brand, dark: boolean): Md3Scheme {
@@ -134,8 +113,8 @@ function buildScheme(brand: Brand, dark: boolean): Md3Scheme {
         secondaryContainer: N[700],
         onSecondaryContainer: N[100],
         surface: darkSurface.base,
-        onSurface: '#E6E1E9', // cool near-white, matches Hub's white-on-dark text
-        onSurfaceVariant: '#CAC4D0', // cool light grey (matches Hub dark neutrals)
+        onSurface: '#E6E1E9',
+        onSurfaceVariant: '#CAC4D0',
         surfaceContainerLowest: darkSurface.containerLowest,
         surfaceContainerLow: darkSurface.containerLow,
         surfaceContainer: darkSurface.container,
@@ -143,26 +122,25 @@ function buildScheme(brand: Brand, dark: boolean): Md3Scheme {
         surfaceContainerHighest: darkSurface.containerHighest,
         surfaceDim: darkSurface.dim,
         surfaceBright: darkSurface.bright,
-        outline: '#939099', // cool grey outline (Hub --dd-outline)
-        outlineVariant: '#56535c', // Hub --dd-outline-variant
+        outline: '#939099',
+        outlineVariant: '#56535c',
         inverseSurface: '#E6E1E9',
         inverseOnSurface: '#322F35',
       }
     : {
-        // Light — despatchweb exact.
         primary: P[500],
         primaryLight: P[300],
         primaryDark: P[700],
-        onPrimary: '#0d0c2c', // dark Ink text on light cyan (WCAG)
+        onPrimary: '#0d0c2c',
         primaryContainer: P[50],
         onPrimaryContainer: P[900],
         secondary: N[500],
         onSecondary: '#ffffff',
         secondaryContainer: N[100],
         onSecondaryContainer: N[900],
-        surface: '#f4f2f1', // Light Grey page background
+        surface: '#f4f2f1',
         onSurface: '#0d0c2c',
-        onSurfaceVariant: '#6e6d80', // brand Ink-Blue 60% — secondary text/icons (p8)
+        onSurfaceVariant: '#6e6d80',
         surfaceContainerLowest: '#ffffff',
         surfaceContainerLow: '#f8f7f7',
         surfaceContainer: N[100],
@@ -183,11 +161,9 @@ export const md3Schemes: Record<Brand, Record<Md3Mode, Md3Scheme>> = {
 };
 
 export function getMd3Scheme(_isUsCustomer: boolean, mode: Md3Mode): Md3Scheme {
-  // Single DFRNT brand for all tenants (arg retained for signature compat).
   return md3Schemes.dfrnt[mode];
 }
 
-/** Relative-luminance WCAG contrast ratio between two hex colors. */
 export function contrastRatio(fgHex: string, bgHex: string): number {
   const toLinear = (c: number): number => {
     const s = c / 255;

@@ -48,7 +48,6 @@ describe('ColorModeProvider', () => {
       </ColorModeProvider>,
     )
 
-    // The jsdom matchMedia stub reports no dark preference.
     expect(screen.getByTestId('probe')).toHaveTextContent('system/light')
   })
 })

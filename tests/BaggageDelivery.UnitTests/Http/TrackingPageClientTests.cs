@@ -77,7 +77,6 @@ public class TrackingPageClientTests
         Assert.Equal(42, dto.JobId);
         Assert.Equal("7", dto.CurrentStatus);
         Assert.Empty(dto.Events);
-        // 15:30 on 10 Jun 2026 is NZST (UTC+12) -> 03:30Z.
         Assert.Equal(new DateTime(2026, 6, 10, 3, 30, 0, DateTimeKind.Utc), dto.EtaWindowStartUtc);
         Assert.Equal(dto.EtaWindowStartUtc, dto.EtaWindowEndUtc);
         Assert.Null(dto.CourierFirstName);
@@ -87,7 +86,6 @@ public class TrackingPageClientTests
     [Fact]
     public async Task StatusId_supplied_as_string_is_still_read()
     {
-        // The client sets NumberHandling = AllowReadingFromString.
         var handler = StubHttpMessageHandler.Json(HttpStatusCode.OK, JobJson(statusId: "\"9\""));
 
         var dto = await NewClient(handler).GetJobAsync(42, TestContext.Current.CancellationToken);
@@ -174,7 +172,6 @@ public class TrackingPageClientTests
     [InlineData(HttpStatusCode.Unauthorized)]
     public async Task Non_success_status_returns_null(HttpStatusCode status)
     {
-        // trackingpage maps job-not-found to 400; the rest are logged as unexpected.
         var handler = StubHttpMessageHandler.Json(status, """{ "success": false }""");
 
         var dto = await NewClient(handler).GetJobAsync(42, TestContext.Current.CancellationToken);
@@ -209,7 +206,6 @@ public class TrackingPageClientTests
     [Fact]
     public async Task Timeout_returns_null_when_the_caller_did_not_cancel()
     {
-        // HttpClient surfaces its own timeout as TaskCanceledException.
         var handler = StubHttpMessageHandler.Throws(new TaskCanceledException("timed out"));
 
         var dto = await NewClient(handler).GetJobAsync(42, TestContext.Current.CancellationToken);

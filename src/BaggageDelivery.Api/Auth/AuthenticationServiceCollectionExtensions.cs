@@ -15,9 +15,6 @@ public static class AuthenticationServiceCollectionExtensions
         var issuer = Environment.GetEnvironmentVariable("Issuer") ?? configuration["Auth:Issuer"] ?? "DespatchSC";
         var audience = Environment.GetEnvironmentVariable("Audience") ?? configuration["Auth:Audience"] ?? "DespatchSC";
 
-        // Bearer (SC-JWT) is the only registered scheme. Customer-facing pax
-        // routes are [AllowAnonymous] and authenticate by holding the encrypted
-        // BagDelBooking ID in the URL path — same model as inboundagent.
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, o =>
             {
@@ -37,12 +34,6 @@ public static class AuthenticationServiceCollectionExtensions
 
         services.AddAuthorizationBuilder();
 
-        // The cookie half of the token keeps its framework defaults: host-only,
-        // HttpOnly, SameSite=Strict. It is deliberately NOT named XSRF-TOKEN and
-        // NOT scoped to the shared Domain — that name is already taken by
-        // inboundagent on the same parent domain, and the SPA must never see this
-        // value. GET /api/v1/antiforgery/token issues the readable companion
-        // cookie carrying the request token (see AntiforgeryController).
         services.AddAntiforgery(options =>
         {
             options.HeaderName = "X-XSRF-TOKEN";

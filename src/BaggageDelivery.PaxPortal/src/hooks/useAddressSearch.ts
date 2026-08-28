@@ -9,8 +9,6 @@ interface UseAddressSearchOptions {
   debounceMs?: number
 }
 
-// Hoisted: `data: suggestions = []` would otherwise hand out a fresh array on every
-// render until the first response lands, defeating any memo keyed on it downstream.
 const NO_SUGGESTIONS: AddressSearchResult[] = []
 
 export function useAddressSearch(options: UseAddressSearchOptions) {

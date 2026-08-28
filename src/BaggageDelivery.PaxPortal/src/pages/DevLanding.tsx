@@ -19,11 +19,6 @@ import { PoweredByFooter } from '../components/PoweredByFooter'
 import { getDevLinks } from '../api/pax'
 import { useRedirectOnNotFound } from '../hooks/useRedirectOnNotFound'
 
-// Landing page for `/`, which is never a real pax entry point — passengers always
-// arrive on /c/:id or /t/:id. In Development the API exposes /dev/links and this
-// screen surfaces the magic links for DevTesting:JobId so there is somewhere to
-// start from. Outside Development the endpoint 404s and useRedirectOnNotFound
-// sends us to /expired, which is the behaviour the catch-all route used to give.
 export function DevLanding() {
   const links = useQuery({
     queryKey: ['dev', 'links'],

@@ -8,9 +8,6 @@ import { useColorMode } from './hooks/colorModeContext'
 import { queryClient } from './api/queryClient'
 import { App } from './App'
 
-// `mode` comes from ColorModeProvider (defaults to the OS 'system' preference and
-// follows prefers-color-scheme live) and is the single source of truth for the
-// scheme — feed it to forceColorScheme rather than Mantine's own auto switch.
 export function ThemedApp() {
   const { mode } = useColorMode()
   return (

@@ -85,8 +85,6 @@ describe('ConfirmedScreen', () => {
   it('narrates the file reference and the chosen window', () => {
     renderConfirmed('token-abc-123')
 
-    // The reference is set as a baggage tag, same as the confirm hero: label and
-    // value are separate nodes because the helpline asks for the value alone.
     expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
     expect(screen.getByText('AKLNZ12345')).toBeInTheDocument()
     expect(screen.getByText('Delivery window')).toBeInTheDocument()
@@ -95,8 +93,6 @@ describe('ConfirmedScreen', () => {
   })
 
   it('issues a full docket of what was submitted', () => {
-    // This is the passenger's only record of the booking and the screen they are
-    // most likely to screenshot, so it reads back every field they filled in.
     renderConfirmed('token-abc-123')
 
     expect(screen.getByText('Deliver to')).toBeInTheDocument()
@@ -145,8 +141,6 @@ describe('ConfirmedScreen', () => {
   it('keeps the Ink hero rather than introducing a green one', () => {
     const { container } = renderConfirmed('token-abc-123')
 
-    // A full-bleed green band was a fourth brand colour at the moment the
-    // passenger is most likely to remember, and it dropped the airline theme.
     const hero = container.querySelector('[style*="ink-9"]')
     expect(hero).not.toBeNull()
     expect(container.querySelector('[style*="green-8"]')).toBeNull()
@@ -164,9 +158,6 @@ describe('ConfirmedScreen', () => {
   it('signs off with the attribution alone', () => {
     renderConfirmed('token-abc-123')
 
-    // The carrier name and the support number both left the footer: the name only
-    // repeated the hero, and the number belongs where the passenger is stuck, not
-    // under a screen that already told them everything worked.
     const footer = within(screen.getByRole('contentinfo'))
     expect(footer.queryByText('Test Air')).not.toBeInTheDocument()
     expect(footer.queryByRole('link', { name: /call/i })).not.toBeInTheDocument()
@@ -181,8 +172,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     { id: 7, name: 'Safe Place' },
   ]
 
-  // The server resolves which option the page arrives on, so the portal never has
-  // to know a LeaveNotHomeId or match a display name.
   const booking = (overrides: Partial<BookingSummary> = {}) => ({
     ...summary,
     atlOptions,
@@ -207,12 +196,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
   beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 
-  // The slot fixtures depart at fixed 2026-06-10 instants, so on any real clock
-  // past that date every run has already left: useRunStartCountdown fires onExpire
-  // on mount, which drops the selection and closes the review dialog. That raced
-  // every click in this describe. Pin the clock just before the first departure so
-  // the countdown behaves as it does for a passenger with a live booking; the few
-  // tests that need a different instant still call setSystemTime themselves.
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-06-10T01:00:00Z'))
@@ -243,8 +226,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('gives every section a real heading, not body-weight text', async () => {
     renderForm()
 
-    // The page had one heading (the hero h1) for an eight-field form, and set the
-    // section titles at the same size as the field labels beneath them.
     await screen.findByRole('heading', { level: 2, name: /your details/i })
     expect(screen.getByRole('heading', { level: 2, name: /delivery address/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: /delivery window/i })).toBeInTheDocument()
@@ -266,9 +247,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     renderForm()
 
-    // A spinner on an empty page was the first thing a passenger saw after tapping
-    // the SMS link. The headline and body copy do not depend on the booking, so they
-    // render immediately and only the airline name and file reference are skeletoned.
     expect(
       await screen.findByRole('heading', { level: 1, name: /confirm your baggage delivery/i }),
     ).toBeInTheDocument()
@@ -289,9 +267,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const user = userEvent.setup()
     renderForm()
 
-    // The old state was a bare red Alert on an otherwise empty page telling the
-    // passenger to contact support, with no number and no booking loaded to get one
-    // from. Retrying is the action they actually have.
     expect(await screen.findByText(/couldn't load your booking/i)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /try again/i }))
@@ -308,7 +283,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     renderForm()
 
-    // Label and value are separate nodes on the tag, so they are matched apart.
     expect(await screen.findByText('AKLNZ179252')).toBeInTheDocument()
     expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
     expect(screen.queryByText(/REF · 42/)).not.toBeInTheDocument()
@@ -343,8 +317,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     renderForm()
 
-    // Both halves are visible, so the passenger can tell today from tomorrow
-    // without decoding a time on its own.
     expect(await screen.findByText('Today, Wed 10 Jun')).toBeInTheDocument()
     expect(screen.getByText('2:00 PM – 5:00 PM')).toBeInTheDocument()
     expect(screen.getByText('Tomorrow, Thu 11 Jun')).toBeInTheDocument()
@@ -365,8 +337,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const user = userEvent.setup()
     renderForm()
 
-    // The card used to render as an empty box, which reads as the page being
-    // broken rather than as something the passenger can do anything about.
     expect(await screen.findByText(/couldn't load the available delivery windows/i))
       .toBeInTheDocument()
 
@@ -380,10 +350,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     renderForm()
 
-    // The number also sits in the footer sign-off, so match it on the empty-state
-    // block itself rather than page-wide. The support sentence is its own node now
-    // — it used to be concatenated onto the end of the sentence above it — so this
-    // asserts on the block holding both.
     const message = await screen.findByText(/no delivery windows available for this booking yet/i)
     expect(message.parentElement).toHaveTextContent('0800 267 5494')
   })
@@ -391,15 +357,12 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('names what the passenger loses if the chosen run departs', async () => {
     renderForm()
 
-    // States the stake rather than issuing an instruction: the old line read
-    // "Make sure you confirm your booking before the chosen run time".
     expect(await screen.findByText(/time left to keep this window/i)).toBeInTheDocument()
   })
 
   it('escalates the run-start notice inside the last ten minutes', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      // slot departs at 02:00Z. Twelve minutes out is still just context...
       vi.setSystemTime(new Date('2026-06-10T01:48:00Z'))
       server.use(http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])))
 
@@ -409,7 +372,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
       const calm = countdown.parentElement as HTMLElement
       expect(calm.style.backgroundColor).toBe('var(--dd-surface-container-high)')
 
-      // ...and two minutes later it is something to act on.
       await act(async () => {
         vi.advanceTimersByTime(150_000)
       })
@@ -424,7 +386,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('counts down to the start of the selected run, and retargets when a later one is picked', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      // slot departs at 02:00Z, tomorrowSlot at 21:00Z.
       vi.setSystemTime(new Date('2026-06-10T01:50:00Z'))
       server.use(
         http.get('*/pax/:id/booking/timeslots', () =>
@@ -442,8 +403,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
       })
       expect(screen.getByText('9:55')).toBeInTheDocument()
 
-      // Nineteen hours and change out — the note says "the chosen run time", so
-      // the deadline has to follow the choice.
       await user.click(screen.getByText('Tomorrow, Thu 11 Jun'))
 
       expect(await screen.findByText(/^19:\d{2}:\d{2}$/)).toBeInTheDocument()
@@ -460,8 +419,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
       server.use(
         http.get('*/pax/:id/booking/timeslots', () => {
           timeslotRequests += 1
-          // The second response drops the departed first window, so the refreshed
-          // list can only be showing tomorrow if the refetch landed.
           return HttpResponse.json(timeslotRequests === 1 ? [slot] : [tomorrowSlot])
         }),
       )
@@ -482,20 +439,15 @@ describe('PaxMobile — Authority to Leave submit', () => {
     }
   })
 
-  // The address gate gets in the way of every submit on purpose. Tick it after any
-  // address edits — ticking closes the editor.
   async function confirmAddress(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await screen.findByRole('checkbox', { name: /this address is correct/i }))
   }
 
-  // Almost every bag goes to the address already on the booking, so the fields
-  // live behind Edit rather than in front of the passenger.
   async function editAddress(user: ReturnType<typeof userEvent.setup>) {
     await user.click(await screen.findByRole('button', { name: /^edit$/i }))
     await screen.findByRole('textbox', { name: /street address/i })
   }
 
-  // The bar button only opens the read-back now; the dialog's own button sends.
   async function openReview(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole('button', { name: /review delivery/i }))
   }
@@ -509,8 +461,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     return screen.queryByRole('dialog', { name: /check your delivery details/i })
   }
 
-  // Authority to leave arrives off and its option list is collapsed, which puts the
-  // radios out of the accessibility tree — switch it on before reaching for them.
   async function enableAtl(user: ReturnType<typeof userEvent.setup>) {
     await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
     await user.click(screen.getByRole('switch'))
@@ -521,22 +471,17 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await screen.findByText(/confirm your baggage delivery/i)
 
-    // Read-first: the address the bag is already going to, and one tick to say so.
     expect(screen.getByText('123 Test St')).toBeInTheDocument()
     expect(screen.getByText('Suburb, Auckland 1010')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /this address is correct/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
 
-    // Everything else is the exception path and stays out of the way.
     expect(screen.queryByRole('textbox', { name: /street address/i })).not.toBeInTheDocument()
     expect(
       screen.queryByRole('textbox', { name: /extra delivery information/i }),
     ).not.toBeInTheDocument()
-    // By role, not by label: a collapsed Mantine Collapse keeps its children
-    // mounted but out of the accessibility tree, which is the state that matters.
     expect(screen.queryByRole('combobox', { name: /search address/i })).not.toBeInTheDocument()
 
-    // The passenger's own details are not the address, and stay editable.
     expect(screen.getByRole('textbox', { name: /full name/i })).toBeEnabled()
   })
 
@@ -568,10 +513,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() =>
       expect(screen.queryByRole('textbox', { name: /street address/i })).not.toBeInTheDocument(),
     )
-    // The search is a tool for changing the address — no reason to keep offering
-    // it once the passenger has said the address is right.
-    // By role, not by label: a collapsed Mantine Collapse keeps its children
-    // mounted but out of the accessibility tree, which is the state that matters.
     expect(screen.queryByRole('combobox', { name: /search address/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
   })
@@ -607,8 +548,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     renderForm()
 
-    // Deane's review: delivery instructions are what the driver needs, so they
-    // are read back with the address rather than hidden behind Edit.
     expect(await screen.findByText('Extra delivery information')).toBeInTheDocument()
     expect(screen.getByText('Gate code 1234')).toBeInTheDocument()
   })
@@ -656,8 +595,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await confirmAddress(user)
     await openReview(user)
 
-    // An error on a collapsed field is an error the passenger cannot see, let
-    // alone fix.
     expect(await screen.findByRole('textbox', { name: /suburb/i })).toBeInTheDocument()
     expect(screen.getByText(/please enter your suburb/i)).toBeInTheDocument()
     expect(reviewDialog()).not.toBeInTheDocument()
@@ -685,8 +622,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await screen.findByText(/confirm your baggage delivery/i)
 
-    // Leaving a suitcase unattended is the passenger's call to make, not a default
-    // they have to notice and undo.
     await waitFor(() => expect(screen.getByRole('switch')).toBeEnabled())
     expect(screen.getByRole('switch')).not.toBeChecked()
     expect(screen.queryByRole('radio', { name: 'Front door' })).not.toBeInTheDocument()
@@ -699,8 +634,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await screen.findByText(/confirm your baggage delivery/i)
     await enableAtl(user)
 
-    // Front door is the normal handoff point for a suitcase, so opting in is one
-    // tap rather than one tap and a choice.
     expect(await screen.findByRole('radio', { name: 'Front door' })).toBeChecked()
   })
 
@@ -781,9 +714,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
   })
 
   it('blocks submit when the timeslot has no runUtc instead of posting without a delivery time', async () => {
-    // The shape served before the per-client economy-run change: it still matches
-    // by id, so the slot reads as selected, but runUtc is undefined and
-    // JSON.stringify drops deliveryTimeUtc from the body entirely.
     server.use(
       http.get('*/pax/:id/booking/timeslots', () =>
         HttpResponse.json([
@@ -850,8 +780,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(lastConfirmBody!.atlOptionId).toBeNull()
   })
 
-  // The country is server-normalised and has no input of its own — the portal is
-  // a passthrough. This pins that, so client-side mangling can't creep back in.
   it('posts the country from the booking summary unchanged', async () => {
     const user = userEvent.setup()
     renderForm()
@@ -930,9 +858,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await confirmAddress(user)
     await reviewAndConfirm(user)
 
-    // Correctable: the editor reopens on a field the passenger could not otherwise
-    // see, the message lands on it rather than only in the toast, and the gate
-    // reopens so they can actually act on it.
     const country = await screen.findByRole('textbox', { name: /country/i })
     await waitFor(() => expect(country).toHaveAttribute('aria-invalid', 'true'))
     expect(
@@ -964,8 +889,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(dialog.getByText('2:00 PM – 5:00 PM')).toBeInTheDocument()
     expect(dialog.getByText('Today, Wed 10 Jun')).toBeInTheDocument()
     expect(dialog.getByText('123 Test St')).toBeInTheDocument()
-    // Suburb and city are separate places, so they take a comma; the postcode
-    // belongs to the city and follows it on a space, as on an envelope.
     expect(dialog.getByText('Suburb, Auckland 1010')).toBeInTheDocument()
     expect(dialog.getByText('NZ')).toBeInTheDocument()
     expect(dialog.getByText('Test Passenger')).toBeInTheDocument()
@@ -974,7 +897,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(dialog.getByText('Safe Place')).toBeInTheDocument()
     expect(dialog.getByText(/behind the garden shed/i)).toBeInTheDocument()
 
-    // Opening the read-back must not have sent anything.
     expect(lastConfirmBody).toBeNull()
   })
 
@@ -1001,8 +923,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await confirmAddress(user)
     await openReview(user)
 
-    // The file the delivery is being booked against, so the passenger can check
-    // it matches the reference the airline gave them before anything is sent.
     const dialog = within(await screen.findByRole('dialog'))
     expect(dialog.getByText(/^file reference$/i)).toBeInTheDocument()
     expect(dialog.getByText('AKLNZ12345')).toBeInTheDocument()
@@ -1039,7 +959,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await waitFor(() => expect(reviewDialog()).not.toBeInTheDocument())
     expect(lastConfirmBody).toBeNull()
-    // The form is still behind it with everything the passenger entered.
     expect(screen.getByRole('checkbox', { name: /this address is correct/i })).toBeChecked()
   })
 
@@ -1062,8 +981,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
         vi.advanceTimersByTime(61_000)
       })
 
-      // The window on the docket no longer exists — confirming it would book a run
-      // that has departed.
       await waitFor(() => expect(reviewDialog()).not.toBeInTheDocument())
       expect(lastConfirmBody).toBeNull()
     } finally {
@@ -1091,8 +1008,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await confirmAddress(user)
     await reviewAndConfirm(user)
 
-    // Field errors and the address gate are behind the scrim — the dialog has to go
-    // for the passenger to fix what failed.
     await waitFor(() => expect(reviewDialog()).not.toBeInTheDocument())
     expect(await screen.findByText(/120 characters or fewer/i)).toBeInTheDocument()
   })
@@ -1100,21 +1015,15 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('leads the hero with the task, with the airline as the identity line above it', async () => {
     renderForm()
 
-    // The airline appears twice now — hero and footer sign-off. The hero is first.
     const [airline] = await screen.findAllByText('Test Air')
     const task = screen.getByRole('heading', { level: 1, name: /Confirm your baggage delivery/i })
 
-    // The airline name led at display size before, which told the passenger whose
-    // system this is but never what the page wanted from them. The task carries the
-    // display type now; the airline sits above it as the identity line.
     expect(airline.compareDocumentPosition(task) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('sets the file reference as a baggage tag under the task', async () => {
     renderForm()
 
-    // The one token the passenger will be read back over the phone, and the
-    // page's answer to the question they arrived with — does anyone have my bag.
     const value = await screen.findByText('AKLNZ12345')
     const label = screen.getByText(/^file reference$/i)
     const task = screen.getByRole('heading', { level: 1, name: /Confirm your baggage delivery/i })
@@ -1126,13 +1035,9 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('gives the delivery window more weight than the day it falls on', async () => {
     renderForm()
 
-    // The day is context; the hours are what the passenger is choosing between.
-    // Emphasis sat on the day, leaving the decisive value in the dimmed line.
     const hours = await screen.findByText('2:00 PM – 5:00 PM')
     const day = screen.getByText('Today, Wed 10 Jun')
 
-    // The window card is the one decision on the page, so the hours carry the
-    // page's heaviest body weight — not the same 600 as every section title.
     expect(hours).toHaveStyle({ fontWeight: '700' })
     expect(day).not.toHaveStyle({ fontWeight: '700' })
   })
@@ -1141,8 +1046,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const user = userEvent.setup()
     renderForm()
 
-    // The chip replaced a glyph that only restated the title in a picture. It now
-    // carries state, so the column of chips is a progress read.
     expect(await screen.findByLabelText('Your details — complete')).toBeInTheDocument()
     expect(
       screen.getByLabelText('Delivery address — not filled in yet'),
@@ -1161,7 +1064,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     )
     renderForm()
 
-    // An empty box on an optional section reads as an unfinished task.
     expect(await screen.findByLabelText('Authority to leave — off')).toBeInTheDocument()
   })
 
@@ -1177,8 +1079,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     ).toBeInTheDocument()
   })
 
-  // The ATL list renders its own radios, so every window assertion is scoped to the
-  // window group rather than to the page.
   async function windowOptions() {
     const group = await screen.findByRole('radiogroup', { name: /delivery window/i })
     return within(group).getAllByRole('radio')
@@ -1194,9 +1094,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const options = await windowOptions()
     expect(options).toHaveLength(2)
 
-    // Roving tab index: the group is one tab stop, not one per window. Before this
-    // the rows carried `outline: none` and no focus rule, so the one decision on
-    // the page could not be reached — let alone made — from a keyboard.
     expect(options[0]).toHaveAttribute('aria-checked', 'true')
     expect(options[0]).toHaveAttribute('tabindex', '0')
     expect(options[1]).toHaveAttribute('tabindex', '-1')
@@ -1209,7 +1106,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     )
     const moved = await windowOptions()
     expect(moved[0]).toHaveAttribute('aria-checked', 'false')
-    // Focus follows selection, or the next arrow press comes from the old row.
     expect(moved[1]).toHaveFocus()
   })
 
@@ -1252,14 +1148,8 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const confirm = dialog.getByRole('button', { name: /confirm delivery/i })
     const edit = dialog.getByRole('button', { name: /edit details/i })
 
-    // Despatch's order: the way back, then the primary. Source order is the
-    // rendered order at every width — .dd-dialog-footer stacks it on a phone and
-    // lays it out as a right-aligned row from 576px, but never reverses it, so the
-    // visual and tab orders cannot drift apart. Asserted on the DOM because that
-    // is what fixes the tab order; jsdom does not apply index.css.
     expect(edit.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
-    // Both live in the footer that owns that layout.
     const footer = confirm.closest('.dd-dialog-footer')
     expect(footer).not.toBeNull()
     expect(footer).toContainElement(edit)
@@ -1276,9 +1166,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await user.click(screen.getByRole('button', { name: /review delivery/i }))
 
     const dialog = within(await screen.findByRole('dialog'))
-    // The title is a real h2, not Mantine's own Modal.Title slot.
     expect(dialog.getByRole('heading', { level: 2, name: /check your delivery details/i })).toBeInTheDocument()
-    // The intro line moved from the body into the header as its subtitle.
     expect(dialog.getByText(/we'll book this as soon as you confirm/i)).toBeInTheDocument()
     expect(dialog.getByRole('button', { name: /close dialog/i })).toBeInTheDocument()
   })
@@ -1288,8 +1176,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await screen.findByText(/confirm your baggage delivery/i)
 
-    // Nothing in the footer competes with the form: no carrier name repeating the
-    // hero, and no phone number inviting the passenger to stop and call.
     const footer = within(screen.getByRole('contentinfo'))
     expect(footer.queryByText('Test Air')).not.toBeInTheDocument()
     expect(footer.queryByRole('link', { name: /call/i })).not.toBeInTheDocument()
@@ -1300,13 +1186,9 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('names the bar button for what it does — review, not confirm', async () => {
     renderForm()
 
-    // Tapping it only opens the read-back. Calling it "confirm" told the passenger
-    // the booking was being made, so some never opened the docket they were meant
-    // to check.
     const bar = await screen.findByRole('button', { name: /review delivery/i })
     expect(bar).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /review and confirm/i })).not.toBeInTheDocument()
-    // "Confirm delivery" belongs to the dialog, which hasn't been opened.
     expect(screen.queryByRole('button', { name: /^confirm delivery$/i })).not.toBeInTheDocument()
   })
 
@@ -1319,9 +1201,6 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(screen.getByText('In transit')).toBeInTheDocument()
     expect(screen.getByText('Delivered')).toBeInTheDocument()
 
-    // Lifecycle state, not a wizard: Confirm is the step in progress, and no step
-    // is reachable by keyboard or click. Scoped to the stepper — other buttons on
-    // the page also read as "Confirm …".
     const stepper = document.querySelector('.mantine-Stepper-root') as HTMLElement
     const steps = within(stepper).getAllByRole('button')
     expect(steps).toHaveLength(3)

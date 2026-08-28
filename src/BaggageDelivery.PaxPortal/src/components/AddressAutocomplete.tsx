@@ -4,9 +4,6 @@ import { MapPinIcon } from './Icon'
 import { useAddressSearch } from '../hooks/useAddressSearch'
 import type { AddressAutocompleteProps } from './AddressAutocompleteProps'
 
-// Memoized: this sits next to the form's other text inputs, so without memo every
-// keystroke elsewhere in ConfirmForm would re-render it. Relies on a stable
-// `onAddressSelect` from the parent (see handleAddressSelect in PaxMobile).
 export const AddressAutocomplete = memo(function AddressAutocomplete({
   bookingId,
   label = 'Search address',
@@ -21,12 +18,8 @@ export const AddressAutocomplete = memo(function AddressAutocomplete({
 
   const loading = isLoading || isLookingUp
 
-  // A fresh array on every keystroke re-runs Mantine's option filtering and
-  // re-renders the whole dropdown even when the suggestions haven't changed.
   const options = useMemo(() => suggestions.map((s) => s.title), [suggestions])
 
-  // Mantine's Autocomplete works on string options; keep our own suggestion list to
-  // recover the PAF id for the selected title and fetch full address details.
   const handleOptionSubmit = async (title: string) => {
     const match = suggestions.find((s) => s.title === title)
     if (!match) return
@@ -56,7 +49,6 @@ export const AddressAutocomplete = memo(function AddressAutocomplete({
       placeholder={placeholder}
       value={displayValue}
       data={options}
-      // Present suggestions as-is (server already ranked them); don't re-filter locally.
       filter={({ options }) => options}
       onChange={(value) => {
         setDisplayValue(value)

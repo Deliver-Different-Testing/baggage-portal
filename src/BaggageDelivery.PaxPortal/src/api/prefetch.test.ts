@@ -23,8 +23,6 @@ describe('prefetchRouteData', () => {
   it('primes the booking and its windows for a confirm URL', async () => {
     await prefetchRouteData('/c/token-xyz')
 
-    // Same keys PaxMobile's useQuery calls read, so the mounted page never
-    // re-requests what the entry script already has in flight.
     expect(queryClient.getQueryData(['pax', 'booking', 'token-xyz'])).toEqual(booking)
     expect(queryClient.getQueryData(['pax', 'timeslots', 'token-xyz'])).toEqual(timeslots)
   })
@@ -54,8 +52,6 @@ describe('prefetchRouteData', () => {
   it('never rejects when the token is already dead', async () => {
     server.use(http.get('*/pax/:id/booking', () => new HttpResponse(null, { status: 404 })))
 
-    // The page's own query re-runs and drives the /expired redirect; a rejected
-    // prefetch at module scope would be an unhandled rejection before React mounts.
     await expect(prefetchRouteData('/c/token-xyz')).resolves.toBeUndefined()
     expect(queryClient.getQueryData(['pax', 'booking', 'token-xyz'])).toBeUndefined()
   })

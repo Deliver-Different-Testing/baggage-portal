@@ -8,15 +8,6 @@ using Serilog;
 
 namespace BaggageDelivery.Core.Http;
 
-// HTTP client for the trackingpage app. No auth — trackingpage's API
-// endpoints are anonymous; the encrypted-ID URL is what gates customer use
-// from the public web. BaggageDelivery calls server-to-server so we hit the
-// plain by-id endpoint directly.
-//
-// REQUIRES: trackingpage exposes `GET /api/Job/byId/{jobId}` returning the
-// existing JobResponse shape. The underlying JobService.Get(int jobId,
-// Guid messageId) overload already exists — only the controller route is
-// missing from JobController.cs.
 public sealed class TrackingPageClient(
     HttpClient httpClient,
     IOptions<TrackingPageUrlsOptions> urlOptions)
@@ -43,9 +34,6 @@ public sealed class TrackingPageClient(
             var content = await response.Content.ReadAsStringAsync(ct);
             var parsed = TryDeserialize(content);
 
-            // trackingpage maps job-not-found to 400 BadRequest with
-            // Success=false. 200 + Success=true + Job populated is the
-            // only "found" signal; everything else returns null.
             if (response.IsSuccessStatusCode && parsed is { Success: true, Job: { } job })
             {
                 return MapToTrackingDto(job);
@@ -90,14 +78,6 @@ public sealed class TrackingPageClient(
         }
     }
 
-    // Trackingpage exposes the live job state (status id, ETA delivery
-    // time, courier id) but not an event timeline. Events stays empty
-    // until trackingpage gains a /timeline endpoint backed by TucEvent.
-    // CurrentStatus is the raw StatusId as a string — a future revision
-    // can fan-out /api/JobTypeStatus (cached) for a human-readable label.
-    // CourierFirstName / VehicleLabel are null because the response only
-    // carries CourierId; a join through tucCourier would have to come
-    // from trackingpage too.
     private static TrackingDto MapToTrackingDto(JobWire job)
     {
         var eta = TenantLocalToUtc(job.DeliverByTime, job.DeliverByTimeZoneCode ?? job.TimeZoneCode);
@@ -114,10 +94,6 @@ public sealed class TrackingPageClient(
         };
     }
 
-    // trackingpage emits DeliverByTime in the tenant's local clock (no Kind
-    // information) plus a separate IANA-ish TimeZoneCode. Convert to UTC
-    // when both are present; degrade to null on any failure so we don't
-    // surface a bogus instant.
     private static DateTime? TenantLocalToUtc(DateTime? local, string? timeZoneCode)
     {
         if (local is null || string.IsNullOrWhiteSpace(timeZoneCode))
@@ -143,7 +119,6 @@ public sealed class TrackingPageClient(
         }
     }
 
-    // Wire models — subset of trackingpage's JobResponse / JobFullDto.
     private sealed record JobResponseWire(bool Success, JobWire? Job);
 
     private sealed record JobWire(

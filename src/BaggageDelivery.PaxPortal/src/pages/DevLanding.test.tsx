@@ -43,7 +43,6 @@ describe('DevLanding', () => {
 
     const [confirm, track] = await screen.findAllByRole('link', { name: /open/i })
 
-    // Absolute hrefs would leave the router; the paths keep navigation client-side.
     expect(confirm).toHaveAttribute('href', '/c/token-abc-123')
     expect(track).toHaveAttribute('href', '/t/token-abc-123')
   })

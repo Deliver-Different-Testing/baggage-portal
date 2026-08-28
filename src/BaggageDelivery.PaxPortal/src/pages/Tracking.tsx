@@ -46,9 +46,6 @@ const STATUS_INFO = {
   },
 } as const
 
-// Constructing an Intl.DateTimeFormat is the expensive half of the formatting, and
-// toLocale*String builds a fresh one per call — this page re-renders every 30s and
-// formats once per timeline event. Same for the status regexes, which sit in a map.
 const DAY_MONTH = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
 const DAY_MONTH_YEAR = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
@@ -71,10 +68,6 @@ const DAY_AND_TIME = new Intl.DateTimeFormat(undefined, {
 const CAPITALS = /([A-Z])/g
 const FIRST_CHAR = /^./
 
-// Splitting the PascalCase status is a decent fallback but a poor label: it title-
-// cases every word, so the passenger read "Out For Delivery" and "Collected From
-// Airport". Statuses we know about get written English; anything new still falls
-// back to the split rather than showing a raw enum name.
 const STATUS_LABELS: Record<string, string> = {
   BookingConfirmed: 'Booking confirmed',
   CollectedFromAirport: 'Collected from the airport',
@@ -124,9 +117,6 @@ export function Tracking() {
   const statusInfo = getStatusInfo(status)
 
   return (
-    // Flex column so the footer sits on the bottom edge. A short timeline used to
-    // leave the sign-off floating mid-page with a few hundred pixels of blank
-    // surface under it, which reads as a page that failed to finish loading.
     <Box mih="100vh" style={{ display: 'flex', flexDirection: 'column' }}>
       <Box
         px={{ base: 20, sm: 32 }}
@@ -209,9 +199,6 @@ export function Tracking() {
         px={{ base: 12, sm: 16 }}
         mt={{ base: -28, sm: -32 }}
         pb={48}
-        // width:100% because Container centres itself with auto inline margins,
-        // and an auto cross-axis margin opts a flex item out of stretching — it
-        // would otherwise shrink to its content width inside the column above.
         style={{ position: 'relative', flex: 1, width: '100%' }}
       >
         <Grid gap={{ base: 'md', md: 'lg' }}>
@@ -274,9 +261,6 @@ function EtaCard({
   const hasEta = !!startUtc && !!endUtc
   return (
     <Card p="lg">
-      {/* The arrival window is the one fact this page exists to deliver, so it gets
-          the printed treatment — a 2px slip inside the card rather than a heading
-          with a clock icon restating the word "arrival" beside it. */}
       <DocketTile label="Estimated arrival">
         {hasEta ? (
           <Box>
@@ -358,9 +342,6 @@ function TimelineList({ data, nowMs }: { data: TrackingTimeline; nowMs: number }
               </Text>
             }
           >
-            {/* When it happened is the fact; how long ago is the gloss. The
-                relative time led here, which reads fine at "27m ago" and badly
-                at "3h ago" when the passenger wants to know the actual hour. */}
             <Group gap={6} align="baseline" wrap="nowrap">
               <Text size="sm" fw={500} style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatEventTime(event.atUtc, nowMs)}
@@ -393,7 +374,6 @@ function formatStatus(status: string): string {
   )
 }
 
-/** Clock time for today's events; day and clock time once "3:58 PM" is ambiguous. */
 function formatEventTime(utc: string, nowMs: number): string {
   const date = new Date(utc)
   const sameDay = date.toDateString() === new Date(nowMs).toDateString()

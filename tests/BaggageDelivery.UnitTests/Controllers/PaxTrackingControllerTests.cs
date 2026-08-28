@@ -49,8 +49,6 @@ public class PaxTrackingControllerTests
         public string WrittenBody => Encoding.UTF8.GetString(ResponseBody.ToArray());
     }
 
-    // ---- GetTimeline --------------------------------------------------------
-
     [Fact]
     public async Task GetTimeline_with_an_undecryptable_id_is_not_found()
     {
@@ -86,8 +84,6 @@ public class PaxTrackingControllerTests
         await harness.Tracking.Received(1).GetTimelineAsync(4242, Arg.Any<CancellationToken>());
     }
 
-    // ---- Stream (SSE) -------------------------------------------------------
-
     [Fact]
     public async Task Stream_with_an_undecryptable_id_is_404_and_writes_nothing()
     {
@@ -106,12 +102,6 @@ public class PaxTrackingControllerTests
         var harness = new Harness();
         harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>()).Returns(NewDto());
 
-        // Stream writes the headers and the first event before it ever awaits the
-        // 10s idle delay, so the token only has to cut that delay short rather than
-        // arrive at any particular moment. Cancelling on a timer keeps the source
-        // out of the substitute's callback: the callback lives on the substitute and
-        // outlives this scope, so capturing a `using` variable there left it holding
-        // a disposed source (AccessToDisposedClosure).
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         await harness.Controller.Stream(Token, cts.Token);
@@ -128,8 +118,6 @@ public class PaxTrackingControllerTests
         var harness = new Harness();
         harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>()).Returns(NewDto());
 
-        // See Stream_sets_the_event_stream_headers: the first write lands before the
-        // idle delay, so a timer cancels the loop without the callback capturing cts.
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         await harness.Controller.Stream(Token, cts.Token);
@@ -148,8 +136,6 @@ public class PaxTrackingControllerTests
         harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>())
             .Returns((TrackingDto?)null);
 
-        // Nothing is written when the poll comes back empty, so the token only has to
-        // end the idle delay — again without the callback holding a disposed source.
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         await harness.Controller.Stream(Token, cts.Token);
@@ -177,7 +163,6 @@ public class PaxTrackingControllerTests
         harness.Tracking.GetTimelineAsync(4242, Arg.Any<CancellationToken>())
             .Returns<TrackingDto?>(_ => throw new InvalidOperationException("despatch exploded"));
 
-        // Must not throw: the stream is best-effort and the client reconnects.
         await harness.Controller.Stream(Token, TestContext.Current.CancellationToken);
 
         Assert.Equal(string.Empty, harness.WrittenBody);
