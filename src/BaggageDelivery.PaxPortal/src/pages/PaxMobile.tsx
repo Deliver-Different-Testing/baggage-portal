@@ -1,6 +1,7 @@
 import {
     memo,
     useCallback,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -8,7 +9,7 @@ import {
     type ReactNode,
 } from 'react'
 import {Link as RouterLink, useParams} from 'react-router-dom'
-import {useMutation, useQuery, type UseQueryResult} from '@tanstack/react-query'
+import {useMutation, useQuery, useQueryClient, type UseQueryResult} from '@tanstack/react-query'
 import {
     Alert,
     Badge,
@@ -31,6 +32,7 @@ import {
     Textarea,
     TextInput,
     Title,
+    Tooltip,
 } from '@mantine/core'
 import {useDisclosure} from '@mantine/hooks'
 import {notifications} from '@mantine/notifications'
@@ -53,7 +55,7 @@ import {
     sectionPaperProps,
 } from '../components/dialog'
 import {DeliveryDocket, ExtraDeliveryInfo} from '../components/DeliveryDocket'
-import {addressLines} from '../utils/address'
+import {addressLabels, addressLines, isUnitedStates} from '../utils/address'
 import {FlightPathBackdrop} from '../components/FlightPathBackdrop'
 import {formatCountdown, useRunStartCountdown} from '../hooks/useRunStartCountdown'
 import {confirmBooking, getBooking, getTimeslots} from '../api/pax'
@@ -70,7 +72,7 @@ import {getAirlineBrand} from '../styles/airlineBranding'
 const ACCESS_NOTES_MAX = 120
 const PASSENGER_EMAIL_MAX = 100
 const ADDRESS_LINE2_MAX = 200
-const ADDRESS_FIELD_KEYS = ['line1', 'suburb', 'city', 'postCode', 'country']
+const ADDRESS_FIELD_KEYS = ['line4', 'line5', 'line6', 'line7', 'country']
 
 const SECTION_FIELDS = {
     details: ['passengerName', 'passengerPhone', 'passengerEmail'],
@@ -80,6 +82,8 @@ const SECTION_FIELDS = {
 } as const
 
 const ERROR_COLOR = 'var(--mantine-color-red-6)'
+
+const TRACKING_PENDING_HINT = 'Tracking will be available once your delivery starts.'
 
 function ConfirmSkeleton() {
     return (
@@ -174,10 +178,12 @@ export function PaxMobile() {
         retry: false,
     })
 
+    const confirmation = booking.data?.confirmation ?? null
+
     const slots = useQuery({
         queryKey: ['pax', 'timeslots', id],
         queryFn: () => getTimeslots(id ?? ''),
-        enabled: !!id,
+        enabled: !!id && !confirmation,
     })
 
     useRedirectOnNotFound(booking.error)
@@ -197,6 +203,22 @@ export function PaxMobile() {
                 description="Something went wrong on our side. Check your connection and try again — your booking has not been changed."
                 actionLabel="Try again"
                 onAction={() => void booking.refetch()}
+            />
+        )
+    }
+
+    if (confirmation) {
+        return (
+            <ConfirmedScreen
+                summary={booking.data}
+                slot={{dayLabel: confirmation.dayLabel, label: confirmation.windowLabel}}
+                bookingId={id}
+                address={booking.data.deliveryAddress}
+                passengerName={booking.data.passengerName ?? ''}
+                passengerPhone={booking.data.passengerPhone ?? ''}
+                passengerEmail={booking.data.passengerEmail ?? ''}
+                atlOption={booking.data.atlOptions.find((o) => o.id === confirmation.atlOptionId)}
+                accessNotes={confirmation.accessNotes ?? ''}
             />
         )
     }
@@ -229,6 +251,7 @@ function ConfirmForm({
     const [submitAttempted, setSubmitAttempted] = useState(false)
     const [serverCountryError, setServerCountryError] = useState<string | null>(null)
     const [reviewOpen, {open: openReview, close: closeReview}] = useDisclosure(false)
+    const queryClient = useQueryClient()
 
     const accent = useMemo(
         () => airlineAccent(getAirlineBrand(summary.airlineCode)),
@@ -270,22 +293,31 @@ function ConfirmForm({
         })
     }, [])
 
+    const setLocation = useCallback((patch: Partial<AddressDto>) => {
+        setAddress((a) => ({...a, ...patch, latitude: null, longitude: null}))
+    }, [])
+
     const handleAddressSelect = useCallback(
         (detail: AddressDetail) => {
             setServerCountryError(null)
+            const us = isUnitedStates(detail.countryCode)
             setAddress((a) => ({
                 ...a,
-                line1: detail.street,
-                suburb: detail.suburb || null,
-                city: detail.city,
-                postCode: detail.postalCode || null,
+                line3: detail.streetNumber || null,
+                line4: detail.street,
+                line5: us ? detail.city : detail.suburb,
+                line6: us ? detail.stateCode || detail.state : detail.city,
+                line7: detail.postalCode || null,
                 country: detail.countryCode || a.country,
+                latitude: detail.latitude ?? null,
+                longitude: detail.longitude ?? null,
             }))
         },
         [],
     )
 
     const atlOptions = summary.atlOptions
+    const labels = addressLabels(address.country)
 
     const fieldErrors: { [key: string]: string } = {}
     if (!passengerName.trim()) fieldErrors.passengerName = 'Please enter your full name.'
@@ -299,10 +331,10 @@ function ConfirmForm({
     } else if (!passengerEmail.includes('@')) {
         fieldErrors.passengerEmail = 'Please enter a valid email address.'
     }
-    if (!address.line1.trim()) fieldErrors.line1 = 'Please enter your street address.'
-    if (!(address.suburb ?? '').trim()) fieldErrors.suburb = 'Please enter your suburb.'
-    if (!address.city.trim()) fieldErrors.city = 'Please enter your city.'
-    if (!(address.postCode ?? '').trim()) fieldErrors.postCode = 'Please enter your postcode.'
+    if (!address.line4.trim()) fieldErrors.line4 = `Please enter your ${labels.line4.toLowerCase()}.`
+    if (!address.line5.trim()) fieldErrors.line5 = `Please enter your ${labels.line5.toLowerCase()}.`
+    if (!address.line6.trim()) fieldErrors.line6 = `Please enter your ${labels.line6.toLowerCase()}.`
+    if (!(address.line7 ?? '').trim()) fieldErrors.line7 = `Please enter your ${labels.line7.toLowerCase()}.`
     if (!address.country.trim()) fieldErrors.country = 'Please enter your country.'
     if (!addressConfirmed) {
         fieldErrors.addressConfirmed = 'Please confirm your delivery address is correct.'
@@ -338,6 +370,7 @@ function ConfirmForm({
 
             if (response?.status === 409) {
                 showError('This booking has already been confirmed.')
+                void queryClient.invalidateQueries({queryKey: ['pax', 'booking', bookingId]})
                 return
             }
 
@@ -461,17 +494,37 @@ function ConfirmForm({
                                             <AddressAutocomplete bookingId={bookingId}
                                                                  onAddressSelect={handleAddressSelect}/>
                                             <TextInput
-                                                label="Street address"
-                                                value={address.line1}
+                                                label={labels.line1}
+                                                value={address.line1 ?? ''}
                                                 onChange={(e) => {
                                                     const value = e.currentTarget.value
                                                     setAddress((a) => ({...a, line1: value}))
                                                 }}
-                                                required
-                                                error={showFieldError('line1')}
                                             />
+                                            <Group gap="sm" align="flex-start" wrap="nowrap">
+                                                <TextInput
+                                                    label={labels.line3}
+                                                    value={address.line3 ?? ''}
+                                                    onChange={(e) => {
+                                                        const value = e.currentTarget.value
+                                                        setLocation({line3: value})
+                                                    }}
+                                                    maw={132}
+                                                />
+                                                <TextInput
+                                                    label={labels.line4}
+                                                    value={address.line4}
+                                                    onChange={(e) => {
+                                                        const value = e.currentTarget.value
+                                                        setLocation({line4: value})
+                                                    }}
+                                                    required
+                                                    style={{flex: 1}}
+                                                    error={showFieldError('line4')}
+                                                />
+                                            </Group>
                                             <TextInput
-                                                label="Extra delivery information"
+                                                label={labels.line2}
                                                 placeholder="Apartment number, gate code, where to find the door"
                                                 value={address.line2 ?? ''}
                                                 onChange={(e) => {
@@ -481,45 +534,45 @@ function ConfirmForm({
                                                 maxLength={ADDRESS_LINE2_MAX}
                                             />
                                             <TextInput
-                                                label="Suburb"
-                                                value={address.suburb ?? ''}
+                                                label={labels.line5}
+                                                value={address.line5}
                                                 onChange={(e) => {
                                                     const value = e.currentTarget.value
-                                                    setAddress((a) => ({...a, suburb: value}))
+                                                    setLocation({line5: value})
                                                 }}
                                                 required
-                                                error={showFieldError('suburb')}
+                                                error={showFieldError('line5')}
                                             />
                                             <Group gap="sm" align="flex-start" grow wrap="nowrap">
                                                 <TextInput
-                                                    label="City"
-                                                    value={address.city}
+                                                    label={labels.line6}
+                                                    value={address.line6}
                                                     onChange={(e) => {
                                                         const value = e.currentTarget.value
-                                                        setAddress((a) => ({...a, city: value}))
+                                                        setLocation({line6: value})
                                                     }}
                                                     required
-                                                    error={showFieldError('city')}
+                                                    error={showFieldError('line6')}
                                                 />
                                                 <TextInput
-                                                    label="Postcode"
-                                                    value={address.postCode ?? ''}
+                                                    label={labels.line7}
+                                                    value={address.line7 ?? ''}
                                                     onChange={(e) => {
                                                         const value = e.currentTarget.value
-                                                        setAddress((a) => ({...a, postCode: value}))
+                                                        setLocation({line7: value})
                                                     }}
                                                     required
                                                     maw={132}
-                                                    error={showFieldError('postCode')}
+                                                    error={showFieldError('line7')}
                                                 />
                                             </Group>
                                             <TextInput
-                                                label="Country"
+                                                label={labels.country}
                                                 value={address.country}
                                                 onChange={(e) => {
                                                     const country = e.currentTarget.value
                                                     setServerCountryError(null)
-                                                    setAddress((a) => ({...a, country}))
+                                                    setLocation({country})
                                                 }}
                                                 required
                                                 error={serverCountryError ?? showFieldError('country')}
@@ -1066,7 +1119,7 @@ export function ConfirmedScreen({
                                     accessNotes,
                                 }: {
     summary: BookingSummary
-    slot: TimeSlot | undefined
+    slot: Pick<TimeSlot, 'dayLabel' | 'label'> | undefined
     bookingId: string
     address: AddressDto
     passengerName: string
@@ -1075,6 +1128,12 @@ export function ConfirmedScreen({
     atlOption: AtlOption | undefined
     accessNotes: string
 }) {
+    const trackingAvailable = summary.trackingAvailable ?? false
+
+    useLayoutEffect(() => {
+        window.scrollTo(0, 0)
+    }, [])
+
     return (
         <Box mih="100vh" style={{display: 'flex', flexDirection: 'column'}}>
             <Box
@@ -1131,8 +1190,8 @@ export function ConfirmedScreen({
                 <Stack gap="md">
                     <Card p="lg">
                         <Stack gap="md">
-                            {summary.fileReference && (
-                                <PunchedTag label="File reference" value={summary.fileReference}/>
+                            {summary.jobNumber && (
+                                <PunchedTag label="Job number" value={summary.jobNumber}/>
                             )}
 
                             {slot && (
@@ -1155,23 +1214,50 @@ export function ConfirmedScreen({
                                 passengerEmail={passengerEmail}
                                 atlOption={atlOption}
                                 accessNotes={accessNotes}
+                                fileReference={summary.fileReference}
                             />
                         </Stack>
                     </Card>
 
-                    <Button
-                        component={RouterLink}
-                        to={`/t/${bookingId}`}
-                        size="lg"
-                        fullWidth
-                        rightSection={<ArrowRightIcon size={18}/>}
-                        style={tokens.button.primary}
+                    <Tooltip
+                        label={TRACKING_PENDING_HINT}
+                        disabled={trackingAvailable}
+                        events={{hover: true, focus: true, touch: true}}
+                        multiline
+                        w={240}
+                        withArrow
+                        position="top"
                     >
-                        Track your delivery
-                    </Button>
+                        <Box>
+                            {trackingAvailable ? (
+                                <Button
+                                    component={RouterLink}
+                                    to={`/t/${bookingId}`}
+                                    size="lg"
+                                    fullWidth
+                                    rightSection={<ArrowRightIcon size={18}/>}
+                                    style={tokens.button.primary}
+                                >
+                                    Track your delivery
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="lg"
+                                    fullWidth
+                                    disabled
+                                    rightSection={<ArrowRightIcon size={18}/>}
+                                    style={tokens.button.primary}
+                                >
+                                    Track your delivery
+                                </Button>
+                            )}
+                        </Box>
+                    </Tooltip>
 
                     <Text size="sm" c="dimmed" ta="center">
-                        We'll also text you when our driver is on the way.
+                        {trackingAvailable
+                            ? "We'll also text you when our driver is on the way."
+                            : TRACKING_PENDING_HINT}
                     </Text>
                 </Stack>
             </Container>

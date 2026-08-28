@@ -75,11 +75,13 @@ apiClient.interceptors.response.use(
 )
 
 export type AddressDto = {
-  line1: string
+  line1?: string | null
   line2?: string | null
-  suburb?: string | null
-  city: string
-  postCode?: string | null
+  line3?: string | null
+  line4: string
+  line5: string
+  line6: string
+  line7?: string | null
   country: string
   latitude?: number | null
   longitude?: number | null
@@ -88,6 +90,7 @@ export type AddressDto = {
 export type BookingSummary = {
   bookingId: number
   jobId: number
+  jobNumber: string
   fileReference: string
   airlineLabel: string
   airlineCode?: string | null
@@ -100,6 +103,17 @@ export type BookingSummary = {
   latestSlotUtc: string
   atlOptions: AtlOption[]
   defaultAtlOptionId?: number | null
+  trackingAvailable?: boolean
+  confirmation?: BookingConfirmation | null
+}
+
+export type BookingConfirmation = {
+  confirmedAtUtc: string
+  deliveryTimeUtc?: string | null
+  dayLabel: string
+  windowLabel: string
+  atlOptionId?: number | null
+  accessNotes?: string | null
 }
 
 export type AtlOption = {

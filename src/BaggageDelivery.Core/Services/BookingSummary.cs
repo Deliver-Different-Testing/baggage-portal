@@ -4,6 +4,7 @@ namespace BaggageDelivery.Core.Services;
 
 public sealed record BookingSummary(
     int JobId,
+    string JobNumber,
     string FileReference,
     string AirlineLabel,
     string? AirlineCode,
@@ -15,4 +16,14 @@ public sealed record BookingSummary(
     DateTime EarliestSlotUtc,
     DateTime LatestSlotUtc,
     IReadOnlyList<AtlOptionDto> AtlOptions,
-    int? DefaultAtlOptionId);
+    int? DefaultAtlOptionId,
+    bool TrackingAvailable,
+    BookingConfirmation? Confirmation);
+
+public sealed record BookingConfirmation(
+    DateTime ConfirmedAtUtc,
+    DateTime? DeliveryTimeUtc,
+    string DayLabel,
+    string WindowLabel,
+    int? AtlOptionId,
+    string? AccessNotes);

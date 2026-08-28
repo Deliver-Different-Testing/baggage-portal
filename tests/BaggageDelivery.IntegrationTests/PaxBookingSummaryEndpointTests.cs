@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Interfaces;
@@ -23,7 +23,7 @@ public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixtu
             TestContext.Current.CancellationToken);
 
         Assert.Equal("AKLNZ12345", payload.GetProperty("fileReference").GetString());
-        Assert.False(payload.TryGetProperty("jobNumber", out _));
+        Assert.Equal("URG-4401", payload.GetProperty("jobNumber").GetString());
         Assert.Equal("NZ", payload.GetProperty("airlineCode").GetString());
     }
 

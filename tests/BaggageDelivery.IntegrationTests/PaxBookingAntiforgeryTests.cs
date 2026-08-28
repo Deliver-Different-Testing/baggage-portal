@@ -1,5 +1,7 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
@@ -167,6 +169,87 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         Assert.Contains("DeliveryTimeUtc", body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Confirm_a_second_time_is_refused_as_a_conflict()
+    {
+        const int jobId = 4249;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        var first = await PostConfirmAsync(client, jobId);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await PostConfirmAsync(client, jobId);
+        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task Booking_reports_the_confirmation_once_the_passenger_has_submitted()
+    {
+        const int jobId = 4250;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        var before = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking", TestContext.Current.CancellationToken);
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("confirmation").ValueKind);
+
+        (await PostConfirmAsync(client, jobId)).EnsureSuccessStatusCode();
+
+        var after = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking", TestContext.Current.CancellationToken);
+
+        var confirmation = after.GetProperty("confirmation");
+        Assert.Equal(JsonValueKind.Object, confirmation.ValueKind);
+        Assert.Equal("Leave at the door", confirmation.GetProperty("accessNotes").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(confirmation.GetProperty("dayLabel").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(confirmation.GetProperty("windowLabel").GetString()));
+    }
+
+    private async Task<HttpResponseMessage> PostConfirmAsync(HttpClient client, int jobId)
+    {
+        var tokenResponse = await client.GetAsync("/api/v1/antiforgery/token",
+            TestContext.Current.CancellationToken);
+        tokenResponse.EnsureSuccessStatusCode();
+
+        var requestToken = CookieValue(tokenResponse.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith($"{RequestTokenCookie}=", StringComparison.Ordinal)));
+
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking/confirm")
+        {
+            Content = JsonContent.Create(ConfirmBody())
+        };
+        request.Headers.Add("X-XSRF-TOKEN", requestToken);
+
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Confirm_persists_each_address_line_to_its_own_column()
+    {
+        const int jobId = 4251;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        (await PostConfirmAsync(client, jobId)).EnsureSuccessStatusCode();
+
+        await factory.SeedAsync(async db =>
+        {
+            var job = await db.TucJobs.AsNoTracking()
+                .SingleAsync(j => j.UcjbId == jobId, TestContext.Current.CancellationToken);
+            Assert.Equal("1", job.DeliveryAddressLine3);
+            Assert.Equal("Test Street", job.DeliveryAddressLine4);
+            Assert.Equal("Ponsonby", job.DeliveryAddressLine5);
+            Assert.Equal("Auckland", job.DeliveryAddressLine6);
+            Assert.Equal("1011", job.DeliveryAddressLine7);
+            Assert.Equal("NZ", job.DeliveryAddressLine8);
+        });
+    }
+
     private string EncryptedId(int jobId)
     {
         using var scope = factory.Services.CreateScope();
@@ -189,10 +272,11 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
     {
         address = new
         {
-            line1 = "1 Test Street",
-            suburb = "Ponsonby",
-            city = "Auckland",
-            postCode = "1011",
+            line3 = "1",
+            line4 = "Test Street",
+            line5 = "Ponsonby",
+            line6 = "Auckland",
+            line7 = "1011",
             country
         },
         deliveryTimeUtc = new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
@@ -207,10 +291,11 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
     {
         address = new
         {
-            line1 = "17 Saleyards Road",
-            suburb = "Otahuhu",
-            city = "Auckland",
-            postCode = "1062",
+            line3 = "17",
+            line4 = "Saleyards Road",
+            line5 = "Otahuhu",
+            line6 = "Auckland",
+            line7 = "1062",
             country = "NZ"
         },
         atlOptionId = (int?)null,

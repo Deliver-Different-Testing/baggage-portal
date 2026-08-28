@@ -513,11 +513,13 @@ public class PaxBookingServiceTests
             JobId: 4242,
             Address: new AddressUpdateDto
             {
-                Line1 = "1 Test Street",
+                Line1 = "Acme Co",
                 Line2 = "Apartment 4B, ring the buzzer",
-                Suburb = "Ponsonby",
-                City = "Auckland",
-                PostCode = "1011",
+                Line3 = "1",
+                Line4 = "Test Street",
+                Line5 = "Ponsonby",
+                Line6 = "Auckland",
+                Line7 = "1011",
                 Country = "NZ"
             },
             DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
@@ -534,8 +536,8 @@ public class PaxBookingServiceTests
 
         Assert.Equal("Acme Co", job.DeliveryAddressLine1);
         Assert.Equal("Apartment 4B, ring the buzzer", job.DeliveryAddressLine2);
-        Assert.Null(job.DeliveryAddressLine3);
-        Assert.Equal("1 Test Street", job.DeliveryAddressLine4);
+        Assert.Equal("1", job.DeliveryAddressLine3);
+        Assert.Equal("Test Street", job.DeliveryAddressLine4);
         Assert.Equal("Ponsonby", job.DeliveryAddressLine5);
         Assert.Equal("Auckland", job.DeliveryAddressLine6);
         Assert.Equal("1011", job.DeliveryAddressLine7);
@@ -573,7 +575,7 @@ public class PaxBookingServiceTests
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4243,
-            Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
+            Address: new AddressUpdateDto { Line4 = "Test Street", Line5 = "Ponsonby", Line6 = "Auckland", Country = "NZ" },
             DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
@@ -607,7 +609,8 @@ public class PaxBookingServiceTests
             JobId: 4244,
             Address: new AddressUpdateDto
             {
-                Line1 = "1 Test Street", Line2 = null, City = "Auckland", Country = "NZ"
+                Line2 = null, Line4 = "Test Street", Line5 = "Ponsonby", Line6 = "Auckland",
+                Country = "NZ"
             },
             DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
@@ -642,7 +645,7 @@ public class PaxBookingServiceTests
         // 2026-06-10T21:00Z is 09:00 on 11 June in Pacific/Auckland (NZST).
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4250,
-            Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
+            Address: new AddressUpdateDto { Line4 = "Test Street", Line5 = "Ponsonby", Line6 = "Auckland", Country = "NZ" },
             DeliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
@@ -677,7 +680,7 @@ public class PaxBookingServiceTests
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4251,
-            Address: new AddressUpdateDto { Line1 = "1 Test Street", City = "Auckland", Country = "NZ" },
+            Address: new AddressUpdateDto { Line4 = "Test Street", Line5 = "Ponsonby", Line6 = "Auckland", Country = "NZ" },
             DeliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
@@ -701,7 +704,7 @@ public class PaxBookingServiceTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 9999,
-            Address: new AddressUpdateDto { Line1 = "x", City = "y", Country = "NZ" },
+            Address: new AddressUpdateDto { Line4 = "x", Line5 = "y", Line6 = "z", Country = "NZ" },
             DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
             AtlOptionId: null,
             AccessNotes: null,
@@ -923,10 +926,11 @@ public class PaxBookingServiceTests
 
         Assert.NotNull(summary);
         var addr = summary.DeliveryAddress;
-        Assert.Equal("12 Queen St", addr.Line1);
-        Assert.Equal("CBD", addr.Suburb);
-        Assert.Equal("Auckland", addr.City);
-        Assert.Equal("1010", addr.PostCode);
+        Assert.Equal("12", addr.Line3);
+        Assert.Equal("Queen St", addr.Line4);
+        Assert.Equal("CBD", addr.Line5);
+        Assert.Equal("Auckland", addr.Line6);
+        Assert.Equal("1010", addr.Line7);
         Assert.Equal("NZ", addr.Country);
         Assert.Equal(-36.8485m, addr.Latitude);
         Assert.Equal(174.7633m, addr.Longitude);
@@ -976,7 +980,57 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
-    public async Task GetJobNumber_returns_the_job_number_for_a_known_job()
+    public async Task GetNotificationDetails_returns_the_trimmed_file_reference_and_the_client_name()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucClients.Add(new TucClient
+        {
+            UcclId = 3, UcclCode = "NZ", UcclName = "Air New Zealand",
+            UcclLegalName = "Air New Zealand Ltd", Smsname = "AirNZ",
+            CreatedBy = "test", LastModifiedBy = "test"
+        });
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7, UcjbNumber = "URG-7", UcjbClientId = 3, UcjbClientRefa = " AKLNZ12345 "
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var details = await svc.GetNotificationDetailsAsync(7, ct);
+
+        Assert.NotNull(details);
+        Assert.Equal("AKLNZ12345", details.FileReference);
+        Assert.Equal("Air New Zealand", details.AirlineLabel);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetNotificationDetails_returns_an_empty_file_reference_when_the_job_has_none(
+        string? clientRefa)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientRefa = clientRefa });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var details = await svc.GetNotificationDetailsAsync(7, ct);
+
+        Assert.NotNull(details);
+        Assert.Equal(string.Empty, details.FileReference);
+    }
+
+    [Fact]
+    public async Task GetNotificationDetails_falls_back_to_the_generic_airline_when_the_job_has_no_client()
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
@@ -987,11 +1041,14 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        Assert.Equal("URG-7", await svc.GetJobNumberAsync(7, ct));
+        var details = await svc.GetNotificationDetailsAsync(7, ct);
+
+        Assert.NotNull(details);
+        Assert.Equal("Your Airline", details.AirlineLabel);
     }
 
     [Fact]
-    public async Task GetJobNumber_returns_null_when_despatch_has_no_such_job()
+    public async Task GetNotificationDetails_returns_null_when_despatch_has_no_such_job()
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
@@ -999,7 +1056,7 @@ public class PaxBookingServiceTests
 
         var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
 
-        Assert.Null(await svc.GetJobNumberAsync(404, ct));
+        Assert.Null(await svc.GetNotificationDetailsAsync(404, ct));
     }
 
     [Fact]
@@ -1185,8 +1242,8 @@ public class PaxBookingServiceTests
 
         Assert.NotNull(summary);
         var addr = summary.DeliveryAddress;
-        Assert.Equal(string.Empty, addr.Line1);
-        Assert.Equal(string.Empty, addr.City);
+        Assert.Equal(string.Empty, addr.Line4);
+        Assert.Equal(string.Empty, addr.Line6);
         Assert.Equal("NZ", addr.Country);
         Assert.Null(addr.Latitude);
         Assert.Null(addr.Longitude);
@@ -1267,8 +1324,8 @@ public class PaxBookingServiceTests
         Assert.NotNull(summary);
         var addr = summary.DeliveryAddress;
         Assert.Equal("US", addr.Country);
-        Assert.Equal("New York", addr.City);
-        Assert.Null(addr.Suburb);
+        Assert.Equal("5th Ave", addr.Line4);
+        Assert.Equal("New York", addr.Line5);
     }
 
     [Fact]
@@ -1287,10 +1344,11 @@ public class PaxBookingServiceTests
             JobId: 4242,
             Address: new AddressUpdateDto
             {
-                Line1 = "1 Test Street",
-                Suburb = "Ponsonby",
-                City = "Auckland",
-                PostCode = "1011",
+                Line3 = "1",
+                Line4 = "Test Street",
+                Line5 = "Ponsonby",
+                Line6 = "Auckland",
+                Line7 = "1011",
                 Country = "New Zealand"
             },
             DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
@@ -1302,41 +1360,6 @@ public class PaxBookingServiceTests
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("NZ", job.DeliveryAddressLine8);
-    }
-
-    [Fact]
-    public async Task Confirm_uses_us_column_layout_for_legacy_us_spelling()
-    {
-        await using var db = InMemoryDb.NewContext();
-        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
-        var ct = TestContext.Current.CancellationToken;
-
-        db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
-        await db.SaveChangesAsync(ct);
-
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
-
-        await svc.ConfirmAsync(new ConfirmBookingInput(
-            JobId: 4242,
-            Address: new AddressUpdateDto
-            {
-                Line1 = "350 5th Ave",
-                Suburb = "Brooklyn",
-                City = "New York",
-                PostCode = "10118",
-                Country = "United States"
-            },
-            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
-            AtlOptionId: null,
-            AccessNotes: null,
-            PassengerName: "Jane Pax",
-            PassengerPhone: "+1 555 0100",
-            PassengerEmail: "jane@example.com"), ct);
-
-        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
-        Assert.Equal("US", job.DeliveryAddressLine8);
-        Assert.Equal("New York", job.DeliveryAddressLine5);
-        Assert.Null(job.DeliveryAddressLine6);
     }
 
     [Fact]
@@ -1380,4 +1403,299 @@ public class PaxBookingServiceTests
         Assert.Equal("Auckland", job.DeliveryAddressLine6);
     }
 
+    [Fact]
+    public async Task GetSummary_returns_the_urgent_job_number_alongside_the_file_reference()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 179252, UcjbNumber = "URG-179252", UcjbClientRefa = "AKLA2633476"
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(179252, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal("URG-179252", summary.JobNumber);
+        Assert.Equal("AKLA2633476", summary.FileReference);
+    }
+
+    [Fact]
+    public async Task GetSummary_reports_no_confirmation_before_the_passenger_confirms()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Null(summary.Confirmation);
+    }
+
+    [Fact]
+    public async Task GetSummary_reads_the_booked_window_back_after_a_confirmation()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
+        db.TblJobLeaveNotHomes.Add(NewAtlOption(LeaveNotHomeOption.FrontDoor, "Front door", 10));
+        AddJob(db, 4242, 77);
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        await svc.ConfirmAsync(NewConfirmInput(4242,
+            deliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
+            atlOptionId: (int)LeaveNotHomeOption.FrontDoor,
+            accessNotes: "Gate code 1234"), ct);
+
+        var summary = await svc.GetSummaryAsync(4242, ct);
+
+        Assert.NotNull(summary);
+        var confirmation = summary.Confirmation;
+        Assert.NotNull(confirmation);
+        Assert.Equal(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc), confirmation.ConfirmedAtUtc);
+        Assert.Equal(new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc), confirmation.DeliveryTimeUtc);
+        Assert.Equal("Tomorrow, Thu 11 Jun", confirmation.DayLabel);
+        Assert.Equal("9:00 AM – 12:00 PM", confirmation.WindowLabel);
+        Assert.Equal((int)LeaveNotHomeOption.FrontDoor, confirmation.AtlOptionId);
+        Assert.Equal("Gate code 1234", confirmation.AccessNotes);
+    }
+
+    [Theory]
+    [InlineData(90, "9:00 AM – 10:30 AM")]
+    [InlineData(null, "9:00 AM – 12:00 PM")]
+    public async Task GetSummary_rebuilds_the_confirmed_window_from_the_job_speed(
+        int? speedMinutes, string expectedWindow)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: speedMinutes));
+        AddJob(db, 4242, 77);
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        await svc.ConfirmAsync(NewConfirmInput(4242,
+            deliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc)), ct);
+
+        var summary = await svc.GetSummaryAsync(4242, ct);
+
+        Assert.NotNull(summary?.Confirmation);
+        Assert.Equal(expectedWindow, summary.Confirmation.WindowLabel);
+    }
+
+    [Fact]
+    public async Task Confirm_refuses_a_second_confirmation_of_the_same_booking()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        await svc.ConfirmAsync(NewConfirmInput(4242, passengerName: "Jane Pax"), ct);
+
+        await Assert.ThrowsAsync<PaxAlreadyConfirmedException>(() =>
+            svc.ConfirmAsync(NewConfirmInput(4242, passengerName: "Someone Else"), ct));
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("Jane Pax", job.DeliverToContact);
+    }
+
+    [Theory]
+    [InlineData(null, (int)JobStatus.Dispatched, false)]
+    [InlineData(0, (int)JobStatus.Dispatched, false)]
+    [InlineData(88, (int)JobStatus.New, false)]
+    [InlineData(88, (int)JobStatus.Dispatched, true)]
+    [InlineData(88, (int)JobStatus.Completed, true)]
+    [InlineData(88, (int)JobStatus.Void, false)]
+    public async Task GetSummary_offers_tracking_only_once_a_courier_is_under_way(
+        int? courierId, int status, bool expected)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7, UcjbNumber = "URG-7", UcjbCourierId = courierId, UcjbStatus = status
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal(expected, summary.TrackingAvailable);
+    }
+
+    [Fact]
+    public async Task Confirm_writes_every_address_line_straight_through()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4242,
+            Address: new AddressUpdateDto
+            {
+                Line1 = "Sofitel Auckland",
+                Line2 = "Room 402",
+                Line3 = "21",
+                Line4 = "Viaduct Harbour Ave",
+                Line5 = "Auckland CBD",
+                Line6 = "Auckland",
+                Line7 = "1010",
+                Country = "NZ"
+            },
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+64 21 000",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("Sofitel Auckland", job.DeliveryAddressLine1);
+        Assert.Equal("Room 402", job.DeliveryAddressLine2);
+        Assert.Equal("21", job.DeliveryAddressLine3);
+        Assert.Equal("Viaduct Harbour Ave", job.DeliveryAddressLine4);
+        Assert.Equal("Auckland CBD", job.DeliveryAddressLine5);
+        Assert.Equal("Auckland", job.DeliveryAddressLine6);
+        Assert.Equal("1010", job.DeliveryAddressLine7);
+        Assert.Equal("NZ", job.DeliveryAddressLine8);
+    }
+
+    [Fact]
+    public async Task GetSummary_reads_every_address_line_straight_through()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 7,
+            UcjbNumber = "URG-7",
+            DeliveryAddressLine1 = "Sofitel Auckland",
+            DeliveryAddressLine2 = "Room 402",
+            DeliveryAddressLine3 = "21",
+            DeliveryAddressLine4 = "Viaduct Harbour Ave",
+            DeliveryAddressLine5 = "Auckland CBD",
+            DeliveryAddressLine6 = "Auckland",
+            DeliveryAddressLine7 = "1010",
+            DeliveryAddressLine8 = "NZ"
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        var addr = summary.DeliveryAddress;
+        Assert.Equal("Sofitel Auckland", addr.Line1);
+        Assert.Equal("Room 402", addr.Line2);
+        Assert.Equal("21", addr.Line3);
+        Assert.Equal("Viaduct Harbour Ave", addr.Line4);
+        Assert.Equal("Auckland CBD", addr.Line5);
+        Assert.Equal("Auckland", addr.Line6);
+        Assert.Equal("1010", addr.Line7);
+        Assert.Equal("NZ", addr.Country);
+    }
+
+    [Fact]
+    public async Task Confirm_gives_a_us_address_no_special_column_layout()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar());
+
+        await svc.ConfirmAsync(new ConfirmBookingInput(
+            JobId: 4242,
+            Address: new AddressUpdateDto
+            {
+                Line3 = "350",
+                Line4 = "5th Ave",
+                Line5 = "New York",
+                Line6 = "NY",
+                Line7 = "10118",
+                Country = "United States"
+            },
+            DeliveryTimeUtc: new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: null,
+            AccessNotes: null,
+            PassengerName: "Jane Pax",
+            PassengerPhone: "+1 555 0100",
+            PassengerEmail: "jane@example.com"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
+        Assert.Equal("350", job.DeliveryAddressLine3);
+        Assert.Equal("5th Ave", job.DeliveryAddressLine4);
+        Assert.Equal("New York", job.DeliveryAddressLine5);
+        Assert.Equal("NY", job.DeliveryAddressLine6);
+        Assert.Equal("10118", job.DeliveryAddressLine7);
+        Assert.Equal("US", job.DeliveryAddressLine8);
+    }
+
+    private static ConfirmBookingInput NewConfirmInput(
+        int jobId,
+        DateTime? deliveryTimeUtc = null,
+        int? atlOptionId = null,
+        string? accessNotes = null,
+        string passengerName = "Jane Pax",
+        string? streetNumber = "1",
+        string street = "Test Street",
+        string city = "Auckland",
+        string country = "NZ") =>
+        new(
+            JobId: jobId,
+            Address: new AddressUpdateDto
+            {
+                Line3 = streetNumber,
+                Line4 = street,
+                Line5 = "Ponsonby",
+                Line6 = city,
+                Line7 = "1011",
+                Country = country
+            },
+            DeliveryTimeUtc: deliveryTimeUtc ?? new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc),
+            AtlOptionId: atlOptionId,
+            AccessNotes: accessNotes,
+            PassengerName: passengerName,
+            PassengerPhone: "+64 21 000",
+            PassengerEmail: "jane@example.com");
 }

@@ -4,6 +4,7 @@ using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Security;
+using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -26,10 +27,17 @@ public class BookingLinksControllerTests
         public ProblemDetailsFactory ProblemFactory { get; } = Substitute.For<ProblemDetailsFactory>();
         private BookingLinksController Controller { get; }
 
-        public Harness(string publicBaseUrl = "https://bags.example.com", string? jobNumber = "URG-4242")
+        public Harness(
+            string publicBaseUrl = "https://bags.example.com",
+            string fileReference = "AKLNZ12345",
+            string airlineName = "Air New Zealand",
+            bool despatchKnowsJob = true)
         {
             Encryption.EncryptId(Arg.Any<int>()).Returns(Token);
-            Bookings.GetJobNumberAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(jobNumber);
+            Bookings.GetNotificationDetailsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns(despatchKnowsJob
+                    ? new BookingNotificationDetails(fileReference, airlineName)
+                    : null);
 
             ProblemFactory.CreateProblemDetails(
                     Arg.Any<HttpContext>(), Arg.Any<int?>(), Arg.Any<string>(),
@@ -215,38 +223,63 @@ public class BookingLinksControllerTests
     }
 
     [Fact]
-    public async Task Quotes_the_urgent_job_number_over_the_callers_own_reference()
+    public async Task Quotes_the_file_reference_despatch_holds_for_the_job()
     {
-        var harness = new Harness(jobNumber: " URG-4242 ");
+        // The portal shows ucjbClientRefa as the File Reference, so the message that
+        // sends the passenger there has to quote the same value.
+        var harness = new Harness(fileReference: "AKLNZ12345");
 
-        await harness.Mint(jobId: 4242, reference: "AKLNZ12345");
+        await harness.Mint(jobId: 4242, reference: "URG-4242");
 
-        Assert.Equal("URG-4242", Assert.Single(harness.Sends).Context.Reference);
+        Assert.Equal("AKLNZ12345", Assert.Single(harness.Sends).Context.FileReference);
+    }
+
+    [Fact]
+    public async Task Carries_no_reference_when_the_job_holds_none()
+    {
+        // The portal hides the tag rather than showing the internal id behind the
+        // link, and the caller's own reference is not a stand-in for it.
+        var harness = new Harness(fileReference: "");
+
+        await harness.Mint(jobId: 4242, reference: "URG-4242");
+
+        Assert.Equal(string.Empty, Assert.Single(harness.Sends).Context.FileReference);
+    }
+
+    [Fact]
+    public async Task Carries_no_reference_when_despatch_does_not_know_the_job()
+    {
+        var harness = new Harness(despatchKnowsJob: false);
+
+        await harness.Mint(jobId: 4242, reference: "URG-4242");
+
+        Assert.Equal(string.Empty, Assert.Single(harness.Sends).Context.FileReference);
     }
 
     [Theory]
     [InlineData(null)]
+    [InlineData("")]
     [InlineData("   ")]
-    public async Task Falls_back_to_the_callers_reference_when_despatch_has_no_job_number(
-        string? jobNumber)
+    public async Task Falls_back_to_the_airline_despatch_holds_for_the_job(string? airlineLabel)
     {
-        var harness = new Harness(jobNumber: jobNumber);
+        // "Deliver DFRNT" used to fill this slot, which put the platform's name in
+        // the subject line where the carrier's belongs.
+        var harness = new Harness(airlineName: "Air New Zealand");
 
-        await harness.Mint(jobId: 4242, reference: "AKLNZ12345");
+        await harness.Mint(airlineLabel: airlineLabel);
 
-        Assert.Equal("AKLNZ12345", Assert.Single(harness.Sends).Context.Reference);
+        Assert.Equal("Air New Zealand", Assert.Single(harness.Sends).Context.AirlineLabel);
     }
 
     [Fact]
-    public async Task Falls_back_to_defaults_and_the_job_id_when_details_are_absent()
+    public async Task Falls_back_to_defaults_when_despatch_does_not_know_the_job()
     {
-        var harness = new Harness(jobNumber: null);
+        var harness = new Harness(despatchKnowsJob: false);
 
-        await harness.Mint(jobId: 4242, passengerName: null, airlineLabel: null, reference: null);
+        await harness.Mint(passengerName: null, airlineLabel: null);
 
         var context = Assert.Single(harness.Sends).Context;
         Assert.Equal("Unknown Passenger", context.PassengerName);
-        Assert.Equal("Deliver DFRNT", context.AirlineLabel);
-        Assert.Equal("4242", context.Reference);
+        Assert.Equal("Your Airline", context.AirlineLabel);
     }
 }

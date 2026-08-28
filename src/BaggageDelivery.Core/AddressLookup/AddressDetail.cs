@@ -1,7 +1,9 @@
-namespace BaggageDelivery.Core.AddressLookup;
+﻿namespace BaggageDelivery.Core.AddressLookup;
 
 public sealed class AddressDetail
 {
+    public string StreetNumber { get; init; } = string.Empty;
+
     public string Street { get; init; } = string.Empty;
     public string Suburb { get; init; } = string.Empty;
     public string City { get; init; } = string.Empty;
@@ -9,4 +11,8 @@ public sealed class AddressDetail
     public string StateCode { get; init; } = string.Empty;
     public string PostalCode { get; init; } = string.Empty;
     public string CountryCode { get; init; } = string.Empty;
+
+    public decimal? Latitude { get; init; }
+
+    public decimal? Longitude { get; init; }
 }

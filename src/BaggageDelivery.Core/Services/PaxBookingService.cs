@@ -40,6 +40,7 @@ internal sealed class PaxBookingService(
                 j.DeliverToContact,
                 j.DeliverToPhone,
                 j.ProofOfDeliveryEmail,
+                j.DeliveryAddressLine1,
                 j.DeliveryAddressLine2,
                 j.DeliveryAddressLine3,
                 j.DeliveryAddressLine4,
@@ -53,7 +54,16 @@ internal sealed class PaxBookingService(
                 ClientPhone = j.UcjbClient != null ? j.UcjbClient.UcclPhone : null,
                 ClientRefa = j.UcjbClientRefa,
                 JobClientCode = j.UcjbClientCode,
-                ClientCode = j.UcjbClient != null ? j.UcjbClient.UcclCode : null
+                ClientCode = j.UcjbClient != null ? j.UcjbClient.UcclCode : null,
+                JobNumber = j.UcjbNumber,
+                CourierId = j.UcjbCourierId,
+                Status = j.UcjbStatus,
+                AtlOptionId = j.DeliverToLeaveId,
+                AccessNotes = j.UcjbToSpecial,
+                WindowMinutes = db.TucJobTypes
+                    .Where(t => t.UcjtId == j.UcjbSpeed)
+                    .Select(t => t.Minutes)
+                    .FirstOrDefault()
             })
             .FirstOrDefaultAsync(ct);
 
@@ -91,31 +101,105 @@ internal sealed class PaxBookingService(
 
         var defaultCountry = despatchOptions.Value.Countries is { Length: > 0 } cs ? cs[0] : "NZ";
 
+        var timeZone = ResolveTimeZone(despatchOptions.Value.TimeZone);
+        var confirmation = await BuildConfirmationAsync(
+            jobId, job.DeliverByTime, etaUtc, job.AtlOptionId, job.AccessNotes,
+            job.WindowMinutes, now, timeZone, ct);
+
         return new BookingSummary(
             JobId: jobId,
+            JobNumber: (job.JobNumber ?? string.Empty).Trim(),
             FileReference: (job.ClientRefa ?? string.Empty).Trim(),
-            AirlineLabel: string.IsNullOrWhiteSpace(job.ClientName) ? "Your Airline" : job.ClientName,
+            AirlineLabel: AirlineLabelOf(job.ClientName),
             SupportPhone: FirstNonBlank(job.ClientPhone, despatchOptions.Value.SupportPhone),
             AirlineCode: string.IsNullOrWhiteSpace(airlineCode) ? null : airlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
             PassengerEmail: job.ProofOfDeliveryEmail,
-            DeliveryAddress: BuildAddressDto(jobId, job.DeliveryAddressLine2, job.DeliveryAddressLine3,
-                job.DeliveryAddressLine4, job.DeliveryAddressLine5, job.DeliveryAddressLine6,
-                job.DeliveryAddressLine7, job.DeliveryAddressLine8, job.DeliveryLatitude,
-                job.DeliveryLongitude, defaultCountry),
+            DeliveryAddress: BuildAddressDto(jobId, job.DeliveryAddressLine1,
+                job.DeliveryAddressLine2, job.DeliveryAddressLine3, job.DeliveryAddressLine4,
+                job.DeliveryAddressLine5, job.DeliveryAddressLine6, job.DeliveryAddressLine7,
+                job.DeliveryAddressLine8, job.DeliveryLatitude, job.DeliveryLongitude,
+                defaultCountry),
             EarliestSlotUtc: etaUtc ?? now,
             LatestSlotUtc: etaUtc ?? now.AddDays(2),
             AtlOptions: atlOptions,
-            DefaultAtlOptionId: defaultAtlOptionId);
+            DefaultAtlOptionId: defaultAtlOptionId,
+            TrackingAvailable: job.CourierId > 0
+                && job.Status >= (int)JobStatus.Dispatched
+                && job.Status != (int)JobStatus.Void,
+            Confirmation: confirmation);
     }
+
+    private async Task<BookingConfirmation?> BuildConfirmationAsync(
+        int jobId, DateTime? deliverByLocal, DateTime? deliverByUtc, int? atlOptionId,
+        string? accessNotes, int? windowMinutes, DateTime nowUtc, TimeZoneInfo? timeZone,
+        CancellationToken ct)
+    {
+        var confirmedAt = await FindConfirmedAtAsync(jobId, ct);
+        if (confirmedAt is not { } stamp)
+        {
+            return null;
+        }
+
+        var window = TimeSpan.FromMinutes(
+            windowMinutes is > 0 ? windowMinutes.Value : DefaultWindowMinutes);
+
+        var dayLabel = string.Empty;
+        var windowLabel = string.Empty;
+        if (deliverByLocal is not { } localStart)
+        {
+            return new BookingConfirmation(
+                ConfirmedAtUtc: stamp,
+                DeliveryTimeUtc: deliverByUtc,
+                DayLabel: dayLabel,
+                WindowLabel: windowLabel,
+                AtlOptionId: atlOptionId,
+                AccessNotes: accessNotes);
+        }
+
+        dayLabel = FormatDayLabel(localStart.Date, TenantToday(nowUtc, timeZone));
+        windowLabel = FormatWindowLabel(localStart, localStart.Add(window));
+
+        return new BookingConfirmation(
+            ConfirmedAtUtc: stamp,
+            DeliveryTimeUtc: deliverByUtc,
+            DayLabel: dayLabel,
+            WindowLabel: windowLabel,
+            AtlOptionId: atlOptionId,
+            AccessNotes: accessNotes);
+    }
+
+    private Task<DateTime?> FindConfirmedAtAsync(int jobId, CancellationToken ct) =>
+        db.JobDeliveryJourneys
+            .AsNoTracking()
+            .Where(j => j.JobId == jobId
+                && j.ChangeType == nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking))
+            .OrderByDescending(j => j.UpdatedAt)
+            .Select(j => (DateTime?)j.UpdatedAt)
+            .FirstOrDefaultAsync(ct);
     
-    public Task<string?> GetJobNumberAsync(int jobId, CancellationToken ct) =>
-        db.TucJobs
+    public async Task<BookingNotificationDetails?> GetNotificationDetailsAsync(int jobId, CancellationToken ct)
+    {
+        var job = await db.TucJobs
             .AsNoTracking()
             .Where(j => j.UcjbId == jobId)
-            .Select(j => j.UcjbNumber)
+            .Select(j => new
+            {
+                ClientRefa = j.UcjbClientRefa,
+                ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null
+            })
             .FirstOrDefaultAsync(ct);
+
+        return job is null
+            ? null
+            : new BookingNotificationDetails(
+                (job.ClientRefa ?? string.Empty).Trim(),
+                AirlineLabelOf(job.ClientName));
+    }
+
+    private static string AirlineLabelOf(string? clientName) =>
+        string.IsNullOrWhiteSpace(clientName) ? BookingNotificationDetails.UnknownAirline : clientName;
 
     private static string FirstNonBlank(string? preferred, string? fallback) =>
         !string.IsNullOrWhiteSpace(preferred) ? preferred.Trim()
@@ -124,19 +208,19 @@ internal sealed class PaxBookingService(
 
     private static AddressUpdateDto BuildAddressDto(
         int jobId,
-        string? line2, string? line3, string? line4, string? line5, string? line6, string? line7,
-        string? line8, decimal? latitude, decimal? longitude, string defaultCountry)
+        string? line1, string? line2, string? line3, string? line4, string? line5, string? line6,
+        string? line7, string? line8, decimal? latitude, decimal? longitude, string defaultCountry)
     {
-        var country = ResolveStoredCountry(jobId, line8, defaultCountry);
-        var isUs = country == "US";
         return new AddressUpdateDto
         {
-            Line1 = CombineStreet(line3, line4),
+            Line1 = line1,
             Line2 = line2,
-            Suburb = isUs ? null : line5,
-            City = (isUs ? line5 : line6) ?? string.Empty,
-            PostCode = line7,
-            Country = country,
+            Line3 = line3,
+            Line4 = line4 ?? string.Empty,
+            Line5 = line5 ?? string.Empty,
+            Line6 = line6 ?? string.Empty,
+            Line7 = line7,
+            Country = ResolveStoredCountry(jobId, line8, defaultCountry),
             Latitude = latitude,
             Longitude = longitude
         };
@@ -177,17 +261,7 @@ internal sealed class PaxBookingService(
             : null;
     }
 
-    private static string CombineStreet(string? numberPart, string? streetPart)
-    {
-        var a = (numberPart ?? string.Empty).Trim();
-        var b = (streetPart ?? string.Empty).Trim();
-        if (a.Length == 0)
-        {
-            return b;
-        }
 
-        return b.Length == 0 ? a : $"{a} {b}";
-    }
 
     private static TimeZoneInfo? ResolveTimeZone(string? timeZoneCode)
     {
@@ -500,6 +574,12 @@ internal sealed class PaxBookingService(
     {
         ArgumentNullException.ThrowIfNull(input);
 
+        if (await FindConfirmedAtAsync(input.JobId, ct) is not null)
+        {
+            Log.Information("Pax confirmation refused, already confirmed: JobId={JobId}", input.JobId);
+            throw new PaxAlreadyConfirmedException(input.JobId);
+        }
+
         var leaveId = input.AtlOptionId;
         var startLocal = UtcToTenantLocal(input.DeliveryTimeUtc, despatchOptions.Value.TimeZone);
         var startDateLocal = startLocal?.Date;
@@ -511,10 +591,6 @@ internal sealed class PaxBookingService(
                 + "Please check it, or use the address search to select your address.");
         }
 
-        var isUs = country == "US";
-        var line5 = isUs ? input.Address.City : input.Address.Suburb;
-        var line6 = isUs ? null : input.Address.City;
-
         var rows = await db.TucJobs
             .Where(j => j.UcjbId == input.JobId)
             .ExecuteUpdateAsync(s => s
@@ -523,12 +599,13 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.ProofOfDeliveryEmail, input.PassengerEmail)
                     .SetProperty(j => j.DeliverToLeaveId, leaveId)
                     .SetProperty(j => j.UcjbToSpecial, input.AccessNotes)
+                    .SetProperty(j => j.DeliveryAddressLine1, input.Address.Line1)
                     .SetProperty(j => j.DeliveryAddressLine2, input.Address.Line2)
-                    .SetProperty(j => j.DeliveryAddressLine3, (string?)null)
-                    .SetProperty(j => j.DeliveryAddressLine4, input.Address.Line1)
-                    .SetProperty(j => j.DeliveryAddressLine5, line5)
-                    .SetProperty(j => j.DeliveryAddressLine6, line6)
-                    .SetProperty(j => j.DeliveryAddressLine7, input.Address.PostCode)
+                    .SetProperty(j => j.DeliveryAddressLine3, input.Address.Line3)
+                    .SetProperty(j => j.DeliveryAddressLine4, input.Address.Line4)
+                    .SetProperty(j => j.DeliveryAddressLine5, input.Address.Line5)
+                    .SetProperty(j => j.DeliveryAddressLine6, input.Address.Line6)
+                    .SetProperty(j => j.DeliveryAddressLine7, input.Address.Line7)
                     .SetProperty(j => j.DeliveryAddressLine8, country)
                     .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
                     .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)

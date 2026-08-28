@@ -64,9 +64,11 @@ public sealed class PaxBookingController(
                 {
                     Line1 = body.Address.Line1,
                     Line2 = body.Address.Line2,
-                    Suburb = body.Address.Suburb,
-                    City = body.Address.City,
-                    PostCode = body.Address.PostCode,
+                    Line3 = body.Address.Line3,
+                    Line4 = body.Address.Line4,
+                    Line5 = body.Address.Line5,
+                    Line6 = body.Address.Line6,
+                    Line7 = body.Address.Line7,
                     Country = body.Address.Country,
                     Latitude = body.Address.Latitude,
                     Longitude = body.Address.Longitude
@@ -77,6 +79,10 @@ public sealed class PaxBookingController(
                 PassengerName: body.PassengerName,
                 PassengerPhone: body.PassengerPhone,
                 PassengerEmail: body.PassengerEmail), ct);
+        }
+        catch (PaxAlreadyConfirmedException)
+        {
+            return Conflict();
         }
         catch (PaxAddressValidationException ex)
         {
@@ -89,6 +95,7 @@ public sealed class PaxBookingController(
 
     private static BookingSummaryDto MapSummary(BookingSummary s) => new(
         JobId: s.JobId,
+        JobNumber: s.JobNumber,
         FileReference: s.FileReference,
         AirlineLabel: s.AirlineLabel,
         AirlineCode: s.AirlineCode,
@@ -99,14 +106,22 @@ public sealed class PaxBookingController(
         DeliveryAddress: new AddressDto(
             s.DeliveryAddress.Line1,
             s.DeliveryAddress.Line2,
-            s.DeliveryAddress.Suburb,
-            s.DeliveryAddress.City,
-            s.DeliveryAddress.PostCode,
+            s.DeliveryAddress.Line3,
+            s.DeliveryAddress.Line4,
+            s.DeliveryAddress.Line5,
+            s.DeliveryAddress.Line6,
+            s.DeliveryAddress.Line7,
             s.DeliveryAddress.Country,
             s.DeliveryAddress.Latitude,
             s.DeliveryAddress.Longitude),
         EarliestSlotUtc: s.EarliestSlotUtc,
         LatestSlotUtc: s.LatestSlotUtc,
         AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))],
-        DefaultAtlOptionId: s.DefaultAtlOptionId);
+        DefaultAtlOptionId: s.DefaultAtlOptionId,
+        TrackingAvailable: s.TrackingAvailable,
+        Confirmation: s.Confirmation is { } c
+            ? new BookingConfirmationDto(
+                c.ConfirmedAtUtc, c.DeliveryTimeUtc, c.DayLabel, c.WindowLabel,
+                c.AtlOptionId, c.AccessNotes)
+            : null);
 }

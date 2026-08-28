@@ -32,6 +32,7 @@ vi.mock('../components/Icon', async (importOriginal) => ({
 const summary: BookingSummary = {
   bookingId: 1,
   jobId: 42,
+  jobNumber: 'URG-179252',
   fileReference: 'AKLNZ12345',
   airlineLabel: 'Test Air',
   supportPhone: '0800 267 5494',
@@ -39,10 +40,11 @@ const summary: BookingSummary = {
   passengerPhone: '+64211234567',
   passengerEmail: 'test@example.com',
   deliveryAddress: {
-    line1: '123 Test St',
-    suburb: 'Suburb',
-    city: 'Auckland',
-    postCode: '1010',
+    line3: '123',
+    line4: 'Test St',
+    line5: 'Suburb',
+    line6: 'Auckland',
+    line7: '1010',
     country: 'NZ',
   },
   earliestSlotUtc: '2026-06-10T00:00:00Z',

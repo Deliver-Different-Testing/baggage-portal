@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using BaggageDelivery.Api.DTOs.Pax;
 using BaggageDelivery.Core.Models;
@@ -14,7 +14,7 @@ public class ConfirmBookingRequestLengthTests
         { nameof(ConfirmBookingRequest.AccessNotes), nameof(TucJob.UcjbToSpecial) },
         { nameof(ConfirmBookingRequest.PassengerName), nameof(TucJob.DeliverToContact) },
         { nameof(ConfirmBookingRequest.PassengerPhone), nameof(TucJob.DeliverToPhone) },
-        { nameof(ConfirmBookingRequest.PassengerEmail), nameof(TucJob.ProofOfDeliveryEmail) },
+        { nameof(ConfirmBookingRequest.PassengerEmail), nameof(TucJob.ProofOfDeliveryEmail) }
     };
 
     [Theory]
@@ -34,10 +34,13 @@ public class ConfirmBookingRequestLengthTests
 
     public static TheoryData<string, string> WrittenAddressColumns() => new()
     {
-        { nameof(AddressDto.Line1), nameof(TucJob.DeliveryAddressLine4) },
-        { nameof(AddressDto.Suburb), nameof(TucJob.DeliveryAddressLine5) },
-        { nameof(AddressDto.City), nameof(TucJob.DeliveryAddressLine6) },
-        { nameof(AddressDto.PostCode), nameof(TucJob.DeliveryAddressLine7) },
+        { nameof(AddressDto.Line1), nameof(TucJob.DeliveryAddressLine1) },
+        { nameof(AddressDto.Line2), nameof(TucJob.DeliveryAddressLine2) },
+        { nameof(AddressDto.Line3), nameof(TucJob.DeliveryAddressLine3) },
+        { nameof(AddressDto.Line4), nameof(TucJob.DeliveryAddressLine4) },
+        { nameof(AddressDto.Line5), nameof(TucJob.DeliveryAddressLine5) },
+        { nameof(AddressDto.Line6), nameof(TucJob.DeliveryAddressLine6) },
+        { nameof(AddressDto.Line7), nameof(TucJob.DeliveryAddressLine7) }
     };
 
     [Theory]

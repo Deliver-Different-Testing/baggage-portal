@@ -4,5 +4,5 @@ public sealed record BookingNotificationContext(
     string Channel,
     string PassengerName,
     string AirlineLabel,
-    string Reference,
+    string? FileReference,
     string BookingUrl);

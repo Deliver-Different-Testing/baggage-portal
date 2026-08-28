@@ -8,7 +8,7 @@ export function ExtraDeliveryInfo({ value }: { value?: string | null }) {
   if (!text) return null
   return (
     <Box mt={8}>
-      <Eyebrow mb={2}>Extra delivery information</Eyebrow>
+      <Eyebrow mb={2}>Apartment, unit or suite</Eyebrow>
       <Text size="sm">{text}</Text>
     </Box>
   )
