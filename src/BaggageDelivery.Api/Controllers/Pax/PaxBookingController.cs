@@ -1,9 +1,12 @@
 ﻿using BaggageDelivery.Api.DTOs.Pax;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
+using BaggageDelivery.Core.Models;
+using BaggageDelivery.Core.Notifications;
 using BaggageDelivery.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 
 namespace BaggageDelivery.Api.Controllers.Pax;
 
@@ -12,7 +15,9 @@ namespace BaggageDelivery.Api.Controllers.Pax;
 [AllowAnonymous]
 public sealed class PaxBookingController(
     IEncryptionService encryption,
-    IPaxBookingService paxBooking) : ControllerBase
+    IPaxBookingService paxBooking,
+    IJobTrackingLinkService trackingLinks,
+    INotificationService notifications) : ControllerBase
 {
     [HttpGet("")]
     public async Task<ActionResult<BookingSummaryDto>> GetBooking(string id, CancellationToken ct)
@@ -24,7 +29,13 @@ public sealed class PaxBookingController(
         }
 
         var summary = await paxBooking.GetSummaryAsync(jobId.Value, ct);
-        return summary is null ? NotFound() : Ok(MapSummary(summary));
+        if (summary is null)
+        {
+            return NotFound();
+        }
+
+        var trackingUrl = await trackingLinks.GetTrackingUrlAsync(jobId.Value, ct);
+        return Ok(MapSummary(summary, trackingUrl));
     }
 
     [HttpGet("timeslots")]
@@ -90,10 +101,53 @@ public sealed class PaxBookingController(
             return ValidationProblem(ModelState);
         }
 
-        return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow));
+        var trackingUrl = await trackingLinks.GetTrackingUrlAsync(jobId.Value, ct);
+        await SendConfirmationAsync(jobId.Value, body, trackingUrl, ct);
+
+        return Ok(new ConfirmBookingResponse("Released", DateTime.UtcNow, trackingUrl));
     }
 
-    private static BookingSummaryDto MapSummary(BookingSummary s) => new(
+    private async Task SendConfirmationAsync(
+        int jobId, ConfirmBookingRequest body, string? trackingUrl, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body.PassengerPhone) && string.IsNullOrWhiteSpace(body.PassengerEmail))
+        {
+            return;
+        }
+
+        try
+        {
+            var summary = await paxBooking.GetSummaryAsync(jobId, ct);
+            if (summary?.Confirmation is not { } confirmation)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(body.PassengerPhone))
+            {
+                await notifications.SendBookingConfirmedAsync(jobId, body.PassengerPhone,
+                    NewContext(NotificationChannel.Sms, summary, confirmation, trackingUrl), ct);
+            }
+
+            if (!string.IsNullOrWhiteSpace(body.PassengerEmail))
+            {
+                await notifications.SendBookingConfirmedAsync(jobId, body.PassengerEmail,
+                    NewContext(NotificationChannel.Email, summary, confirmation, trackingUrl), ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Warning(ex,
+                "Pax confirmation JobId={JobId}: confirmation notification not queued", jobId);
+        }
+    }
+
+    private static BookingConfirmedNotificationContext NewContext(
+        string channel, BookingSummary summary, BookingConfirmation confirmation, string? trackingUrl) =>
+        new(channel, summary.PassengerName, summary.AirlineLabel, summary.FileReference,
+            confirmation.DayLabel, confirmation.WindowLabel, trackingUrl);
+
+    private static BookingSummaryDto MapSummary(BookingSummary s, string? trackingUrl) => new(
         JobId: s.JobId,
         JobNumber: s.JobNumber,
         FileReference: s.FileReference,
@@ -119,6 +173,7 @@ public sealed class PaxBookingController(
         AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))],
         DefaultAtlOptionId: s.DefaultAtlOptionId,
         TrackingAvailable: s.TrackingAvailable,
+        TrackingUrl: trackingUrl,
         Confirmation: s.Confirmation is { } c
             ? new BookingConfirmationDto(
                 c.ConfirmedAtUtc, c.DeliveryTimeUtc, c.DayLabel, c.WindowLabel,

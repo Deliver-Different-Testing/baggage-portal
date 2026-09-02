@@ -1,7 +1,7 @@
 import { memo, type CSSProperties, type ReactNode } from 'react'
-import { Box, Center, Container, Group, Skeleton, Stepper, Text, Title } from '@mantine/core'
+import { Box, Center, Container, Group, Skeleton, Text, Title } from '@mantine/core'
 import { LuggageIcon } from './Icon'
-import { PunchedTag } from './Docket'
+import { BagTag } from './Docket'
 import { FlightPathBackdrop } from './FlightPathBackdrop'
 import { onBrandScrim, tokens } from '../styles/mantineTheme'
 import type { AirlineAccent } from '../styles/airlineAccent'
@@ -27,8 +27,11 @@ const HERO_BODY_STYLE: CSSProperties = {
 }
 
 const HERO_TITLE = 'Confirm your baggage delivery'
-const HERO_BODY =
-  "Review your details below and pick a delivery window. We'll text you when our driver is on the way."
+
+function heroBody(airlineLabel: string) {
+  const handler = airlineLabel.trim() || 'Your airline'
+  return `${handler} passed your delayed bag to us. Pick a time and check where it should go.`
+}
 
 function HeroShell({ topRule, children }: { topRule?: string; children: ReactNode }) {
   return (
@@ -45,16 +48,6 @@ function HeroShell({ topRule, children }: { topRule?: string; children: ReactNod
         {children}
       </Container>
     </Box>
-  )
-}
-
-function HeroStepper() {
-  return (
-    <Stepper active={0} size="xs" className="pax-hero-stepper" mt="xl">
-      <Stepper.Step label="Confirm" />
-      <Stepper.Step label="In transit" />
-      <Stepper.Step label="Delivered" />
-    </Stepper>
   )
 }
 
@@ -89,19 +82,18 @@ export const ConfirmHero = memo(function ConfirmHero({
       </Title>
       {summary.fileReference && (
         <Box mt="md">
-          <PunchedTag
+          <BagTag
             label="File reference"
             value={summary.fileReference}
+            caption={summary.passengerName}
             accent={accent.accent}
-            onScrim
           />
         </Box>
       )}
-      <Text mt="md" style={HERO_BODY_STYLE}>
-        {HERO_BODY}
-      </Text>
 
-      <HeroStepper />
+      <Text mt="md" style={HERO_BODY_STYLE}>
+        {heroBody(summary.airlineLabel)}
+      </Text>
     </HeroShell>
   )
 })
@@ -128,13 +120,9 @@ export function ConfirmHeroSkeleton() {
         {HERO_TITLE}
       </Title>
       <Box mt="md">
-        <Skeleton height={46} width={210} radius={tokens.radius.tile} />
+        <Skeleton height={64} width={230} radius={tokens.radius.tile} />
       </Box>
-      <Text mt="md" style={HERO_BODY_STYLE}>
-        {HERO_BODY}
-      </Text>
-
-      <HeroStepper />
+      <Skeleton height={15} width={300} radius="sm" mt="md" />
     </HeroShell>
   )
 }

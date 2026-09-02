@@ -7,7 +7,7 @@ export function isUnitedStates(country?: string | null): boolean {
 export function addressLabels(country?: string | null) {
   const us = isUnitedStates(country)
   return {
-    line1: 'Company',
+    line1: 'Hotel or company',
     line2: 'Apartment, unit or suite',
     line3: 'Street number',
     line4: 'Street name',

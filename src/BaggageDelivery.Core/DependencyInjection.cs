@@ -30,6 +30,8 @@ public static class DependencyInjection
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, TucManualMessageSender>();
+            services.AddScoped<IJobTrackingLinkService, JobTrackingLinkService>();
+            services.AddScoped<ISuburbResolver, SuburbResolver>();
         }
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)

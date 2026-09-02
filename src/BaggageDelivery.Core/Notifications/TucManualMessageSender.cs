@@ -11,7 +11,19 @@ internal sealed class TucManualMessageSender(
     public async Task SendBookingLinkAsync(int jobId, string recipient, BookingNotificationContext context, CancellationToken ct)
     {
         var rendered = await renderer.RenderBookingLinkAsync(context, ct);
+        await EnqueueAsync(jobId, recipient, context.Channel, rendered, ct);
+    }
 
+    public async Task SendBookingConfirmedAsync(
+        int jobId, string recipient, BookingConfirmedNotificationContext context, CancellationToken ct)
+    {
+        var rendered = await renderer.RenderBookingConfirmedAsync(context, ct);
+        await EnqueueAsync(jobId, recipient, context.Channel, rendered, ct);
+    }
+
+    private async Task EnqueueAsync(
+        int jobId, string recipient, string channel, RenderedNotification rendered, CancellationToken ct)
+    {
         var entity = new TucManualMessage
         {
             UcmmDate = time.GetUtcNow().UtcDateTime,
@@ -23,7 +35,7 @@ internal sealed class TucManualMessageSender(
             Read = false
         };
 
-        switch (context.Channel)
+        switch (channel)
         {
             case NotificationChannel.Sms:
                 entity.SendToMobile = recipient;
@@ -32,8 +44,8 @@ internal sealed class TucManualMessageSender(
                 entity.SendToEmailAddress = recipient;
                 break;
             default:
-                throw new ArgumentOutOfRangeException(nameof(context),
-                    $"Unknown channel '{context.Channel}'");
+                throw new ArgumentOutOfRangeException(nameof(channel),
+                    $"Unknown channel '{channel}'");
         }
 
         await db.TucManualMessages.AddAsync(entity, ct);

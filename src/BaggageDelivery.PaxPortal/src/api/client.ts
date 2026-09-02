@@ -104,6 +104,7 @@ export type BookingSummary = {
   atlOptions: AtlOption[]
   defaultAtlOptionId?: number | null
   trackingAvailable?: boolean
+  trackingUrl?: string | null
   confirmation?: BookingConfirmation | null
 }
 
