@@ -1,4 +1,4 @@
-using BaggageDelivery.Core.Models;
+﻿using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
 using Mjml.Net;
 using Xunit;
@@ -115,5 +115,62 @@ public class NotificationRendererTests
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => Render(channel: "carrier-pigeon"));
+    }
+
+    // ---- Booking confirmed ---------------------------------------------------
+
+    private static Task<RenderedNotification> RenderConfirmed(
+        string channel = NotificationChannel.Email,
+        string passengerName = "Jane Pax",
+        string airlineLabel = "Air New Zealand",
+        string? fileReference = "AKLNZ12345",
+        string? trackingUrl = "https://tracking.example.com/#/TOKEN") =>
+        Renderer.RenderBookingConfirmedAsync(
+            new BookingConfirmedNotificationContext(
+                channel, passengerName, airlineLabel, fileReference,
+                "Tomorrow, Thu 11 Jun", "2:00 PM – 4:00 PM", trackingUrl),
+            TestContext.Current.CancellationToken);
+
+    [Fact]
+    public async Task Confirmed_sms_states_the_slot_and_the_tracking_link()
+    {
+        var rendered = await RenderConfirmed(NotificationChannel.Sms);
+
+        Assert.Equal("", rendered.Subject);
+        Assert.Contains("Jane", rendered.Body);
+        Assert.Contains("Tomorrow, Thu 11 Jun", rendered.Body);
+        Assert.Contains("2:00 PM", rendered.Body);
+        Assert.Contains("https://tracking.example.com/#/TOKEN", rendered.Body);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Confirmed_sms_omits_the_tracking_sentence_when_there_is_no_link(string? trackingUrl)
+    {
+        var rendered = await RenderConfirmed(NotificationChannel.Sms, trackingUrl: trackingUrl);
+
+        Assert.DoesNotContain("Track", rendered.Body);
+        Assert.Contains("Tomorrow, Thu 11 Jun", rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_links_the_tracking_url_and_names_the_airline()
+    {
+        var rendered = await RenderConfirmed();
+
+        Assert.Contains("Your Air New Zealand baggage delivery is booked", rendered.Subject);
+        Assert.Contains("File Reference: AKLNZ12345", rendered.Body);
+        Assert.Contains("https://tracking.example.com/#/TOKEN", rendered.Body);
+        Assert.Contains("Tomorrow, Thu 11 Jun", rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_without_a_tracking_url_has_no_tracking_button()
+    {
+        var rendered = await RenderConfirmed(trackingUrl: null);
+
+        Assert.DoesNotContain("Track your delivery", rendered.Body);
+        Assert.Contains("Tomorrow, Thu 11 Jun", rendered.Body);
     }
 }

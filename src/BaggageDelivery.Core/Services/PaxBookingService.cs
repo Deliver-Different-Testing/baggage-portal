@@ -17,7 +17,8 @@ internal sealed class PaxBookingService(
     IOptions<DespatchOptions> despatchOptions,
     IMemoryCache cache,
     TimeProvider time,
-    IDespatchCalendar calendar) : IPaxBookingService
+    IDespatchCalendar calendar,
+    ISuburbResolver suburbs) : IPaxBookingService
 {
     private const string AtlOptionsCacheKey = "pax:atl-options";
     private const string EcoRunsCacheKeyPrefix = "pax:eco-runs:";
@@ -591,6 +592,10 @@ internal sealed class PaxBookingService(
                 + "Please check it, or use the address search to select your address.");
         }
 
+        var suburbId = CountryCodes.IsUnitedStates(country)
+            ? null
+            : await suburbs.ResolveAsync(input.Address.Line5, input.Address.Line7, ct);
+
         var rows = await db.TucJobs
             .Where(j => j.UcjbId == input.JobId)
             .ExecuteUpdateAsync(s => s
@@ -607,6 +612,8 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.DeliveryAddressLine6, input.Address.Line6)
                     .SetProperty(j => j.DeliveryAddressLine7, input.Address.Line7)
                     .SetProperty(j => j.DeliveryAddressLine8, country)
+                    .SetProperty(j => j.UcjbToAddr, DespatchAddressComposer.Compose(input.Address, country))
+                    .SetProperty(j => j.UcjbTo, j => suburbId ?? j.UcjbTo)
                     .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
                     .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)
                     .SetProperty(j => j.DeliverByTime, startLocal)

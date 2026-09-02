@@ -47,7 +47,15 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucSuburb]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[UTL_AddBusinessDays]",
+         "ObjectType": 2
+      },
+      {
+         "Name": "[dbo].[UTL_fncSuburb_FromNameWithPostCode]",
          "ObjectType": 2
       },
       {

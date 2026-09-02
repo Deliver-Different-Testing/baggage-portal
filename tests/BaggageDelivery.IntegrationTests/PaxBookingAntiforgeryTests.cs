@@ -250,6 +250,86 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         });
     }
 
+    [Fact]
+    public async Task Confirm_rewrites_the_composite_address_Despatch_displays()
+    {
+        const int jobId = 4252;
+        await factory.SeedAsync(async db =>
+        {
+            db.TucJobs.Add(new TucJob
+            {
+                UcjbId = jobId,
+                UcjbNumber = $"TEST-{jobId}",
+                UcjbToAddr = "Auckland Airport, Mangere, Auckland",
+                UcjbStatus = (int)JobStatus.Dispatched
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+
+        var client = factory.CreateClient();
+
+        (await PostConfirmAsync(client, jobId)).EnsureSuccessStatusCode();
+
+        await factory.SeedAsync(async db =>
+        {
+            var job = await db.TucJobs.AsNoTracking()
+                .SingleAsync(j => j.UcjbId == jobId, TestContext.Current.CancellationToken);
+            Assert.Equal("1, Test Street, Ponsonby, Auckland, 1011, NZ", job.UcjbToAddr);
+        });
+    }
+
+    [Fact]
+    public async Task Confirm_queues_a_confirmation_message_per_channel()
+    {
+        const int jobId = 4253;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        (await PostConfirmAsync(client, jobId)).EnsureSuccessStatusCode();
+
+        await factory.SeedAsync(async db =>
+        {
+            var messages = await db.TucManualMessages.AsNoTracking()
+                .Where(m => m.JobId == jobId)
+                .ToListAsync(TestContext.Current.CancellationToken);
+
+            var sms = Assert.Single(messages, m => m.SendToMobile == "+64211234567");
+            Assert.Contains("booked", sms.UcmmMessage, StringComparison.OrdinalIgnoreCase);
+
+            var email = Assert.Single(messages, m => m.SendToEmailAddress == "jane@example.com");
+            Assert.Contains("booked", email.Subject, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public async Task Confirm_leaves_the_suburb_alone_when_the_lookup_is_unavailable()
+    {
+        const int jobId = 4254;
+        await factory.SeedAsync(async db =>
+        {
+            db.TucJobs.Add(new TucJob
+            {
+                UcjbId = jobId,
+                UcjbNumber = $"TEST-{jobId}",
+                UcjbStatus = (int)JobStatus.Dispatched
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+
+        var client = factory.CreateClient();
+
+        (await PostConfirmAsync(client, jobId)).EnsureSuccessStatusCode();
+
+        await factory.SeedAsync(async db =>
+        {
+            var job = await db.TucJobs.AsNoTracking()
+                .SingleAsync(j => j.UcjbId == jobId, TestContext.Current.CancellationToken);
+            Assert.Null(job.UcjbTo);
+            Assert.Equal("Ponsonby", job.DeliveryAddressLine5);
+        });
+    }
+
     private string EncryptedId(int jobId)
     {
         using var scope = factory.Services.CreateScope();

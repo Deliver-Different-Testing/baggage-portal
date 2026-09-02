@@ -119,9 +119,9 @@ export function Tracking() {
   return (
     <Box mih="100vh" style={{ display: 'flex', flexDirection: 'column' }}>
       <Box
-        px={{ base: 20, sm: 32 }}
-        pt={{ base: 32, sm: 40 }}
-        pb={{ base: 48, sm: 56 }}
+        px={tokens.hero.px}
+        pt={tokens.hero.pt}
+        pb={tokens.hero.pb}
         style={{
           backgroundColor: onBrandScrim.heroBg,
           color: onBrandScrim.text,
@@ -135,7 +135,11 @@ export function Tracking() {
             <Center
               w={36}
               h={36}
-              style={{ borderRadius: 12, backgroundColor: onBrandScrim.fill, flexShrink: 0 }}
+              style={{
+                borderRadius: tokens.radius.md,
+                backgroundColor: onBrandScrim.fill,
+                flexShrink: 0,
+              }}
             >
               <LuggageIcon size={20} color={onBrandScrim.text} />
             </Center>
@@ -178,13 +182,7 @@ export function Tracking() {
           <Title
             order={1}
             mb="xs"
-            style={{
-              fontSize: tokens.type.hero,
-              lineHeight: 1.05,
-              color: 'inherit',
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-            }}
+            style={{ ...tokens.type.heroTitle, color: 'inherit' }}
           >
             {statusInfo.headline}
           </Title>
@@ -197,7 +195,7 @@ export function Tracking() {
       <Container
         size="lg"
         px={{ base: 12, sm: 16 }}
-        mt={{ base: -28, sm: -32 }}
+        mt={tokens.hero.overlap}
         pb={48}
         style={{ position: 'relative', flex: 1, width: '100%' }}
       >

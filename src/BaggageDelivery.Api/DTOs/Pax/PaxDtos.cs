@@ -18,6 +18,7 @@ public sealed record BookingSummaryDto(
     AtlOptionDto[] AtlOptions,
     int? DefaultAtlOptionId,
     bool TrackingAvailable,
+    string? TrackingUrl,
     BookingConfirmationDto? Confirmation);
 
 public sealed record BookingConfirmationDto(
@@ -54,4 +55,4 @@ public sealed record ConfirmBookingRequest(
     [MaxLength(40)] string? PassengerPhone,
     [MaxLength(100), EmailAddress] string? PassengerEmail);
 
-public sealed record ConfirmBookingResponse(string Status, DateTime ReleasedAtUtc);
+public sealed record ConfirmBookingResponse(string Status, DateTime ReleasedAtUtc, string? TrackingUrl);

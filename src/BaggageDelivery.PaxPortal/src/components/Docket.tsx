@@ -129,3 +129,60 @@ export function PunchedTag({
     </Box>
   )
 }
+
+const BAG_TAG_VALUE_STYLE: CSSProperties = {
+  fontSize: 22,
+  fontWeight: 700,
+  letterSpacing: '0.14em',
+  lineHeight: 1.1,
+  fontVariantNumeric: 'tabular-nums',
+  wordBreak: 'break-all',
+}
+
+export function BagTag({
+  label,
+  value,
+  caption,
+  accent,
+}: {
+  label: ReactNode
+  value: ReactNode
+  caption?: ReactNode
+  accent: string
+}) {
+  return (
+    <Box
+      style={{
+        display: 'inline-flex',
+        alignItems: 'stretch',
+        borderRadius: tokens.radius.tile,
+        overflow: 'hidden',
+        maxWidth: '100%',
+        backgroundColor: onBrandScrim.hoverFill,
+        border: `1px solid ${onBrandScrim.border}`,
+      }}
+    >
+      <Center px={9} style={{ flexShrink: 0, backgroundColor: accent }}>
+        <Box
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            backgroundColor: onBrandScrim.heroBg,
+          }}
+        />
+      </Center>
+      <Box px={14} py={10} style={{ minWidth: 0 }}>
+        <Eyebrow tone="onScrim" mb={3}>
+          {label}
+        </Eyebrow>
+        <Text style={{ ...BAG_TAG_VALUE_STYLE, color: onBrandScrim.text }}>{value}</Text>
+        {caption && (
+          <Text mt={2} style={{ color: onBrandScrim.mutedText, fontSize: 13, fontWeight: 500 }}>
+            {caption}
+          </Text>
+        )}
+      </Box>
+    </Box>
+  )
+}
