@@ -7,13 +7,17 @@ import type { AtlOption } from '../../api/client'
 const ACCESS_NOTES_MAX = 120
 
 const CONSENT =
-  'Leave my bag in a safe place if I am not home. I accept the risk of loss or damage once it has been left.'
+  "Leave my baggage in a safe place if I'm not available. I accept the risk of loss or damage once it has been left."
 
 const CONDITIONS = [
-  'Weatherproof, so your bag stays dry',
-  'Out of view of the street',
-  'Safe and easy for the driver to reach',
+  'Pick a location that is waterproof so your bag stays dry.',
+  'Pick a location that is out of view of the street.',
+  'Pick a location that is safe and easy for the driver to reach.',
+  'If at a motel or hotel, inform reception that your bag is on its way.',
 ]
+
+const DELIVERY_PROOF =
+  "As soon as we've delivered your bag to this location, you will receive a message confirming where we've left it and a photograph of the bag at that location."
 
 export function AtlSection({
   options,
@@ -68,14 +72,14 @@ export function AtlSection({
               <Text component="summary" size="sm" style={{ cursor: 'pointer' }}>
                 What this means
               </Text>
-              <Text size="sm" c="dimmed" mt={6}>
-                Pick a spot that is:
-              </Text>
-              <List size="sm" c="dimmed" spacing={2} mt={2} withPadding>
+              <List size="sm" c="dimmed" spacing={2} mt={6} withPadding>
                 {CONDITIONS.map((condition) => (
                   <List.Item key={condition}>{condition}</List.Item>
                 ))}
               </List>
+              <Text size="sm" c="dimmed" mt={6}>
+                {DELIVERY_PROOF}
+              </Text>
             </Box>
           </Box>
 

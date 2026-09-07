@@ -1835,6 +1835,173 @@ public class PaxBookingServiceTests
         Assert.Equal("US", job.DeliveryAddressLine8);
     }
 
+    [Fact]
+    public async Task Confirm_records_the_old_and_new_address_when_the_passenger_changes_it()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4300,
+            UcjbNumber = "TEST-4300",
+            DeliveryAddressLine3 = "9",
+            DeliveryAddressLine4 = "Aratonga Ave",
+            DeliveryAddressLine5 = "Greenlane",
+            DeliveryAddressLine6 = "Auckland",
+            DeliveryAddressLine7 = "1051",
+            DeliveryAddressLine8 = "NZ",
+            UcjbToAddr = "9, Aratonga Ave, Greenlane, Auckland, 1051, NZ",
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        await svc.ConfirmAsync(NewConfirmInput(4300, street: "Sailyards Road"), ct);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4300, ct);
+        Assert.Equal("ucjbToAddr", journey.FieldName);
+        Assert.Equal("9, Aratonga Ave, Greenlane, Auckland, 1051, NZ", journey.OldValue);
+        Assert.Equal("1, Sailyards Road, Ponsonby, Auckland, 1011, NZ", journey.NewValue);
+        Assert.Contains("changed by the passenger", journey.Comments);
+        Assert.Contains("10 Jun 2026 at 3:00 PM", journey.Comments);
+
+        Assert.Equal(nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking), journey.ChangeType);
+        Assert.Equal(nameof(DeliveryJourneyUpdatedByType.System), journey.UpdatedByType);
+    }
+
+    [Fact]
+    public async Task Confirm_leaves_the_address_diff_blank_when_the_passenger_keeps_the_address()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4301));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        await svc.ConfirmAsync(NewConfirmInput(4301), ct);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4301, ct);
+        Assert.Null(journey.FieldName);
+        Assert.Null(journey.OldValue);
+        Assert.Null(journey.NewValue);
+        Assert.DoesNotContain("changed by the passenger", journey.Comments);
+    }
+
+    [Fact]
+    public async Task Confirm_ignores_case_and_whitespace_when_comparing_the_address()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        var job = NewJobAtDefaultConfirmAddress(4302);
+        job.DeliveryAddressLine4 = "  TEST STREET  ";
+        job.DeliveryAddressLine5 = "ponsonby";
+        db.TucJobs.Add(job);
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        await svc.ConfirmAsync(NewConfirmInput(4302), ct);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4302, ct);
+        Assert.Null(journey.FieldName);
+        Assert.DoesNotContain("changed by the passenger", journey.Comments);
+    }
+
+    [Fact]
+    public async Task Confirm_does_not_record_an_address_change_for_a_non_address_edit()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4303));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        await svc.ConfirmAsync(NewConfirmInput(4303, accessNotes: "Leave with concierge"), ct);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4303, ct);
+        Assert.Equal("Leave with concierge", job.UcjbToSpecial);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4303, ct);
+        Assert.Null(journey.FieldName);
+    }
+
+    [Fact]
+    public async Task Confirm_keeps_the_journey_comment_within_the_column_limit()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4304,
+            UcjbNumber = "TEST-4304",
+            DeliveryAddressLine1 = new string('A', 250),
+            DeliveryAddressLine4 = new string('B', 250),
+            DeliveryAddressLine8 = "NZ",
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        await svc.ConfirmAsync(NewConfirmInput(4304, street: new string('C', 250)), ct);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4304, ct);
+        Assert.Equal("ucjbToAddr", journey.FieldName);
+        Assert.True(journey.Comments.Length <= 500);
+    }
+
+    [Fact]
+    public async Task Confirm_falls_back_to_the_flat_address_when_the_job_has_no_address_lines()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(new TucJob
+        {
+            UcjbId = 4305,
+            UcjbNumber = "TEST-4305",
+            UcjbToAddr = "9 Aratonga Ave, Greenlane, Auckland",
+            UcjbStatus = (int)JobStatus.Dispatched
+        });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        await svc.ConfirmAsync(NewConfirmInput(4305), ct);
+
+        var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4305, ct);
+        Assert.Equal("9 Aratonga Ave, Greenlane, Auckland", journey.OldValue);
+        Assert.Equal("1, Test Street, Ponsonby, Auckland, 1011, NZ", journey.NewValue);
+    }
+
+    private static TucJob NewJobAtDefaultConfirmAddress(int jobId) => new()
+    {
+        UcjbId = jobId,
+        UcjbNumber = $"TEST-{jobId}",
+        DeliveryAddressLine3 = "1",
+        DeliveryAddressLine4 = "Test Street",
+        DeliveryAddressLine5 = "Ponsonby",
+        DeliveryAddressLine6 = "Auckland",
+        DeliveryAddressLine7 = "1011",
+        DeliveryAddressLine8 = "NZ",
+        UcjbToAddr = "1, Test Street, Ponsonby, Auckland, 1011, NZ",
+        UcjbStatus = (int)JobStatus.Dispatched
+    };
+
     private static ConfirmBookingInput NewConfirmInput(
         int jobId,
         DateTime? deliveryTimeUtc = null,
