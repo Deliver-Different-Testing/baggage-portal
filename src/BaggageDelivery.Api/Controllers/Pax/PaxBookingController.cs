@@ -144,8 +144,8 @@ public sealed class PaxBookingController(
 
     private static BookingConfirmedNotificationContext NewContext(
         string channel, BookingSummary summary, BookingConfirmation confirmation, string? trackingUrl) =>
-        new(channel, summary.PassengerName, summary.AirlineLabel, summary.FileReference,
-            confirmation.DayLabel, confirmation.WindowLabel, trackingUrl);
+        new(channel, summary.PassengerName, summary.AirlineSmsName, summary.FileReference,
+            summary.JobNumber, confirmation.DayLabel, confirmation.WindowLabel, trackingUrl);
 
     private static BookingSummaryDto MapSummary(BookingSummary s, string? trackingUrl) => new(
         JobId: s.JobId,

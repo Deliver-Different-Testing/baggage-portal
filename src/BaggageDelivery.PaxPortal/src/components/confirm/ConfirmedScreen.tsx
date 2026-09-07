@@ -22,12 +22,13 @@ import { PoweredByFooter } from '../PoweredByFooter'
 import { onBrandScrim, tokens } from '../../styles/mantineTheme'
 import type { AddressDto, AtlOption, BookingSummary, TimeSlot } from '../../api/client'
 
-export const TRACKING_PENDING_HINT = 'Tracking will be available once your delivery starts.'
+export const TRACKING_PENDING_HINT =
+  'Tracking goes live once your bag is collected from the airport.'
 
 const NEXT_STEPS = [
-  'We collect your bag from the airport.',
-  'We text you on the morning of your delivery window.',
-  'The driver calls when they are close.',
+  'We collect your bag and deliver it to your address within the Delivery Window.',
+  'We will text/email you when your bag is collected from the airport with a tracking link.',
+  'You can track the driver from the airport to your address.',
 ]
 
 export function ConfirmedScreen({
@@ -49,7 +50,7 @@ export function ConfirmedScreen({
   atlOption: AtlOption | undefined
   accessNotes: string
 }) {
-  const trackingHref = (summary.trackingAvailable ?? false) ? summary.trackingUrl ?? null : null
+  const trackingHref = summary.trackingUrl ?? null
   const trackingAvailable = trackingHref !== null
 
   useLayoutEffect(() => {
@@ -184,9 +185,7 @@ export function ConfirmedScreen({
           </Tooltip>
 
           <Text size="sm" c="dimmed" ta="center">
-            {trackingAvailable
-              ? "We'll also text you when our driver is on the way."
-              : TRACKING_PENDING_HINT}
+            {TRACKING_PENDING_HINT}
           </Text>
 
           {summary.supportPhone && (
@@ -199,7 +198,7 @@ export function ConfirmedScreen({
               >
                 {summary.supportPhone}
               </Anchor>
-              {summary.fileReference ? ` and quote ${summary.fileReference}.` : '.'}
+              {summary.jobNumber ? ` and quote job number ${summary.jobNumber}.` : '.'}
             </Text>
           )}
         </Stack>

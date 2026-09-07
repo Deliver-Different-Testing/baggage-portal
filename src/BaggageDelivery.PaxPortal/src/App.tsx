@@ -6,9 +6,6 @@ import { TokenExpired } from './pages/TokenExpired'
 const PaxMobile = lazy(() =>
   import('./pages/PaxMobile').then((m) => ({ default: m.PaxMobile })),
 )
-const Tracking = lazy(() =>
-  import('./pages/Tracking').then((m) => ({ default: m.Tracking })),
-)
 const ProcessMap = lazy(() =>
   import('./pages/ProcessMap').then((m) => ({ default: m.ProcessMap })),
 )
@@ -30,7 +27,6 @@ export function App() {
       <Routes>
         <Route path="/" element={<DevLanding />} />
         <Route path="/c/:id" element={<PaxMobile />} />
-        <Route path="/t/:id" element={<Tracking />} />
         <Route path="/internal/process-map" element={<ProcessMap />} />
         <Route path="/expired" element={<TokenExpired />} />
         <Route path="*" element={<Navigate to="/expired" replace />} />

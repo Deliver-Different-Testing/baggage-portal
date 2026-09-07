@@ -12,7 +12,6 @@ const links: DevLinks = {
   jobId: 67,
   token: 'token-abc-123',
   confirmUrl: 'http://baggagedelivery.local.deliverdifferent.com:5173/c/token-abc-123',
-  trackUrl: 'http://baggagedelivery.local.deliverdifferent.com:5173/t/token-abc-123',
 }
 
 describe('DevLanding', () => {
@@ -38,13 +37,13 @@ describe('DevLanding', () => {
     )
   }
 
-  it('links to the SPA paths for the minted token, not the absolute dev-server URLs', async () => {
+  it('links to the SPA path for the minted token, not the absolute dev-server URL', async () => {
     renderLanding()
 
-    const [confirm, track] = await screen.findAllByRole('link', { name: /open/i })
+    const links = await screen.findAllByRole('link', { name: /open/i })
 
-    expect(confirm).toHaveAttribute('href', '/c/token-abc-123')
-    expect(track).toHaveAttribute('href', '/t/token-abc-123')
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAttribute('href', '/c/token-abc-123')
   })
 
   it('shows the job id and the full magic-link URLs to copy', async () => {
@@ -52,7 +51,6 @@ describe('DevLanding', () => {
 
     expect(await screen.findByText(/job 67/i)).toBeInTheDocument()
     expect(screen.getByText(links.confirmUrl)).toBeInTheDocument()
-    expect(screen.getByText(links.trackUrl)).toBeInTheDocument()
   })
 
   it('redirects to /expired when the endpoint is absent, which is production behaviour', async () => {

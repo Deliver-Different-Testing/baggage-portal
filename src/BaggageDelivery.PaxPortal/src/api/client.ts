@@ -144,24 +144,7 @@ export type DevLinks = {
   jobId: number
   token: string
   confirmUrl: string
-  trackUrl: string
 }
 
-export type TrackingEvent = {
-  status: string
-  atUtc: string
-  locationLabel?: string | null
-  description?: string | null
-}
-
-export type TrackingTimeline = {
-  jobId: number
-  currentStatus: string
-  events: TrackingEvent[]
-  etaWindowStartUtc?: string | null
-  etaWindowEndUtc?: string | null
-  courierFirstName?: string | null
-  vehicleLabel?: string | null
-}
 
 export type { AxiosRequestConfig }

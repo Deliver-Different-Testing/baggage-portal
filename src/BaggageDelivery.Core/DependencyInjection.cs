@@ -1,5 +1,4 @@
-﻿using System.Net;
-using BaggageDelivery.Core.AddressLookup;
+﻿using BaggageDelivery.Core.AddressLookup;
 using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
@@ -26,7 +25,6 @@ public static class DependencyInjection
             services.AddSingleton<IEncryptionService, EncryptionService>();
             services.AddScoped<IDespatchCalendar, DespatchCalendar>();
             services.AddScoped<IPaxBookingService, PaxBookingService>();
-            services.AddScoped<IPaxTrackingService, PaxTrackingService>();
             services.AddSingleton<IMjmlRenderer, MjmlRenderer>();
             services.AddScoped<INotificationRenderer, NotificationRenderer>();
             services.AddScoped<INotificationService, TucManualMessageSender>();
@@ -41,7 +39,7 @@ public static class DependencyInjection
             services.AddEncryption(configuration);
             services.AddBookingLinks(configuration);
             services.AddDespatchOptions(configuration);
-            services.AddTrackingPageClient(configuration);
+            services.AddTrackingPageUrls(configuration);
             services.AddAddressLookup(configuration);
         }
 
@@ -102,10 +100,17 @@ public static class DependencyInjection
                 {
                     opts.SupportPhone = supportPhone;
                 }
+
+                var replyTo = Environment.GetEnvironmentVariable("NotificationReplyToEmail")
+                              ?? configuration["NotificationReplyToEmail"];
+                if (!string.IsNullOrEmpty(replyTo))
+                {
+                    opts.NotificationReplyToEmail = replyTo;
+                }
             });
         }
 
-        private void AddTrackingPageClient(IConfiguration configuration)
+        private void AddTrackingPageUrls(IConfiguration configuration)
         {
             services.Configure<TrackingPageUrlsOptions>(configuration.GetSection(TrackingPageUrlsOptions.SectionName));
             services.PostConfigure<TrackingPageUrlsOptions>(opts =>
@@ -118,25 +123,9 @@ public static class DependencyInjection
                 }
             });
 
-            var retryPolicy = HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
-
-            var circuitBreakerPolicy = HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .CircuitBreakerAsync(5, TimeSpan.FromSeconds(30));
-
-            services.AddHttpClient<ITrackingPageClient, TrackingPageClient>(client =>
-                {
-                    client.Timeout = TimeSpan.FromSeconds(15);
-                })
-                .AddPolicyHandler(retryPolicy)
-                .AddPolicyHandler(circuitBreakerPolicy)
-                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-                {
-                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
-                });
         }
+
+
 
         private void AddAddressLookup(IConfiguration configuration)
         {

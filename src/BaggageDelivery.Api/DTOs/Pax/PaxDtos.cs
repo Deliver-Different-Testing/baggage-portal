@@ -34,7 +34,7 @@ public sealed record AtlOptionDto(int Id, string Name);
 public sealed record AddressDto(
     [MaxLength(255)] string? Line1,
     [MaxLength(255)] string? Line2,
-    [MaxLength(255)] string? Line3,
+    [Required, MaxLength(255)] string? Line3,
     [Required, MaxLength(255)] string Line4,
     [Required, MaxLength(255)] string Line5,
     [Required, MaxLength(255)] string Line6,

@@ -38,7 +38,7 @@ export function AtlSection({
 
   return (
     <FormSection
-      title="If nobody's home"
+      title="Authority to leave"
       subtitle="We can leave your bag in a safe place instead of waiting for someone"
       action={
         <Switch

@@ -7,6 +7,7 @@ public sealed record BookingSummary(
     string JobNumber,
     string FileReference,
     string AirlineLabel,
+    string AirlineSmsName,
     string? AirlineCode,
     string SupportPhone,
     string PassengerName,

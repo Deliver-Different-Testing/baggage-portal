@@ -4,7 +4,6 @@ import type {
   ConfirmBookingRequest,
   DevLinks,
   TimeSlot,
-  TrackingTimeline,
 } from './client'
 
 export async function getBooking(id: string): Promise<BookingSummary> {
@@ -23,10 +22,6 @@ export async function confirmBooking(id: string, body: ConfirmBookingRequest): P
   await apiClient.post(`/pax/${id}/booking/confirm`, body)
 }
 
-export async function getTracking(id: string): Promise<TrackingTimeline> {
-  const { data } = await apiClient.get<TrackingTimeline>(`/pax/${id}/tracking`)
-  return data
-}
 
 export async function getDevLinks(): Promise<DevLinks> {
   const { data } = await apiClient.get<DevLinks>('/dev/links')

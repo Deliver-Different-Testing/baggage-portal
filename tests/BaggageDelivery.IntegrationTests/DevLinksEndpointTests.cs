@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using BaggageDelivery.Api.Dev;
 using BaggageDelivery.Core.Interfaces;
@@ -9,7 +9,7 @@ namespace BaggageDelivery.IntegrationTests;
 
 public class DevLinksEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApiFactory>
 {
-    private sealed record DevLinksResponse(int JobId, string Token, string ConfirmUrl, string TrackUrl);
+    private sealed record DevLinksResponse(int JobId, string Token, string ConfirmUrl);
 
     [Fact]
     public async Task Dev_links_returns_a_token_that_decrypts_back_to_the_configured_job()
@@ -32,7 +32,7 @@ public class DevLinksEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApi
     }
 
     [Fact]
-    public async Task Dev_links_urls_target_the_pax_routes_on_the_spa_origin()
+    public async Task Dev_links_url_targets_the_confirm_route_on_the_spa_origin()
     {
         var client = factory.CreateClient();
 
@@ -44,6 +44,5 @@ public class DevLinksEndpointTests(PaxApiFactory factory) : IClassFixture<PaxApi
         var paxBase = DevStartup.ResolvePaxBaseUrl(Environment.GetEnvironmentVariable("AppUrl"));
 
         Assert.Equal($"{paxBase}/c/{links.Token}", links.ConfirmUrl);
-        Assert.Equal($"{paxBase}/t/{links.Token}", links.TrackUrl);
     }
 }

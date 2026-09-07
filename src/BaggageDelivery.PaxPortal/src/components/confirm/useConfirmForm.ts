@@ -6,7 +6,7 @@ import { addressLabels, isUnitedStates } from '../../utils/address'
 import { confirmBooking } from '../../api/pax'
 import { airlineAccent } from '../../styles/airlineAccent'
 import { getAirlineBrand } from '../../styles/airlineBranding'
-import { atlNotesAreRequired, computeFieldErrors } from './confirmValidation'
+import { ADDRESS_FIELD_KEYS, atlNotesAreRequired, computeFieldErrors } from './confirmValidation'
 import type { AddressDto, BookingSummary, TimeSlot } from '../../api/client'
 import type { AddressDetail } from '../../types/address'
 
@@ -29,6 +29,8 @@ export function useConfirmForm(
   const [passengerName, setPassengerName] = useState(summary.passengerName ?? '')
   const [passengerPhone, setPassengerPhone] = useState(summary.passengerPhone ?? '')
   const [passengerEmail, setPassengerEmail] = useState(summary.passengerEmail ?? '')
+  const [addressConfirmed, setAddressConfirmed] = useState(false)
+  const [editingAddress, setEditingAddress] = useState(false)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [atlOptionId, setAtlOptionId] = useState<number | null>(null)
   const [accessNotes, setAccessNotes] = useState('')
@@ -81,6 +83,18 @@ export function useConfirmForm(
     setAddress((a) => ({ ...a, ...patch }))
   }, [])
 
+  const handleAddressConfirmedChange = useCallback((value: boolean) => {
+    setAddressConfirmed(value)
+    if (value) setEditingAddress(false)
+  }, [])
+
+  const handleToggleAddressEdit = useCallback(() => {
+    setEditingAddress((editing) => {
+      if (!editing) setAddressConfirmed(false)
+      return !editing
+    })
+  }, [])
+
   const handleCountryChange = useCallback(
     (country: string) => {
       setServerCountryError(null)
@@ -91,6 +105,7 @@ export function useConfirmForm(
 
   const handleAddressSelect = useCallback((detail: AddressDetail) => {
     setServerCountryError(null)
+    setAddressConfirmed(false)
     const us = isUnitedStates(detail.countryCode)
     setAddress((a) => ({
       ...a,
@@ -121,6 +136,7 @@ export function useConfirmForm(
       passengerPhone,
       passengerEmail,
       address,
+      addressConfirmed,
       hasDeliveryTime: !!selectedSlot?.runUtc,
       atlOptionName: selectedAtlOption?.name,
       accessNotes,
@@ -134,7 +150,6 @@ export function useConfirmForm(
     mutationFn: (body: Parameters<typeof confirmBooking>[1]) => confirmBooking(bookingId, body),
     onSuccess: () => {
       setConfirmed(true)
-      void import('../../pages/Tracking')
     },
     onError: (err) => {
       closeReview()
@@ -155,6 +170,7 @@ export function useConfirmForm(
       const countryError = errors?.['Address.Country']?.[0]
       if (countryError) {
         setServerCountryError(countryError)
+        setEditingAddress(true)
         showError(countryError)
         return
       }
@@ -166,7 +182,10 @@ export function useConfirmForm(
 
   function review() {
     setSubmitCount((count) => count + 1)
-    if (Object.keys(fieldErrors).length > 0) return
+    if (Object.keys(fieldErrors).length > 0) {
+      if (ADDRESS_FIELD_KEYS.some((key) => fieldErrors[key])) setEditingAddress(true)
+      return
+    }
     openReview()
   }
 
@@ -191,6 +210,8 @@ export function useConfirmForm(
     accent,
     labels,
     address,
+    addressConfirmed,
+    editingAddress,
     fieldErrors,
     submitCount,
     passengerName,
@@ -217,6 +238,8 @@ export function useConfirmForm(
     setLocation,
     patchAddress,
     handleCountryChange,
+    handleAddressConfirmedChange,
+    handleToggleAddressEdit,
     handleAddressSelect,
     handleSelectSlot,
     handleRunStartPassed,

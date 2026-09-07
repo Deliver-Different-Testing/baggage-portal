@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace BaggageDelivery.Api.DTOs.Admin;
 
@@ -14,4 +14,4 @@ public sealed record MintBookingLinkRequest(
 public sealed record MintBookingLinkResponse(
     string EncryptedId,
     string ConfirmUrl,
-    string TrackUrl);
+    string? TrackUrl);

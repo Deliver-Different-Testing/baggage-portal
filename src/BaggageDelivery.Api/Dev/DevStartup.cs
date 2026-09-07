@@ -1,4 +1,4 @@
-using BaggageDelivery.Core.Interfaces;
+﻿using BaggageDelivery.Core.Interfaces;
 using Serilog;
 
 namespace BaggageDelivery.Api.Dev;
@@ -9,7 +9,7 @@ public static class DevStartup
 
     private const int DefaultJobId = 67;
 
-    internal sealed record DevLinks(int JobId, string Token, string ConfirmUrl, string TrackUrl);
+    internal sealed record DevLinks(int JobId, string Token, string ConfirmUrl);
 
     internal sealed record DevLinksResult(DevLinks? Links, string? Error, Exception? Exception = null);
 
@@ -38,7 +38,7 @@ public static class DevStartup
         var paxBase = ResolvePaxBaseUrl(appUrl);
 
         return new DevLinksResult(
-            new DevLinks(jobId, token, $"{paxBase}/c/{token}", $"{paxBase}/t/{token}"),
+            new DevLinks(jobId, token, $"{paxBase}/c/{token}"),
             null);
     }
 
@@ -68,7 +68,6 @@ public static class DevStartup
 
             Log.Information("DevStartup: magic links for JobId={JobId}", result.Links.JobId);
             Log.Information("  Pax confirmation: {ConfirmUrl}", result.Links.ConfirmUrl);
-            Log.Information("  Pax tracking:     {TrackUrl}", result.Links.TrackUrl);
         }
 
         public void MapDevLinks()

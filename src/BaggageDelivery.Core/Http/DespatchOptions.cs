@@ -12,6 +12,8 @@ public sealed class DespatchOptions
 
     public string SupportPhone { get; set; } = string.Empty;
 
+    public string NotificationReplyToEmail { get; set; } = "baggage@urgent.co.nz";
+
     public LeaveNotHomeOption[] ExcludedAtlOptions { get; set; } =
     [
         LeaveNotHomeOption.LetterBox,

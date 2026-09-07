@@ -72,6 +72,18 @@ export function ConfirmForm({
                 />
               </Box>
 
+              <ContactSection
+                passengerName={form.passengerName}
+                passengerPhone={form.passengerPhone}
+                passengerEmail={form.passengerEmail}
+                onNameChange={form.setPassengerName}
+                onPhoneChange={form.setPassengerPhone}
+                onEmailChange={form.setPassengerEmail}
+                showFieldError={showFieldError}
+              />
+
+              <Divider />
+
               <WindowSection
                 slots={slots}
                 available={form.availableSlots}
@@ -89,23 +101,15 @@ export function ConfirmForm({
                 bookingId={bookingId}
                 address={address}
                 labels={form.labels}
+                confirmed={form.addressConfirmed}
+                editing={form.editingAddress}
                 serverCountryError={form.serverCountryError}
+                onConfirmedChange={form.handleAddressConfirmedChange}
+                onToggleEdit={form.handleToggleAddressEdit}
                 onAddressSelect={form.handleAddressSelect}
                 onPatch={form.patchAddress}
                 onLocationPatch={form.setLocation}
                 onCountryChange={form.handleCountryChange}
-                showFieldError={showFieldError}
-              />
-
-              <Divider />
-
-              <ContactSection
-                passengerName={form.passengerName}
-                passengerPhone={form.passengerPhone}
-                passengerEmail={form.passengerEmail}
-                onNameChange={form.setPassengerName}
-                onPhoneChange={form.setPassengerPhone}
-                onEmailChange={form.setPassengerEmail}
                 showFieldError={showFieldError}
               />
 
@@ -140,7 +144,7 @@ export function ConfirmForm({
               >
                 {summary.supportPhone}
               </Anchor>
-              {summary.fileReference ? ` and quote ${summary.fileReference}.` : '.'}
+              {summary.jobNumber ? ` and quote job number ${summary.jobNumber}.` : '.'}
             </Text>
           )}
         </Stack>

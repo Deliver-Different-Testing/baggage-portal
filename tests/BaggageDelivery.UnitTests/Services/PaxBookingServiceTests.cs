@@ -825,6 +825,31 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
+    public async Task GetSummary_carries_both_the_client_name_and_its_sms_name()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucClients.Add(new TucClient
+        {
+            UcclId = 3, UcclCode = "NZ", UcclName = "Air New Zealand",
+            UcclLegalName = "Air New Zealand Ltd", Smsname = "AirNZ",
+            CreatedBy = "test", LastModifiedBy = "test"
+        });
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientId = 3 });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal("Air New Zealand", summary.AirlineLabel);
+        Assert.Equal("AirNZ", summary.AirlineSmsName);
+    }
+
+    [Fact]
     public async Task GetSummary_returns_only_category_all_allow_leave_atl_options_ordered_by_sequence_desc_then_name()
     {
         await using var db = InMemoryDb.NewContext();
@@ -1114,6 +1139,34 @@ public class PaxBookingServiceTests
         Assert.NotNull(details);
         Assert.Equal("AKLNZ12345", details.FileReference);
         Assert.Equal("Air New Zealand", details.AirlineLabel);
+        Assert.Equal("AirNZ", details.AirlineSmsName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetNotificationDetails_falls_back_to_the_client_name_without_an_sms_name(
+        string smsName)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucClients.Add(new TucClient
+        {
+            UcclId = 3, UcclCode = "NZ", UcclName = "Air New Zealand",
+            UcclLegalName = "Air New Zealand Ltd", Smsname = smsName,
+            CreatedBy = "test", LastModifiedBy = "test"
+        });
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientId = 3 });
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+
+        var details = await svc.GetNotificationDetailsAsync(7, ct);
+
+        Assert.NotNull(details);
+        Assert.Equal("Air New Zealand", details.AirlineSmsName);
     }
 
     [Theory]
@@ -1154,6 +1207,7 @@ public class PaxBookingServiceTests
 
         Assert.NotNull(details);
         Assert.Equal("Your Airline", details.AirlineLabel);
+        Assert.Equal("Your Airline", details.AirlineSmsName);
     }
 
     [Fact]
@@ -1229,7 +1283,7 @@ public class PaxBookingServiceTests
     }
 
     [Fact]
-    public async Task GetSummary_offers_the_clients_own_phone_as_the_support_number()
+    public async Task GetSummary_serves_the_courier_support_line_over_the_clients_own_phone()
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
@@ -1247,14 +1301,15 @@ public class PaxBookingServiceTests
         var summary = await svc.GetSummaryAsync(7, ct);
 
         Assert.NotNull(summary);
-        Assert.Equal("0800 267 5494", summary.SupportPhone);
+        Assert.Equal("0800 111 222", summary.SupportPhone);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task GetSummary_falls_back_to_the_tenant_support_phone(string? clientPhone)
+    public async Task GetSummary_serves_the_tenant_support_phone_whatever_the_client_carries(
+        string? clientPhone)
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
