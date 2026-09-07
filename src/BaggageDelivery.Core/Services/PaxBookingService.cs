@@ -52,7 +52,7 @@ internal sealed class PaxBookingService(
                 j.DeliveryLatitude,
                 j.DeliveryLongitude,
                 ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null,
-                ClientPhone = j.UcjbClient != null ? j.UcjbClient.UcclPhone : null,
+                ClientSmsName = j.UcjbClient != null ? j.UcjbClient.Smsname : null,
                 ClientRefa = j.UcjbClientRefa,
                 JobClientCode = j.UcjbClientCode,
                 ClientCode = j.UcjbClient != null ? j.UcjbClient.UcclCode : null,
@@ -112,7 +112,8 @@ internal sealed class PaxBookingService(
             JobNumber: (job.JobNumber ?? string.Empty).Trim(),
             FileReference: (job.ClientRefa ?? string.Empty).Trim(),
             AirlineLabel: AirlineLabelOf(job.ClientName),
-            SupportPhone: FirstNonBlank(job.ClientPhone, despatchOptions.Value.SupportPhone),
+            AirlineSmsName: AirlineSmsNameOf(job.ClientSmsName, job.ClientName),
+            SupportPhone: (despatchOptions.Value.SupportPhone).Trim(),
             AirlineCode: string.IsNullOrWhiteSpace(airlineCode) ? null : airlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
@@ -188,7 +189,8 @@ internal sealed class PaxBookingService(
             .Select(j => new
             {
                 ClientRefa = j.UcjbClientRefa,
-                ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null
+                ClientName = j.UcjbClient != null ? j.UcjbClient.UcclName : null,
+                ClientSmsName = j.UcjbClient != null ? j.UcjbClient.Smsname : null
             })
             .FirstOrDefaultAsync(ct);
 
@@ -196,16 +198,15 @@ internal sealed class PaxBookingService(
             ? null
             : new BookingNotificationDetails(
                 (job.ClientRefa ?? string.Empty).Trim(),
-                AirlineLabelOf(job.ClientName));
+                AirlineLabelOf(job.ClientName),
+                AirlineSmsNameOf(job.ClientSmsName, job.ClientName));
     }
 
     private static string AirlineLabelOf(string? clientName) =>
         string.IsNullOrWhiteSpace(clientName) ? BookingNotificationDetails.UnknownAirline : clientName;
 
-    private static string FirstNonBlank(string? preferred, string? fallback) =>
-        !string.IsNullOrWhiteSpace(preferred) ? preferred.Trim()
-        : !string.IsNullOrWhiteSpace(fallback) ? fallback.Trim()
-        : string.Empty;
+    private static string AirlineSmsNameOf(string? clientSmsName, string? clientName) =>
+        string.IsNullOrWhiteSpace(clientSmsName) ? AirlineLabelOf(clientName) : clientSmsName.Trim();
 
     private static AddressUpdateDto BuildAddressDto(
         int jobId,

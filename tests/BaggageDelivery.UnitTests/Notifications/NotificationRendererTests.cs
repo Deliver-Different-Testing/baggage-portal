@@ -12,11 +12,11 @@ public class NotificationRendererTests
     private static Task<RenderedNotification> Render(
         string channel = NotificationChannel.Email,
         string passengerName = "Jane Pax",
-        string airlineLabel = "Air New Zealand",
+        string airlineName = "Air New Zealand",
         string? fileReference = "AKLNZ12345") =>
         Renderer.RenderBookingLinkAsync(
             new BookingNotificationContext(
-                channel, passengerName, airlineLabel, fileReference, "https://bags.example.com/c/TOKEN"),
+                channel, passengerName, airlineName, fileReference, "https://bags.example.com/c/TOKEN"),
             TestContext.Current.CancellationToken);
 
     // ---- Email: the reference the portal shows -------------------------------
@@ -58,9 +58,21 @@ public class NotificationRendererTests
     [Fact]
     public async Task Email_subject_names_the_airline()
     {
-        var rendered = await Render(airlineLabel: "Air New Zealand");
+        var rendered = await Render(airlineName: "Air NZ");
 
-        Assert.Equal("Your Air New Zealand baggage is ready for delivery", rendered.Subject);
+        Assert.Equal(
+            "Air NZ: your baggage is here - confirm delivery to receive it (Ref AKLNZ12345)",
+            rendered.Subject);
+    }
+
+    [Fact]
+    public async Task Email_subject_drops_the_reference_when_there_is_none()
+    {
+        var rendered = await Render(airlineName: "Air NZ", fileReference: "  ");
+
+        Assert.Equal(
+            "Air NZ: your baggage is here - confirm delivery to receive it",
+            rendered.Subject);
     }
 
     [Fact]
@@ -90,7 +102,7 @@ public class NotificationRendererTests
     {
         // tucClient.UcclName is free text — an ampersand in it must not break the
         // MJML parse or land raw in the html.
-        var rendered = await Render(airlineLabel: "Loganair & Co", passengerName: "Jane & John");
+        var rendered = await Render(airlineName: "Loganair & Co", passengerName: "Jane & John");
 
         Assert.Contains("Loganair &amp; Co", rendered.Body);
         Assert.Contains("Jane &amp; John", rendered.Body);
@@ -104,10 +116,24 @@ public class NotificationRendererTests
         var rendered = await Render(channel: NotificationChannel.Sms);
 
         Assert.Equal(
-            "Hi Jane, your Air New Zealand baggage is ready for delivery. " +
-            "Confirm your address and time slot: https://bags.example.com/c/TOKEN",
+            "Hi Jane, your Air New Zealand baggage is here. " +
+            "Confirm delivery to receive it (Ref AKLNZ12345) https://bags.example.com/c/TOKEN",
             rendered.Body);
         Assert.Equal("", rendered.Subject);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Sms_without_a_file_reference_still_carries_the_link(string? fileReference)
+    {
+        var rendered = await Render(channel: NotificationChannel.Sms, fileReference: fileReference);
+
+        Assert.Equal(
+            "Hi Jane, your Air New Zealand baggage is here. " +
+            "Confirm delivery to receive it https://bags.example.com/c/TOKEN",
+            rendered.Body);
     }
 
     [Fact]
@@ -122,12 +148,13 @@ public class NotificationRendererTests
     private static Task<RenderedNotification> RenderConfirmed(
         string channel = NotificationChannel.Email,
         string passengerName = "Jane Pax",
-        string airlineLabel = "Air New Zealand",
+        string airlineName = "Air New Zealand",
         string? fileReference = "AKLNZ12345",
+        string jobNumber = "URG-179252",
         string? trackingUrl = "https://tracking.example.com/#/TOKEN") =>
         Renderer.RenderBookingConfirmedAsync(
             new BookingConfirmedNotificationContext(
-                channel, passengerName, airlineLabel, fileReference,
+                channel, passengerName, airlineName, fileReference, jobNumber,
                 "Tomorrow, Thu 11 Jun", "2:00 PM – 4:00 PM", trackingUrl),
             TestContext.Current.CancellationToken);
 
@@ -172,5 +199,69 @@ public class NotificationRendererTests
 
         Assert.DoesNotContain("Track your delivery", rendered.Body);
         Assert.Contains("Tomorrow, Thu 11 Jun", rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_says_the_baggage_is_booked_in_for_delivery()
+    {
+        var rendered = await RenderConfirmed();
+
+        Assert.Contains("booked in for delivery", rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_quotes_the_job_number_as_the_tracking_number()
+    {
+        var rendered = await RenderConfirmed(jobNumber: "URG-179252");
+
+        Assert.Contains("Urgent Couriers will deliver your baggage - Tracking Number", rendered.Body);
+        Assert.Contains("URG-179252", rendered.Body);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Confirmed_email_omits_the_tracking_number_line_without_a_job_number(string jobNumber)
+    {
+        var rendered = await RenderConfirmed(jobNumber: jobNumber);
+
+        Assert.DoesNotContain("Tracking Number", rendered.Body);
+        Assert.Contains("Tomorrow, Thu 11 Jun", rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_lists_what_happens_next()
+    {
+        var rendered = await RenderConfirmed();
+
+        Assert.Contains("What happens next", rendered.Body);
+        Assert.Contains(
+            "We collect your bag and deliver it to your address within the Delivery Window.",
+            rendered.Body);
+        Assert.Contains(
+            "We will text/email you when your bag is collected from the airport with a tracking link.",
+            rendered.Body);
+        Assert.Contains(
+            "You can track the driver from the airport to your address.",
+            rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_invites_a_reply_when_something_changes()
+    {
+        var rendered = await RenderConfirmed();
+
+        Assert.Contains("If anything changes please reply to this email with your update.", rendered.Body);
+    }
+
+    [Fact]
+    public async Task Confirmed_email_escapes_markup_significant_characters_in_supplied_values()
+    {
+        var rendered = await RenderConfirmed(
+            airlineName: "Loganair & Co", passengerName: "Jane & John", jobNumber: "URG&179252");
+
+        Assert.Contains("Loganair &amp; Co", rendered.Body);
+        Assert.Contains("Jane &amp; John", rendered.Body);
+        Assert.Contains("URG&amp;179252", rendered.Body);
     }
 }

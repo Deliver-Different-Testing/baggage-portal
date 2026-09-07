@@ -22,6 +22,7 @@ const valid: ConfirmFormValues = {
     line7: '1010',
     country: 'NZ',
   },
+  addressConfirmed: true,
   hasDeliveryTime: true,
   atlOptionName: undefined,
   accessNotes: '',
@@ -82,6 +83,21 @@ describe('computeFieldErrors', () => {
     )
   })
 
+  it('asks for a street number', () => {
+    expect(errorsFor({ address: { ...valid.address, line3: '  ' } }).line3).toBe(
+      'Please enter your street number.',
+    )
+    expect(errorsFor({ address: { ...valid.address, line3: null } }).line3).toBe(
+      'Please enter your street number.',
+    )
+  })
+
+  it('blocks until the address is ticked as correct', () => {
+    expect(errorsFor({ addressConfirmed: false }).addressConfirmed).toBe(
+      'Please confirm your delivery address is correct.',
+    )
+  })
+
   it('asks for a country', () => {
     expect(errorsFor({ address: { ...valid.address, country: '' } }).country).toBe(
       'Please enter your country.',
@@ -119,10 +135,17 @@ describe('orderedErrors', () => {
     const errors = errorsFor({
       passengerName: '',
       hasDeliveryTime: false,
-      address: { ...valid.address, line5: '' },
+      addressConfirmed: false,
+      address: { ...valid.address, line3: '', line5: '' },
     })
 
-    expect(orderedErrors(errors).map((e) => e.key)).toEqual(['slot', 'line5', 'passengerName'])
+    expect(orderedErrors(errors).map((e) => e.key)).toEqual([
+      'passengerName',
+      'slot',
+      'line3',
+      'line5',
+      'addressConfirmed',
+    ])
   })
 
   it('carries the same message the field shows inline', () => {

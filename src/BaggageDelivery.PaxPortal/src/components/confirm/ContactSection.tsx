@@ -22,7 +22,7 @@ export function ContactSection({
   showFieldError: (key: string) => string | undefined
 }) {
   return (
-    <FormSection title="Contact" subtitle="Who the driver should ask for">
+    <FormSection title="Your details" subtitle="Who the driver should ask for">
       <Stack gap="xs">
         <TextInput
           id={fieldTargetId('passengerName')}

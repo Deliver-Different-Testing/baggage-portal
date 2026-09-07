@@ -27,6 +27,38 @@ function renderConfirmed(overrides: Partial<BookingSummary> = {}) {
 }
 
 describe('ConfirmedScreen', () => {
+  it('tells the passenger the bag comes within the delivery window and a tracking link follows', () => {
+    renderConfirmed()
+
+    const steps = screen.getByRole('list')
+    expect(steps).toHaveTextContent(
+      'We collect your bag and deliver it to your address within the Delivery Window.',
+    )
+    expect(steps).toHaveTextContent(
+      'We will text/email you when your bag is collected from the airport with a tracking link.',
+    )
+    expect(steps).toHaveTextContent('You can track the driver from the airport to your address.')
+    expect(steps).not.toHaveTextContent('The driver calls when they are close.')
+  })
+
+  it('points the help line at the job number, the reference support can look up', () => {
+    renderConfirmed()
+
+    const help = screen.getByText(/need to change something/i)
+    expect(help).toHaveTextContent('quote job number URG-179252')
+    expect(help).not.toHaveTextContent('AKLNZ12345')
+    expect(within(help).getByRole('link', { name: '0800 267 5494' })).toHaveAttribute(
+      'href',
+      'tel:08002675494',
+    )
+  })
+
+  it('stops at the phone number when the job carries no number', () => {
+    renderConfirmed({ jobNumber: '' })
+
+    expect(screen.getByText(/need to change something/i)).not.toHaveTextContent('quote')
+  })
+
   it('renders a tracking link pointing at the Despatch tracking page', () => {
     renderConfirmed()
 
@@ -41,11 +73,22 @@ describe('ConfirmedScreen', () => {
     expect(screen.getByRole('button', { name: /track your delivery/i })).toBeDisabled()
   })
 
-  it('keeps the SMS hint copy alongside the in-page CTA', () => {
+  it('says when tracking goes live rather than repeating the next-steps text promise', () => {
     renderConfirmed()
 
     expect(
-      screen.getByText(/we'll also text you when our driver is on the way/i),
+      screen.getByText(/tracking goes live once your bag is collected from the airport/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/we'll also text you when our driver is on the way/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('says the same thing about tracking whether or not the link is ready yet', () => {
+    renderConfirmed({ trackingUrl: null })
+
+    expect(
+      screen.getByText(/tracking goes live once your bag is collected from the airport/i),
     ).toBeInTheDocument()
   })
 
@@ -87,17 +130,15 @@ describe('ConfirmedScreen', () => {
     scrollTo.mockRestore()
   })
 
-  it('greys out tracking until a courier is actually under way', async () => {
+  it('hands the passenger over to the tracking app before a courier is assigned', async () => {
     renderConfirmed({ trackingAvailable: false })
 
-    expect(screen.queryByRole('link', { name: /track your delivery/i })).not.toBeInTheDocument()
-
-    const button = screen.getByRole('button', { name: /track your delivery/i })
-    expect(button).toBeDisabled()
+    const link = screen.getByRole('link', { name: /track your delivery/i })
+    expect(link).toHaveAttribute('href', 'https://tracking.example.com/#/ENCRYPTED')
 
     expect(
-      screen.getByText(/tracking will be available once your delivery starts/i),
-    ).toBeInTheDocument()
+      screen.queryByText(/tracking will be available once your delivery starts/i),
+    ).not.toBeInTheDocument()
   })
 
   it('issues a full docket of what was submitted', () => {

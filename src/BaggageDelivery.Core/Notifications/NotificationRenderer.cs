@@ -33,16 +33,16 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
     private static RenderedNotification RenderSms(BookingNotificationContext c)
     {
         var body =
-            $"Hi {c.PassengerName.Split(' ')[0]}, your {c.AirlineLabel} baggage is ready for delivery. " +
-            $"Confirm your address and time slot: {c.BookingUrl}";
+            $"Hi {FirstNameOf(c.PassengerName)}, your {c.AirlineName} baggage is here. " +
+            $"Confirm delivery to receive it{RefSuffix(c.FileReference)} {c.BookingUrl}";
         return new RenderedNotification(Subject: "", Body: body);
     }
 
     private RenderedNotification RenderEmail(BookingNotificationContext c)
     {
         var headerLine = string.IsNullOrWhiteSpace(c.FileReference)
-            ? Escape(c.AirlineLabel)
-            : $"File Reference: {Escape(c.FileReference)} · {Escape(c.AirlineLabel)}";
+            ? Escape(c.AirlineName)
+            : $"File Reference: {Escape(c.FileReference)} · {Escape(c.AirlineName)}";
 
         var mjmlTemplate = $"""
             <mjml>
@@ -55,7 +55,7 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
               <mj-body background-color="#f4f2f1">
                 <mj-section background-color="#001F3D" padding="32px">
                   <mj-column>
-                    <mj-text color="#ffffff" font-size="22px" font-weight="700">Your baggage is ready</mj-text>
+                    <mj-text color="#ffffff" font-size="22px" font-weight="700">Your baggage is here</mj-text>
                     <mj-text color="#9eb2cf" font-size="13px">{headerLine}</mj-text>
                   </mj-column>
                 </mj-section>
@@ -63,7 +63,7 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                   <mj-column>
                     <mj-text font-size="16px">Hi {Escape(c.PassengerName)},</mj-text>
                     <mj-text font-size="15px" line-height="1.5">
-                      Good news — your baggage has arrived and we're ready to deliver it. Please confirm
+                      Good news — your baggage is here and we're ready to deliver it. Please confirm
                       your delivery address, pick a time slot, and let us know if it's OK to leave the bag
                       unattended.
                     </mj-text>
@@ -86,14 +86,15 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
 
         var (html, _) = mjml.Render(mjmlTemplate);
         return new RenderedNotification(
-            Subject: $"Your {c.AirlineLabel} baggage is ready for delivery",
+            Subject:
+            $"{c.AirlineName}: your baggage is here - confirm delivery to receive it{RefSuffix(c.FileReference)}",
             Body: html);
     }
 
     private static RenderedNotification RenderConfirmedSms(BookingConfirmedNotificationContext c)
     {
         var body =
-            $"Thanks {c.PassengerName.Split(' ')[0]}, your {c.AirlineLabel} baggage delivery is booked for "
+            $"Thanks {FirstNameOf(c.PassengerName)}, your {c.AirlineName} baggage delivery is booked for "
             + $"{c.DayLabel}, {c.WindowLabel}.";
 
         if (!string.IsNullOrWhiteSpace(c.TrackingUrl))
@@ -107,8 +108,17 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
     private RenderedNotification RenderConfirmedEmail(BookingConfirmedNotificationContext c)
     {
         var headerLine = string.IsNullOrWhiteSpace(c.FileReference)
-            ? Escape(c.AirlineLabel)
-            : $"File Reference: {Escape(c.FileReference)} · {Escape(c.AirlineLabel)}";
+            ? Escape(c.AirlineName)
+            : $"File Reference: {Escape(c.FileReference)} · {Escape(c.AirlineName)}";
+
+        var trackingNumberLine = string.IsNullOrWhiteSpace(c.JobNumber)
+            ? string.Empty
+            : $"""
+                   <mj-text font-size="15px" line-height="1.5">
+                     Urgent Couriers will deliver your baggage - Tracking Number
+                     <strong>{Escape(c.JobNumber)}</strong>
+                   </mj-text>
+               """;
 
         var trackingBlock = string.IsNullOrWhiteSpace(c.TrackingUrl)
             ? string.Empty
@@ -138,8 +148,20 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                   <mj-column>
                     <mj-text font-size="16px">Hi {Escape(c.PassengerName)},</mj-text>
                     <mj-text font-size="15px" line-height="1.5">
-                      Thanks — we have everything we need. Your baggage is booked in for
+                      Thanks — we have everything we need. Your baggage is booked in for delivery
                       <strong>{Escape(c.DayLabel)}</strong>, between <strong>{Escape(c.WindowLabel)}</strong>.
+                    </mj-text>
+            {trackingNumberLine}
+                    <mj-text font-size="15px" font-weight="700" padding-top="16px">What happens next</mj-text>
+                    <mj-text font-size="15px" line-height="1.5">
+                      <ul style="margin:0;padding-left:20px;">
+                        <li>We collect your bag and deliver it to your address within the Delivery Window.</li>
+                        <li>We will text/email you when your bag is collected from the airport with a tracking link.</li>
+                        <li>You can track the driver from the airport to your address.</li>
+                      </ul>
+                    </mj-text>
+                    <mj-text font-size="15px" line-height="1.5">
+                      If anything changes please reply to this email with your update.
                     </mj-text>
             {trackingBlock}
                   </mj-column>
@@ -157,9 +179,14 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
 
         var (html, _) = mjml.Render(mjmlTemplate);
         return new RenderedNotification(
-            Subject: $"Your {c.AirlineLabel} baggage delivery is booked",
+            Subject: $"Your {c.AirlineName} baggage delivery is booked",
             Body: html);
     }
+
+    private static string FirstNameOf(string passengerName) => passengerName.Split(' ')[0];
+
+    private static string RefSuffix(string? fileReference) =>
+        string.IsNullOrWhiteSpace(fileReference) ? string.Empty : $" (Ref {fileReference.Trim()})";
 
     private static string Escape(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
 }

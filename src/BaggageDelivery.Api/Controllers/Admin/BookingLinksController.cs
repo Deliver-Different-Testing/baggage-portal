@@ -1,4 +1,4 @@
-using BaggageDelivery.Api.DTOs.Admin;
+﻿using BaggageDelivery.Api.DTOs.Admin;
 using BaggageDelivery.Core.Interfaces; 
 using BaggageDelivery.Core.Models;
 using BaggageDelivery.Core.Notifications;
@@ -20,6 +20,7 @@ public sealed class BookingLinksController(
     IEncryptionService encryption,
     INotificationService notifications,
     IPaxBookingService bookings,
+    IJobTrackingLinkService trackingLinks,
     IOptions<BookingLinkOptions> linkOptions) : ControllerBase
 {
     private const string DefaultPassenger = "Unknown Passenger";
@@ -38,14 +39,14 @@ public sealed class BookingLinksController(
         
         var token = encryption.EncryptId(body.JobId);
         var confirmUrl = $"{publicBase}/c/{token}";
-        var trackUrl = $"{publicBase}/t/{token}";
+        var trackUrl = await trackingLinks.GetTrackingUrlAsync(body.JobId, ct);
 
         var details = await bookings.GetNotificationDetailsAsync(body.JobId, ct);
 
         var passengerName = body.PassengerName ?? DefaultPassenger;
         var airline = !string.IsNullOrWhiteSpace(body.AirlineLabel)
             ? body.AirlineLabel
-            : details?.AirlineLabel ?? BookingNotificationDetails.UnknownAirline;
+            : details?.AirlineSmsName ?? BookingNotificationDetails.UnknownAirline;
         var fileReference = details?.FileReference ?? string.Empty;
 
         if (body.Channel is "sms" or "both" && !string.IsNullOrWhiteSpace(body.Phone))

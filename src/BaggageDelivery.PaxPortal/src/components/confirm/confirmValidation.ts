@@ -3,18 +3,20 @@ import type { addressLabels } from '../../utils/address'
 
 export type AddressLabels = ReturnType<typeof addressLabels>
 
-export const ADDRESS_FIELD_KEYS = ['line4', 'line5', 'line6', 'line7', 'country'] as const
+export const ADDRESS_FIELD_KEYS = ['line3', 'line4', 'line5', 'line6', 'line7', 'country'] as const
 
 const ERROR_ORDER = [
+  'passengerName',
+  'passengerPhone',
+  'passengerEmail',
   'slot',
+  'line3',
   'line4',
   'line5',
   'line6',
   'line7',
   'country',
-  'passengerName',
-  'passengerPhone',
-  'passengerEmail',
+  'addressConfirmed',
   'accessNotes',
 ] as const
 
@@ -29,6 +31,7 @@ export interface ConfirmFormValues {
   passengerPhone: string
   passengerEmail: string
   address: AddressDto
+  addressConfirmed: boolean
   hasDeliveryTime: boolean
   atlOptionName: string | undefined
   accessNotes: string
@@ -47,6 +50,7 @@ export function computeFieldErrors(
     passengerPhone,
     passengerEmail,
     address,
+    addressConfirmed,
     hasDeliveryTime,
     atlOptionName,
     accessNotes,
@@ -68,6 +72,9 @@ export function computeFieldErrors(
     errors.passengerEmail = 'Please enter a valid email address.'
   }
 
+  if (!(address.line3 ?? '').trim()) {
+    errors.line3 = `Please enter your ${labels.line3.toLowerCase()}.`
+  }
   if (!address.line4.trim()) errors.line4 = `Please enter your ${labels.line4.toLowerCase()}.`
   if (!address.line5.trim()) errors.line5 = `Please enter your ${labels.line5.toLowerCase()}.`
   if (!address.line6.trim()) errors.line6 = `Please enter your ${labels.line6.toLowerCase()}.`
@@ -75,6 +82,10 @@ export function computeFieldErrors(
     errors.line7 = `Please enter your ${labels.line7.toLowerCase()}.`
   }
   if (!address.country.trim()) errors.country = 'Please enter your country.'
+
+  if (!addressConfirmed) {
+    errors.addressConfirmed = 'Please confirm your delivery address is correct.'
+  }
 
   if (!hasDeliveryTime) errors.slot = 'Please pick a delivery window.'
 

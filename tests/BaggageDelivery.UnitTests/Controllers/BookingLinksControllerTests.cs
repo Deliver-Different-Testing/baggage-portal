@@ -1,4 +1,4 @@
-using BaggageDelivery.Api.Controllers.Admin;
+﻿using BaggageDelivery.Api.Controllers.Admin;
 using BaggageDelivery.Api.DTOs.Admin;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
@@ -17,6 +17,7 @@ namespace BaggageDelivery.UnitTests.Controllers;
 public class BookingLinksControllerTests
 {
     private const string Token = "ENCRYPTED-TOKEN";
+    private const string TrackingUrl = "https://tracking.example.com/#/REVERSIBLE";
     private static readonly string[] Expected = ["+64211234567", "pax@example.com"];
 
     private sealed class Harness
@@ -24,6 +25,7 @@ public class BookingLinksControllerTests
         public IEncryptionService Encryption { get; } = Substitute.For<IEncryptionService>();
         private INotificationService Notifications { get; } = Substitute.For<INotificationService>();
         private IPaxBookingService Bookings { get; } = Substitute.For<IPaxBookingService>();
+        private IJobTrackingLinkService TrackingLinks { get; } = Substitute.For<IJobTrackingLinkService>();
         public ProblemDetailsFactory ProblemFactory { get; } = Substitute.For<ProblemDetailsFactory>();
         private BookingLinksController Controller { get; }
 
@@ -31,12 +33,16 @@ public class BookingLinksControllerTests
             string publicBaseUrl = "https://bags.example.com",
             string fileReference = "AKLNZ12345",
             string airlineName = "Air New Zealand",
-            bool despatchKnowsJob = true)
+            string airlineSmsName = "Air NZ",
+            bool despatchKnowsJob = true,
+            string? trackingUrl = TrackingUrl)
         {
             Encryption.EncryptId(Arg.Any<int>()).Returns(Token);
+            TrackingLinks.GetTrackingUrlAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+                .Returns(trackingUrl);
             Bookings.GetNotificationDetailsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
                 .Returns(despatchKnowsJob
-                    ? new BookingNotificationDetails(fileReference, airlineName)
+                    ? new BookingNotificationDetails(fileReference, airlineName, airlineSmsName)
                     : null);
 
             ProblemFactory.CreateProblemDetails(
@@ -48,6 +54,7 @@ public class BookingLinksControllerTests
                 Encryption,
                 Notifications,
                 Bookings,
+                TrackingLinks,
                 Options.Create(new BookingLinkOptions { PublicBaseUrl = publicBaseUrl }))
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
@@ -98,7 +105,7 @@ public class BookingLinksControllerTests
     [InlineData("https://bags.example.com")]
     [InlineData("https://bags.example.com/")]
     [InlineData("https://bags.example.com///")]
-    public async Task Returns_the_token_and_both_urls_with_a_single_separator(string publicBaseUrl)
+    public async Task Returns_the_token_and_the_confirm_url_with_a_single_separator(string publicBaseUrl)
     {
         var harness = new Harness(publicBaseUrl);
 
@@ -108,7 +115,31 @@ public class BookingLinksControllerTests
             Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(Token, response.EncryptedId);
         Assert.Equal($"https://bags.example.com/c/{Token}", response.ConfirmUrl);
-        Assert.Equal($"https://bags.example.com/t/{Token}", response.TrackUrl);
+    }
+
+    [Fact]
+    public async Task Hands_back_the_tracking_apps_url_not_a_route_in_this_app()
+    {
+        var harness = new Harness();
+
+        var result = await harness.Mint(jobId: 4242);
+
+        var response = Assert.IsType<MintBookingLinkResponse>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(TrackingUrl, response.TrackUrl);
+    }
+
+    [Fact]
+    public async Task Mints_the_confirm_link_even_when_no_tracking_url_can_be_built()
+    {
+        var harness = new Harness(trackingUrl: null);
+
+        var result = await harness.Mint(jobId: 4242);
+
+        var response = Assert.IsType<MintBookingLinkResponse>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Null(response.TrackUrl);
+        Assert.Equal($"https://bags.example.com/c/{Token}", response.ConfirmUrl);
     }
 
     [Fact]
@@ -219,7 +250,7 @@ public class BookingLinksControllerTests
 
         var context = Assert.Single(harness.Sends).Context;
         Assert.Equal("Jane Pax", context.PassengerName);
-        Assert.Equal("Air New Zealand", context.AirlineLabel);
+        Assert.Equal("Air New Zealand", context.AirlineName);
     }
 
     [Fact]
@@ -264,11 +295,11 @@ public class BookingLinksControllerTests
     {
         // "Deliver DFRNT" used to fill this slot, which put the platform's name in
         // the subject line where the carrier's belongs.
-        var harness = new Harness(airlineName: "Air New Zealand");
+        var harness = new Harness(airlineName: "Air New Zealand", airlineSmsName: "Air NZ");
 
         await harness.Mint(airlineLabel: airlineLabel);
 
-        Assert.Equal("Air New Zealand", Assert.Single(harness.Sends).Context.AirlineLabel);
+        Assert.Equal("Air NZ", Assert.Single(harness.Sends).Context.AirlineName);
     }
 
     [Fact]
@@ -280,6 +311,6 @@ public class BookingLinksControllerTests
 
         var context = Assert.Single(harness.Sends).Context;
         Assert.Equal("Unknown Passenger", context.PassengerName);
-        Assert.Equal("Your Airline", context.AirlineLabel);
+        Assert.Equal("Your Airline", context.AirlineName);
     }
 }

@@ -74,8 +74,8 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await screen.findByRole('heading', { level: 2, name: /delivery window/i })
     expect(screen.getByRole('heading', { level: 2, name: /deliver to/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: /^contact$/i })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: /nobody's home/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: /your details/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: /authority to leave/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: /confirm your baggage delivery/i })).toBeInTheDocument()
   })
 
@@ -107,7 +107,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const listed = within(alert)
       .getAllByRole('link')
       .map((link) => link.textContent)
-    expect(listed).toEqual(['Please enter your suburb.', 'Please enter your full name.'])
+    expect(listed).toEqual(['Please enter your full name.', 'Please enter your suburb.'])
   })
 
   it('sends the passenger to the field a summary entry names', async () => {
@@ -148,15 +148,31 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
 
-  it('leads with the delivery window, before the address and the contact details', async () => {
+  it('gives the passenger the job number to quote, not the worldtracer reference', async () => {
     renderForm()
 
-    const window = await screen.findByRole('heading', { level: 2, name: /delivery window/i })
-    const deliverTo = screen.getByRole('heading', { level: 2, name: /deliver to/i })
-    const contact = screen.getByRole('heading', { level: 2, name: /^contact$/i })
+    await screen.findByText(/confirm your baggage delivery/i)
 
+    const help = screen.getByText(/any questions/i)
+    expect(help).toHaveTextContent('quote job number URG-179252')
+    expect(help).not.toHaveTextContent('AKLNZ12345')
+    expect(within(help).getByRole('link', { name: '0800 267 5494' })).toHaveAttribute(
+      'href',
+      'tel:08002675494',
+    )
+  })
+
+  it('leads with the passenger, then the window, the address and authority to leave', async () => {
+    renderForm()
+
+    const details = await screen.findByRole('heading', { level: 2, name: /your details/i })
+    const window = screen.getByRole('heading', { level: 2, name: /delivery window/i })
+    const deliverTo = screen.getByRole('heading', { level: 2, name: /deliver to/i })
+    const atl = screen.getByRole('heading', { level: 2, name: /authority to leave/i })
+
+    expect(details.compareDocumentPosition(window)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(window.compareDocumentPosition(deliverTo)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(deliverTo.compareDocumentPosition(contact)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(deliverTo.compareDocumentPosition(atl)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
   it('shows what the page is for while the booking is still loading', async () => {
@@ -397,7 +413,21 @@ describe('PaxMobile — Authority to Leave submit', () => {
     }
   })
 
+  async function editAddress(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /^edit$/i }))
+    await screen.findByRole('textbox', { name: /street name/i })
+  }
+
+  function addressTick() {
+    return screen.getByRole('checkbox', { name: /this address is correct/i })
+  }
+
+  async function tickAddress(user: ReturnType<typeof userEvent.setup>) {
+    if (!(addressTick() as HTMLInputElement).checked) await user.click(addressTick())
+  }
+
   async function openReview(user: ReturnType<typeof userEvent.setup>) {
+    await tickAddress(user)
     await user.click(screen.getByRole('button', { name: /review delivery/i }))
   }
 
@@ -415,28 +445,26 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await user.click(screen.getByRole('switch'))
   }
 
-  it('opens on the saved address as editable fields, not a block to tick off', async () => {
+  it('opens on the saved address as a block to tick off, not editable fields', async () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
 
-    expect(await screen.findByRole('textbox', { name: /street name/i })).toHaveValue('Test St')
-    expect(screen.getByRole('textbox', { name: /street number/i })).toHaveValue('123')
-    expect(screen.getByRole('textbox', { name: /suburb/i })).toHaveValue('Suburb')
-    expect(screen.getByRole('textbox', { name: /^city$/i })).toHaveValue('Auckland')
-    expect(screen.getByRole('textbox', { name: /postcode/i })).toHaveValue('1010')
-    expect(screen.getByRole('combobox', { name: /search address/i })).toBeInTheDocument()
+    expect(await screen.findByText('123 Test St')).toBeInTheDocument()
+    expect(screen.getByText('Suburb, Auckland 1010')).toBeInTheDocument()
+    expect(addressTick()).not.toBeChecked()
+    expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
 
-    expect(screen.queryByRole('checkbox', { name: /this address is correct/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
-
-    expect(screen.getByRole('textbox', { name: /full name/i })).toBeEnabled()
+    expect(screen.queryByRole('textbox', { name: /street name/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /search address/i })).not.toBeInTheDocument()
   })
 
-  it('shows the whole address form, no editor to open first', async () => {
+  it('reveals the whole address form once the passenger presses Edit', async () => {
+    const user = userEvent.setup()
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
 
     expect(screen.getByRole('combobox', { name: /search address/i })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /street number/i })).toHaveValue('123')
@@ -446,6 +474,59 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(screen.getByRole('textbox', { name: /city/i })).toHaveValue('Auckland')
     expect(screen.getByRole('textbox', { name: /postcode/i })).toHaveValue('1010')
     expect(screen.getByRole('textbox', { name: /country/i })).toHaveValue('NZ')
+  })
+
+  it('closes the editor and unticks when the address is edited after being confirmed', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await tickAddress(user)
+    expect(addressTick()).toBeChecked()
+
+    await editAddress(user)
+    expect(addressTick()).not.toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: /^done$/i }))
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: /street name/i })).not.toBeInTheDocument(),
+    )
+  })
+
+  it('blocks the review until the address is ticked as correct', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await user.click(screen.getByRole('button', { name: /review delivery/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/confirm your delivery address is correct/i)
+    expect(reviewDialog()).not.toBeInTheDocument()
+  })
+
+  it('reopens the editor on the missing street number, rather than hiding the error', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({ deliveryAddress: { ...summary.deliveryAddress, line3: '' } }),
+        ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await openReview(user)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/please enter your street number/i)
+    expect(reviewDialog()).not.toBeInTheDocument()
+
+    const streetNumber = await screen.findByRole('textbox', { name: /street number/i })
+    expect(streetNumber).toBeInTheDocument()
+    expect(streetNumber).toHaveAccessibleDescription(/please enter your street number/i)
   })
 
   it('relabels the locality fields for a US address', async () => {
@@ -466,9 +547,11 @@ describe('PaxMobile — Authority to Leave submit', () => {
       ),
     )
 
+    const user = userEvent.setup()
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
 
     expect(screen.getByRole('textbox', { name: /^city$/i })).toHaveValue('New York')
     expect(screen.getByRole('textbox', { name: /^state$/i })).toHaveValue('NY')
@@ -496,6 +579,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
     await user.clear(screen.getByRole('textbox', { name: /street name/i }))
     await user.type(screen.getByRole('textbox', { name: /street name/i }), 'Other St')
     await reviewAndConfirm(user)
@@ -554,6 +638,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
     await user.type(
       screen.getByRole('textbox', { name: /apartment, unit or suite/i }),
       'Apartment 4B, ring the buzzer',
@@ -576,17 +661,24 @@ describe('PaxMobile — Authority to Leave submit', () => {
       ),
     )
 
-    renderForm()
-
-    expect(
-      await screen.findByRole('textbox', { name: /apartment, unit or suite/i }),
-    ).toHaveValue('Gate code 1234')
-  })
-
-  it('leaves the extra-information field empty when the booking has none', async () => {
+    const user = userEvent.setup()
     renderForm()
 
     await screen.findByText(/confirm your baggage delivery/i)
+    expect(screen.getByText('Gate code 1234')).toBeInTheDocument()
+
+    await editAddress(user)
+    expect(screen.getByRole('textbox', { name: /apartment, unit or suite/i })).toHaveValue(
+      'Gate code 1234',
+    )
+  })
+
+  it('leaves the extra-information field empty when the booking has none', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
     expect(screen.getByRole('textbox', { name: /apartment, unit or suite/i })).toHaveValue('')
   })
 
@@ -772,6 +864,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await screen.findByText(/confirm your baggage delivery/i)
     await waitFor(() => expect(screen.getByRole('button', { name: /review delivery/i })).toBeEnabled())
+    await editAddress(user)
 
     expect(screen.getByRole('textbox', { name: /country/i })).toHaveValue('')
 
@@ -788,6 +881,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await screen.findByText(/confirm your baggage delivery/i)
     await waitFor(() => expect(screen.getByRole('button', { name: /review delivery/i })).toBeEnabled())
+    await editAddress(user)
 
     const country = screen.getByRole('textbox', { name: /country/i })
     await user.clear(country)
@@ -879,7 +973,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
 
     await waitFor(() => expect(reviewDialog()).not.toBeInTheDocument())
     expect(lastConfirmBody).toBeNull()
-    expect(screen.getByRole('textbox', { name: /street name/i })).toHaveValue('Test St')
+    expect(screen.getByText('123 Test St')).toBeInTheDocument()
   })
 
   it('drops the read-back when the chosen run departs, without sending', async () => {
@@ -1022,7 +1116,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /review delivery/i })).toBeEnabled(),
     )
-    await user.click(screen.getByRole('button', { name: /review delivery/i }))
+    await openReview(user)
 
     const dialog = within(await screen.findByRole('dialog'))
     const confirm = dialog.getByRole('button', { name: /confirm delivery/i })
@@ -1042,7 +1136,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /review delivery/i })).toBeEnabled(),
     )
-    await user.click(screen.getByRole('button', { name: /review delivery/i }))
+    await openReview(user)
 
     const dialog = within(await screen.findByRole('dialog'))
     expect(dialog.getByRole('heading', { level: 2, name: /check your delivery details/i })).toBeInTheDocument()
@@ -1135,11 +1229,14 @@ describe('PaxMobile — a booking that is already confirmed', () => {
     expect(screen.getByText('Test Passenger')).toBeInTheDocument()
   })
 
-  it('holds tracking closed until the job is under way', async () => {
+  it('sends the passenger to the tracking app, not a page inside this one', async () => {
     renderPage()
 
     await screen.findByRole('heading', { level: 1, name: /you're all set/i })
 
-    expect(screen.getByRole('button', { name: /track your delivery/i })).toBeDisabled()
+    expect(screen.getByRole('link', { name: /track your delivery/i })).toHaveAttribute(
+      'href',
+      'https://tracking.example.com/#/ENCRYPTED',
+    )
   })
 })

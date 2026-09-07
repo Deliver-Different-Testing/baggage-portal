@@ -139,6 +139,36 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
     }
 
     [Fact]
+    public async Task Confirm_without_a_street_number_is_rejected()
+    {
+        const int jobId = 4255;
+        await SeedJobAsync(jobId);
+
+        var client = factory.CreateClient();
+
+        var tokenResponse = await client.GetAsync("/api/v1/antiforgery/token",
+            TestContext.Current.CancellationToken);
+        tokenResponse.EnsureSuccessStatusCode();
+
+        var requestToken = CookieValue(tokenResponse.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith($"{RequestTokenCookie}=", StringComparison.Ordinal)));
+
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking/confirm")
+        {
+            Content = JsonContent.Create(ConfirmBody(streetNumber: "  "))
+        };
+        request.Headers.Add("X-XSRF-TOKEN", requestToken);
+
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("Address.Line3", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Confirm_without_a_delivery_time_is_rejected_not_a_server_error()
     {
         const int jobId = 4248;
@@ -348,11 +378,11 @@ public class PaxBookingAntiforgeryTests(PaxApiFactory factory) : IClassFixture<P
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     });
 
-    private static object ConfirmBody(string country = "NZ") => new
+    private static object ConfirmBody(string country = "NZ", string streetNumber = "1") => new
     {
         address = new
         {
-            line3 = "1",
+            line3 = streetNumber,
             line4 = "Test Street",
             line5 = "Ponsonby",
             line6 = "Auckland",

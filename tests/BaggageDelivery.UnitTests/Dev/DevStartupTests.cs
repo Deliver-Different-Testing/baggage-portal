@@ -1,4 +1,4 @@
-using BaggageDelivery.Api.Dev;
+﻿using BaggageDelivery.Api.Dev;
 using BaggageDelivery.Core.Interfaces;
 using NSubstitute;
 using Xunit;
@@ -35,7 +35,6 @@ public class DevStartupTests
         Assert.Equal(67, links.JobId);
         Assert.Equal("tok-67", links.Token);
         Assert.Equal("https://baggage.example.com/c/tok-67", links.ConfirmUrl);
-        Assert.Equal("https://baggage.example.com/t/tok-67", links.TrackUrl);
     }
 
     [Fact]

@@ -1,11 +1,14 @@
+using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
+using Microsoft.Extensions.Options;
 
 namespace BaggageDelivery.Core.Notifications;
 
 internal sealed class TucManualMessageSender(
     BaggageDeliveryContext db,
     INotificationRenderer renderer,
+    IOptions<DespatchOptions> despatchOptions,
     TimeProvider time) : INotificationService
 {
     public async Task SendBookingLinkAsync(int jobId, string recipient, BookingNotificationContext context, CancellationToken ct)
@@ -42,6 +45,7 @@ internal sealed class TucManualMessageSender(
                 break;
             case NotificationChannel.Email:
                 entity.SendToEmailAddress = recipient;
+                entity.ReplyToEmailAddress = despatchOptions.Value.NotificationReplyToEmail;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(channel),

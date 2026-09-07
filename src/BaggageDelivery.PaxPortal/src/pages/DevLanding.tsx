@@ -14,7 +14,7 @@ import {
   Text,
   Title,
 } from '@mantine/core'
-import { ArrowRightIcon, LuggageIcon, TruckIcon } from '../components/Icon'
+import { ArrowRightIcon, LuggageIcon } from '../components/Icon'
 import { PoweredByFooter } from '../components/PoweredByFooter'
 import { getDevLinks } from '../api/pax'
 import { useRedirectOnNotFound } from '../hooks/useRedirectOnNotFound'
@@ -73,12 +73,6 @@ export function DevLanding() {
                   label="Confirm delivery"
                   to={`/c/${links.data.token}`}
                   url={links.data.confirmUrl}
-                />
-                <DevLink
-                  icon={<TruckIcon size={20} color="var(--mantine-color-brand-6)" />}
-                  label="Track delivery"
-                  to={`/t/${links.data.token}`}
-                  url={links.data.trackUrl}
                 />
               </Stack>
             </Paper>

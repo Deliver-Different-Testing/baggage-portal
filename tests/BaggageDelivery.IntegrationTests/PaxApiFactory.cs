@@ -16,6 +16,8 @@ namespace BaggageDelivery.IntegrationTests;
 
 public sealed class PaxApiFactory : WebApplicationFactory<Program>
 {
+    private const string SupportPhone = "09 3073555";
+
     private readonly SqliteConnection _connection;
 
     static PaxApiFactory()
@@ -29,6 +31,7 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("BaggageDeliveryEncryptionIV",
             Convert.ToBase64String(RandomNumberGenerator.GetBytes(16)));
         Environment.SetEnvironmentVariable("TimeZone", "Pacific/Auckland");
+        Environment.SetEnvironmentVariable("SupportPhone", SupportPhone);
     }
 
     public PaxApiFactory()

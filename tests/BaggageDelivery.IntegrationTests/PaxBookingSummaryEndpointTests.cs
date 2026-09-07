@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Interfaces;
@@ -40,6 +41,20 @@ public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixtu
             TestContext.Current.CancellationToken);
 
         Assert.Equal(string.Empty, payload.GetProperty("fileReference").GetString());
+    }
+
+    [Fact]
+    public async Task The_in_app_tracking_endpoint_is_gone()
+    {
+        const int jobId = 4404;
+        await SeedJobAsync(jobId, "URG-4404", clientRefa: null);
+
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync($"/api/v1/pax/{EncryptedId(jobId)}/tracking",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private Task SeedJobAsync(int jobId, string? jobNumber, string? clientRefa) =>

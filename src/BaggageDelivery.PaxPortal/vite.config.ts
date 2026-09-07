@@ -42,14 +42,6 @@ export default defineConfig({
               expiration: { maxAgeSeconds: 60 * 30 },
             },
           },
-          {
-            urlPattern: /\/api\/v1\/pax\/[^/]+\/tracking/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'pax-tracking',
-              expiration: { maxAgeSeconds: 60 * 60 },
-            },
-          },
         ],
       },
     }),

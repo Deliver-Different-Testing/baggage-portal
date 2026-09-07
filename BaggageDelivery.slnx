@@ -14,7 +14,7 @@
     <File Path="NuGet.Config" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/BaggageDelivery.PaxPortal/BaggageDelivery.PaxPortal.esproj" Type="C#" />
+    <Project Path="src/BaggageDelivery.PaxPortal/BaggageDelivery.PaxPortal.esproj" />
     <Project Path="src/BaggageDelivery.Api/BaggageDelivery.Api.csproj" />
     <Project Path="src/BaggageDelivery.Core/BaggageDelivery.Core.csproj" />
   </Folder>

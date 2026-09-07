@@ -83,24 +83,6 @@ textarea.mantine-Input-input[data-disabled] {
   animation-delay: 200ms;
 }
 
-@keyframes pax-pulse {
-  0% {
-    box-shadow: 0 0 0 0 currentColor;
-    opacity: 0.6;
-  }
-  70% {
-    box-shadow: 0 0 0 8px transparent;
-    opacity: 0;
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-    opacity: 0;
-  }
-}
-.pax-pulse {
-  animation: pax-pulse 2s ease-out infinite;
-}
-
 .dd-dialog-footer {
   display: flex;
   flex-direction: column;
@@ -130,8 +112,7 @@ textarea.mantine-Input-input[data-disabled] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pax-stagger > *,
-  .pax-pulse {
+  .pax-stagger > * {
     animation: none;
   }
 }
