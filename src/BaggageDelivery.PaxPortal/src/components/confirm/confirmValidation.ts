@@ -9,7 +9,6 @@ const ERROR_ORDER = [
   'passengerName',
   'passengerPhone',
   'passengerEmail',
-  'slot',
   'line3',
   'line4',
   'line5',
@@ -17,6 +16,7 @@ const ERROR_ORDER = [
   'line7',
   'country',
   'addressConfirmed',
+  'slot',
   'accessNotes',
 ] as const
 

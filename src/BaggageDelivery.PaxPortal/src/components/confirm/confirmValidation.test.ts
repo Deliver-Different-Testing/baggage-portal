@@ -141,10 +141,10 @@ describe('orderedErrors', () => {
 
     expect(orderedErrors(errors).map((e) => e.key)).toEqual([
       'passengerName',
-      'slot',
       'line3',
       'line5',
       'addressConfirmed',
+      'slot',
     ])
   })
 

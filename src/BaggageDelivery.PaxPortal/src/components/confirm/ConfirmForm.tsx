@@ -84,19 +84,6 @@ export function ConfirmForm({
 
               <Divider />
 
-              <WindowSection
-                slots={slots}
-                available={form.availableSlots}
-                selectedId={form.effectiveSlotId}
-                selectedSlot={form.selectedSlot}
-                supportPhone={summary.supportPhone}
-                error={showFieldError('slot')}
-                onSelect={form.handleSelectSlot}
-                onRunStartPassed={form.handleRunStartPassed}
-              />
-
-              <Divider />
-
               <AddressSection
                 bookingId={bookingId}
                 address={address}
@@ -111,6 +98,19 @@ export function ConfirmForm({
                 onLocationPatch={form.setLocation}
                 onCountryChange={form.handleCountryChange}
                 showFieldError={showFieldError}
+              />
+
+              <Divider />
+
+              <WindowSection
+                slots={slots}
+                available={form.availableSlots}
+                selectedId={form.effectiveSlotId}
+                selectedSlot={form.selectedSlot}
+                supportPhone={summary.supportPhone}
+                error={showFieldError('slot')}
+                onSelect={form.handleSelectSlot}
+                onRunStartPassed={form.handleRunStartPassed}
               />
 
               <Divider />
@@ -144,7 +144,7 @@ export function ConfirmForm({
               >
                 {summary.supportPhone}
               </Anchor>
-              {summary.jobNumber ? ` and quote job number ${summary.jobNumber}.` : '.'}
+              {summary.jobNumber ? ` and quote tracking number ${summary.jobNumber}.` : '.'}
             </Text>
           )}
         </Stack>

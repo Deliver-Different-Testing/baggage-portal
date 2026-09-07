@@ -45,7 +45,7 @@ describe('ConfirmedScreen', () => {
     renderConfirmed()
 
     const help = screen.getByText(/need to change something/i)
-    expect(help).toHaveTextContent('quote job number URG-179252')
+    expect(help).toHaveTextContent('quote tracking number URG-179252')
     expect(help).not.toHaveTextContent('AKLNZ12345')
     expect(within(help).getByRole('link', { name: '0800 267 5494' })).toHaveAttribute(
       'href',
@@ -95,7 +95,7 @@ describe('ConfirmedScreen', () => {
   it('narrates the job number, the file reference and the chosen window', () => {
     renderConfirmed()
 
-    expect(screen.getByText(/^job number$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^tracking number$/i)).toBeInTheDocument()
     expect(screen.getByText('URG-179252')).toBeInTheDocument()
     expect(screen.getByText(/^file reference$/i)).toBeInTheDocument()
     expect(screen.getByText('AKLNZ12345')).toBeInTheDocument()
@@ -118,7 +118,7 @@ describe('ConfirmedScreen', () => {
   it('drops the job number tag when Despatch has no number for the job', () => {
     renderConfirmed({ jobNumber: '' })
 
-    expect(screen.queryByText(/^job number$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^tracking number$/i)).not.toBeInTheDocument()
   })
 
   it('scrolls back to the top so the passenger lands on the hero', () => {

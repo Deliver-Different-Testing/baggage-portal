@@ -154,7 +154,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await screen.findByText(/confirm your baggage delivery/i)
 
     const help = screen.getByText(/any questions/i)
-    expect(help).toHaveTextContent('quote job number URG-179252')
+    expect(help).toHaveTextContent('quote tracking number URG-179252')
     expect(help).not.toHaveTextContent('AKLNZ12345')
     expect(within(help).getByRole('link', { name: '0800 267 5494' })).toHaveAttribute(
       'href',
@@ -162,7 +162,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     )
   })
 
-  it('leads with the passenger, then the window, the address and authority to leave', async () => {
+  it('leads with the passenger, then the address, the window and authority to leave', async () => {
     renderForm()
 
     const details = await screen.findByRole('heading', { level: 2, name: /your details/i })
@@ -170,9 +170,9 @@ describe('PaxMobile — Authority to Leave submit', () => {
     const deliverTo = screen.getByRole('heading', { level: 2, name: /deliver to/i })
     const atl = screen.getByRole('heading', { level: 2, name: /authority to leave/i })
 
-    expect(details.compareDocumentPosition(window)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(window.compareDocumentPosition(deliverTo)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(deliverTo.compareDocumentPosition(atl)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(details.compareDocumentPosition(deliverTo)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(deliverTo.compareDocumentPosition(window)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(window.compareDocumentPosition(atl)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
   it('shows what the page is for while the booking is still loading', async () => {

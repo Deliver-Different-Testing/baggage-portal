@@ -113,7 +113,7 @@ export function ConfirmedScreen({
         <Stack gap="md">
           <Card p="lg">
             <Stack gap="md">
-              {summary.jobNumber && <PunchedTag label="Job number" value={summary.jobNumber} />}
+              {summary.jobNumber && <PunchedTag label="Tracking number" value={summary.jobNumber} />}
 
               {slot && (
                 <DocketTile label="Delivery window" variant="tint">
@@ -198,7 +198,7 @@ export function ConfirmedScreen({
               >
                 {summary.supportPhone}
               </Anchor>
-              {summary.jobNumber ? ` and quote job number ${summary.jobNumber}.` : '.'}
+              {summary.jobNumber ? ` and quote tracking number ${summary.jobNumber}.` : '.'}
             </Text>
           )}
         </Stack>

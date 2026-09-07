@@ -30,6 +30,11 @@ internal sealed class PaxBookingService(
     private const int MaxDaysWalked = 14;
     private const int DefaultWindowMinutes = 180;
 
+    private const string BookingCreatedComment =
+        "Baggage delivery booking created by passenger via self-service link";
+    private const string DeliveryAddressFieldName = "ucjbToAddr";
+    private const int MaxJourneyCommentLength = 500;
+
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
     {
         var job = await db.TucJobs
@@ -597,6 +602,16 @@ internal sealed class PaxBookingService(
             ? null
             : await suburbs.ResolveAsync(input.Address.Line5, input.Address.Line7, ct);
 
+        var before = await db.TucJobs
+            .Where(j => j.UcjbId == input.JobId)
+            .Select(j => new DeliveryAddressSnapshot(
+                j.DeliveryAddressLine1, j.DeliveryAddressLine2, j.DeliveryAddressLine3,
+                j.DeliveryAddressLine4, j.DeliveryAddressLine5, j.DeliveryAddressLine6,
+                j.DeliveryAddressLine7, j.DeliveryAddressLine8, j.UcjbToAddr))
+            .FirstOrDefaultAsync(ct);
+
+        var newAddress = DespatchAddressComposer.Compose(input.Address, country);
+
         var rows = await db.TucJobs
             .Where(j => j.UcjbId == input.JobId)
             .ExecuteUpdateAsync(s => s
@@ -613,7 +628,7 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.DeliveryAddressLine6, input.Address.Line6)
                     .SetProperty(j => j.DeliveryAddressLine7, input.Address.Line7)
                     .SetProperty(j => j.DeliveryAddressLine8, country)
-                    .SetProperty(j => j.UcjbToAddr, DespatchAddressComposer.Compose(input.Address, country))
+                    .SetProperty(j => j.UcjbToAddr, newAddress)
                     .SetProperty(j => j.UcjbTo, j => suburbId ?? j.UcjbTo)
                     .SetProperty(j => j.DeliveryLatitude, input.Address.Latitude)
                     .SetProperty(j => j.DeliveryLongitude, input.Address.Longitude)
@@ -631,15 +646,32 @@ internal sealed class PaxBookingService(
         
         try
         {
+            var updatedAt = time.GetUtcNow().UtcDateTime;
+
             var journey = new JobDeliveryJourney
             {
                 JobId = input.JobId,
                 ChangeType = nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking),
-                UpdatedAt = time.GetUtcNow().UtcDateTime,
+                UpdatedAt = updatedAt,
                 UpdatedByType = nameof(DeliveryJourneyUpdatedByType.System),
-                Comments = "Baggage delivery booking created by passenger via self-service link"
+                Comments = BookingCreatedComment
             };
-            
+
+            if (before is not null && HasAddressChanged(before, input.Address, country))
+            {
+                var oldAddress = DespatchAddressComposer.Compose(
+                    before.Line1, before.Line2, before.Line3, before.Line4,
+                    before.Line5, before.Line6, before.Line7, before.Line8);
+
+                journey.FieldName = DeliveryAddressFieldName;
+                journey.OldValue = string.IsNullOrWhiteSpace(oldAddress) ? before.Flat : oldAddress;
+                journey.NewValue = newAddress;
+                journey.Comments = Truncate(
+                    $"{BookingCreatedComment}. Delivery address changed by the passenger on "
+                    + $"{FormatAuditStamp(updatedAt)}.",
+                    MaxJourneyCommentLength);
+            }
+
             await db.JobDeliveryJourneys.AddAsync(journey, ct);
             await db.SaveChangesAsync(ct);
         }
@@ -652,6 +684,39 @@ internal sealed class PaxBookingService(
 
         Log.Information("Pax confirmation released: JobId={JobId}", input.JobId);
     }
+
+    private sealed record DeliveryAddressSnapshot(
+        string? Line1, string? Line2, string? Line3, string? Line4,
+        string? Line5, string? Line6, string? Line7, string? Line8, string? Flat);
+
+    private static bool HasAddressChanged(
+        DeliveryAddressSnapshot before, AddressUpdateDto after, string country) =>
+        !SameAddressLine(before.Line1, after.Line1)
+        || !SameAddressLine(before.Line2, after.Line2)
+        || !SameAddressLine(before.Line3, after.Line3)
+        || !SameAddressLine(before.Line4, after.Line4)
+        || !SameAddressLine(before.Line5, after.Line5)
+        || !SameAddressLine(before.Line6, after.Line6)
+        || !SameAddressLine(before.Line7, after.Line7)
+        || !SameAddressLine(before.Line8, country);
+
+    private static bool SameAddressLine(string? left, string? right) =>
+        string.Equals(
+            (left ?? string.Empty).Trim(),
+            (right ?? string.Empty).Trim(),
+            StringComparison.OrdinalIgnoreCase);
+
+    private string FormatAuditStamp(DateTime utc)
+    {
+        var local = UtcToTenantLocal(utc, despatchOptions.Value.TimeZone);
+
+        return local is null
+            ? string.Create(CultureInfo.InvariantCulture, $"{utc:d MMM yyyy 'at' h:mm tt} UTC")
+            : string.Create(CultureInfo.InvariantCulture, $"{local.Value:d MMM yyyy 'at' h:mm tt}");
+    }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     private static DateTime? UtcToTenantLocal(DateTime utc, string? timeZoneCode)
     {

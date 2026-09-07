@@ -10,11 +10,14 @@ internal static class DespatchAddressComposer
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        string?[] parts =
-        [
+        return Compose(
             address.Line1, address.Line2, address.Line3, address.Line4,
-            address.Line5, address.Line6, address.Line7, country
-        ];
+            address.Line5, address.Line6, address.Line7, country);
+    }
+
+    public static string Compose(params string?[] parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
 
         var joined = string.Join(", ", parts
             .Where(p => !string.IsNullOrWhiteSpace(p))
