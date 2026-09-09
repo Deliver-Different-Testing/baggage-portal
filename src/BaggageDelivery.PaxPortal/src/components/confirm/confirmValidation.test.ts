@@ -26,6 +26,9 @@ const valid: ConfirmFormValues = {
   hasDeliveryTime: true,
   atlOptionName: undefined,
   accessNotes: '',
+  addressChanged: false,
+  hasService: false,
+  noServiceAvailable: false,
 }
 
 const errorsFor = (overrides: Partial<ConfirmFormValues>, labels = nzLabels) =>
@@ -158,5 +161,54 @@ describe('orderedErrors', () => {
 
   it('returns nothing for a clean form', () => {
     expect(orderedErrors({})).toEqual([])
+  })
+})
+
+describe('service selection after an address change', () => {
+  it('does not ask for a service when the address is untouched', () => {
+    expect(computeFieldErrors(valid, nzLabels).service).toBeUndefined()
+  })
+
+  it('asks for a service once the address has changed', () => {
+    const errors = computeFieldErrors({ ...valid, addressChanged: true }, nzLabels)
+
+    expect(errors.service).toBe('Please choose a delivery service for your new address.')
+  })
+
+  it('accepts a changed address once a service is chosen', () => {
+    const errors = computeFieldErrors(
+      { ...valid, addressChanged: true, hasService: true },
+      nzLabels,
+    )
+
+    expect(errors.service).toBeUndefined()
+  })
+
+  it('blocks a changed address that no service covers', () => {
+    const errors = computeFieldErrors(
+      { ...valid, addressChanged: true, noServiceAvailable: true },
+      nzLabels,
+    )
+
+    expect(errors.service).toContain('cannot deliver to that address')
+  })
+
+  it('does not ask for a window it is not showing when nothing can be delivered', () => {
+    const errors = computeFieldErrors(
+      { ...valid, addressChanged: true, noServiceAvailable: true, hasDeliveryTime: false },
+      nzLabels,
+    )
+
+    expect(errors.slot).toBeUndefined()
+    expect(errors.service).toContain('cannot deliver to that address')
+  })
+
+  it('orders the service error between the address and the window', () => {
+    const errors = computeFieldErrors(
+      { ...valid, addressChanged: true, addressConfirmed: false, hasDeliveryTime: false },
+      nzLabels,
+    )
+
+    expect(orderedErrors(errors).map((e) => e.key)).toEqual(['addressConfirmed', 'service', 'slot'])
   })
 })

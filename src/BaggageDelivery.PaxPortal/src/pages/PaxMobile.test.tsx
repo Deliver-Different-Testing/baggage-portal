@@ -7,7 +7,7 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { PaxMobile } from './PaxMobile'
 import { MantineTestProvider } from '../test/render'
-import { slot, summary, tomorrowSlot } from '../test/paxFixtures'
+import { economyRun, slot, summary, tomorrowSlot } from '../test/paxFixtures'
 import type { BookingSummary, ConfirmBookingRequest } from '../api/client'
 
 
@@ -34,6 +34,9 @@ describe('PaxMobile — Authority to Leave submit', () => {
     }),
     http.get('*/pax/:id/booking', () => HttpResponse.json(booking())),
     http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])),
+    http.post('*/pax/:id/booking/services', () =>
+      HttpResponse.json({ services: [economyRun], noServiceAvailable: false }),
+    ),
     http.post('*/pax/:id/booking/confirm', async ({ request }) => {
       lastConfirmBody = (await request.json()) as ConfirmBookingRequest
       return HttpResponse.json({ status: 'Released', releasedAtUtc: '2026-06-10T00:00:00Z' })
@@ -338,19 +341,19 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('escalates the run-start notice inside the last ten minutes', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      vi.setSystemTime(new Date('2026-06-10T01:48:00Z'))
+      vi.setSystemTime(new Date('2026-06-10T01:20:00Z'))
       server.use(http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])))
 
       renderForm()
 
-      expect(await screen.findByText('12:00')).toBeInTheDocument()
+      expect(await screen.findByText('40:00')).toBeInTheDocument()
       expect(screen.getByRole('timer')).not.toHaveAttribute('data-urgent')
 
       await act(async () => {
-        vi.advanceTimersByTime(150_000)
+        vi.advanceTimersByTime(1_860_000)
       })
 
-      expect(await screen.findByText('9:30')).toBeInTheDocument()
+      expect(await screen.findByText('9:00')).toBeInTheDocument()
       expect(screen.getByRole('timer')).toHaveAttribute('data-urgent')
     } finally {
       vi.useRealTimers()
@@ -360,7 +363,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('counts down to the start of the selected run, and retargets when a later one is picked', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      vi.setSystemTime(new Date('2026-06-10T01:50:00Z'))
+      vi.setSystemTime(new Date('2026-06-10T01:20:00Z'))
       server.use(
         http.get('*/pax/:id/booking/timeslots', () =>
           HttpResponse.json([slot, tomorrowSlot]),
@@ -370,12 +373,12 @@ describe('PaxMobile — Authority to Leave submit', () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       renderForm()
 
-      expect(await screen.findByText('10:00')).toBeInTheDocument()
+      expect(await screen.findByText('40:00')).toBeInTheDocument()
 
       await act(async () => {
         vi.advanceTimersByTime(5_000)
       })
-      expect(screen.getByText('9:55')).toBeInTheDocument()
+      expect(screen.getByText('39:55')).toBeInTheDocument()
 
       await user.click(screen.getByText('Tomorrow, Thu 11 Jun'))
 
@@ -388,7 +391,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('refetches the windows and drops the selection once the run has departed', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      vi.setSystemTime(new Date('2026-06-10T01:59:00Z'))
+      vi.setSystemTime(new Date('2026-06-10T01:20:00Z'))
       let timeslotRequests = 0
       server.use(
         http.get('*/pax/:id/booking/timeslots', () => {
@@ -402,7 +405,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
       await screen.findByText('Today, Wed 10 Jun')
 
       await act(async () => {
-        vi.advanceTimersByTime(61_000)
+        vi.advanceTimersByTime(2_460_000)
       })
 
       await waitFor(() => expect(timeslotRequests).toBe(2))
@@ -429,6 +432,11 @@ describe('PaxMobile — Authority to Leave submit', () => {
   async function openReview(user: ReturnType<typeof userEvent.setup>) {
     await tickAddress(user)
     await user.click(screen.getByRole('button', { name: /review delivery/i }))
+  }
+
+  async function chooseOfferedService(user: ReturnType<typeof userEvent.setup>) {
+    const group = await screen.findByRole('radiogroup', { name: /delivery service/i })
+    await user.click(await within(group).findByRole('radio', { name: /economy run/i }))
   }
 
   async function reviewAndConfirm(user: ReturnType<typeof userEvent.setup>) {
@@ -529,6 +537,37 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(streetNumber).toHaveAccessibleDescription(/please enter your street number/i)
   })
 
+  it('clears a field error as the passenger fixes it', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({
+            passengerName: '',
+            deliveryAddress: { ...summary.deliveryAddress, line3: '' },
+          }),
+        ),
+      ),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await openReview(user)
+
+    const name = await screen.findByRole('textbox', { name: /full name/i })
+    const streetNumber = await screen.findByRole('textbox', { name: /street number/i })
+    expect(name).toHaveAccessibleDescription(/please enter your full name/i)
+    expect(streetNumber).toHaveAccessibleDescription(/please enter your street number/i)
+
+    await user.type(name, 'Test Passenger')
+    expect(name).not.toHaveAccessibleDescription(/please enter your full name/i)
+    expect(streetNumber).toHaveAccessibleDescription(/please enter your street number/i)
+
+    await user.type(streetNumber, '123')
+    expect(streetNumber).not.toHaveAccessibleDescription(/please enter your street number/i)
+  })
+
   it('relabels the locality fields for a US address', async () => {
     server.use(
       http.get('*/pax/:id/booking', () =>
@@ -582,6 +621,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await editAddress(user)
     await user.clear(screen.getByRole('textbox', { name: /street name/i }))
     await user.type(screen.getByRole('textbox', { name: /street name/i }), 'Other St')
+    await chooseOfferedService(user)
     await reviewAndConfirm(user)
 
     await waitFor(() => expect(lastConfirmBody).not.toBeNull())
@@ -633,6 +673,66 @@ describe('PaxMobile — Authority to Leave submit', () => {
     })
   })
 
+  it('routes the passenger to the airline when no service covers the new address', async () => {
+    server.use(
+      http.post('*/pax/:id/booking/services', () =>
+        HttpResponse.json({ services: [], noServiceAvailable: true }),
+      ),
+      http.post('*/pax/:id/booking/address-help', () => HttpResponse.json({ requested: true })),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+    await user.clear(screen.getByRole('textbox', { name: /suburb/i }))
+    await user.type(screen.getByRole('textbox', { name: /suburb/i }), 'Haast')
+
+    await screen.findByText(/we cannot deliver there/i)
+    expect(screen.queryByRole('radiogroup', { name: /delivery window/i })).not.toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /ask test air to contact me/i }))
+
+    expect(await screen.findByText(/we've asked test air to contact you/i)).toBeInTheDocument()
+    expect(lastConfirmBody).toBeNull()
+  })
+
+  it('does not check availability when the address is left alone', async () => {
+    let servicesCalls = 0
+    server.use(
+      http.post('*/pax/:id/booking/services', () => {
+        servicesCalls += 1
+        return HttpResponse.json({ services: [economyRun], noServiceAvailable: false })
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await reviewAndConfirm(user)
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(servicesCalls).toBe(0)
+    expect(lastConfirmBody!.serviceJobTypeId).toBeNull()
+  })
+
+  it('sends the chosen service with the confirmation', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+    await user.clear(screen.getByRole('textbox', { name: /street name/i }))
+    await user.type(screen.getByRole('textbox', { name: /street name/i }), 'Other St')
+    await chooseOfferedService(user)
+    await reviewAndConfirm(user)
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.serviceJobTypeId).toBe(37)
+  })
+
   it('posts extra delivery information as the second address line', async () => {
     const user = userEvent.setup()
     renderForm()
@@ -644,6 +744,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
       'Apartment 4B, ring the buzzer',
     )
 
+    await chooseOfferedService(user)
     await reviewAndConfirm(user)
 
     await waitFor(() => expect(lastConfirmBody).not.toBeNull())
@@ -887,6 +988,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await user.clear(country)
     await user.type(country, 'Australia')
 
+    await chooseOfferedService(user)
     await reviewAndConfirm(user)
 
     await waitFor(() => expect(lastConfirmBody).not.toBeNull())
@@ -979,7 +1081,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
   it('drops the read-back when the chosen run departs, without sending', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      vi.setSystemTime(new Date('2026-06-10T01:59:00Z'))
+      vi.setSystemTime(new Date('2026-06-10T01:20:00Z'))
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       renderForm()
 
@@ -991,7 +1093,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
       expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
       await act(async () => {
-        vi.advanceTimersByTime(61_000)
+        vi.advanceTimersByTime(2_460_000)
       })
 
       await waitFor(() => expect(reviewDialog()).not.toBeInTheDocument())

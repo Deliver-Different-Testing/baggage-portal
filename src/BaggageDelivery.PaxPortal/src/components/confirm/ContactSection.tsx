@@ -1,17 +1,18 @@
+import { memo } from 'react'
 import { Stack, TextInput } from '@mantine/core'
 import { FormSection } from './FormSection'
-import { fieldTargetId } from './confirmValidation'
+import { fieldTargetId, type ContactErrors } from './confirmValidation'
 
 const PASSENGER_EMAIL_MAX = 100
 
-export function ContactSection({
+export const ContactSection = memo(function ContactSection({
   passengerName,
   passengerPhone,
   passengerEmail,
   onNameChange,
   onPhoneChange,
   onEmailChange,
-  showFieldError,
+  errors,
 }: {
   passengerName: string
   passengerPhone: string
@@ -19,7 +20,7 @@ export function ContactSection({
   onNameChange: (value: string) => void
   onPhoneChange: (value: string) => void
   onEmailChange: (value: string) => void
-  showFieldError: (key: string) => string | undefined
+  errors: ContactErrors
 }) {
   return (
     <FormSection title="Your details" subtitle="Who the driver should ask for">
@@ -31,7 +32,7 @@ export function ContactSection({
           onChange={(e) => onNameChange(e.currentTarget.value)}
           autoComplete="name"
           required
-          error={showFieldError('passengerName')}
+          error={errors.passengerName}
         />
         <TextInput
           id={fieldTargetId('passengerPhone')}
@@ -44,7 +45,7 @@ export function ContactSection({
           inputMode="tel"
           type="tel"
           required
-          error={showFieldError('passengerPhone')}
+          error={errors.passengerPhone}
         />
         <TextInput
           id={fieldTargetId('passengerEmail')}
@@ -56,9 +57,9 @@ export function ContactSection({
           autoCapitalize="off"
           required
           maxLength={PASSENGER_EMAIL_MAX}
-          error={showFieldError('passengerEmail')}
+          error={errors.passengerEmail}
         />
       </Stack>
     </FormSection>
   )
-}
+})

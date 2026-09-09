@@ -14,7 +14,7 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core'
-import { ArrowRightIcon, CheckCircleIcon } from '../Icon'
+import { ArrowRightIcon, CheckCircleIcon, EditIcon } from '../Icon'
 import { DocketTile, Eyebrow, PunchedTag } from '../Docket'
 import { DeliveryDocket } from '../DeliveryDocket'
 import { FlightPathBackdrop } from '../FlightPathBackdrop'
@@ -31,6 +31,19 @@ const NEXT_STEPS = [
   'You can track the driver from the airport to your address.',
 ]
 
+function formatDeadline(iso?: string | null): string | null {
+  if (!iso) return null
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return null
+  return at.toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export function ConfirmedScreen({
   summary,
   slot,
@@ -40,6 +53,8 @@ export function ConfirmedScreen({
   passengerEmail,
   atlOption,
   accessNotes,
+  onEdit,
+  editableUntilUtc,
 }: {
   summary: BookingSummary
   slot: Pick<TimeSlot, 'dayLabel' | 'label'> | undefined
@@ -49,9 +64,12 @@ export function ConfirmedScreen({
   passengerEmail: string
   atlOption: AtlOption | undefined
   accessNotes: string
+  onEdit?: () => void
+  editableUntilUtc?: string | null
 }) {
   const trackingHref = summary.trackingUrl ?? null
   const trackingAvailable = trackingHref !== null
+  const changeDeadline = formatDeadline(editableUntilUtc)
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0)
@@ -187,6 +205,26 @@ export function ConfirmedScreen({
           <Text size="sm" c="dimmed" ta="center">
             {TRACKING_PENDING_HINT}
           </Text>
+
+          {onEdit && (
+            <Stack gap={6}>
+              <Button
+                size="md"
+                variant="light"
+                fullWidth
+                onClick={onEdit}
+                leftSection={<EditIcon size={16} />}
+                style={{ borderRadius: 9999 }}
+              >
+                Change delivery details
+              </Button>
+              {changeDeadline && (
+                <Text size="sm" c="dimmed" ta="center">
+                  You can change your delivery until {changeDeadline}.
+                </Text>
+              )}
+            </Stack>
+          )}
 
           {summary.supportPhone && (
             <Text size="sm" c="dimmed" ta="center">

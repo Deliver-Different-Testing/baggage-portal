@@ -19,15 +19,32 @@ export function addressLabels(country?: string | null) {
 }
 
 export function addressLines(a: AddressDto): string[] {
-  const street = [a.line3, a.line4].map((p) => (p ?? '').trim()).filter(Boolean).join(' ')
+  const street = [a.line3, a.line4]
+    .map((p) => (p ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
   const locality = [
-    [a.line5, a.line6].map((p) => (p ?? '').trim()).filter(Boolean).join(', '),
+    [a.line5, a.line6]
+      .map((p) => (p ?? '').trim())
+      .filter(Boolean)
+      .join(', '),
     a.line7,
   ]
     .map((part) => (part ?? '').trim())
     .filter(Boolean)
     .join(' ')
-  return [a.line1, street, locality, a.country]
-    .map((line) => (line ?? '').trim())
-    .filter(Boolean)
+  return [a.line1, street, locality, a.country].map((line) => (line ?? '').trim()).filter(Boolean)
+}
+
+const COMPARED_LINES = ['line1', 'line2', 'line3', 'line4', 'line5', 'line6', 'line7'] as const
+
+function normalise(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+export function sameDeliveryAddress(a: AddressDto, b: AddressDto): boolean {
+  return (
+    COMPARED_LINES.every((key) => normalise(a[key]) === normalise(b[key])) &&
+    normalise(a.country) === normalise(b.country)
+  )
 }

@@ -531,6 +531,8 @@ public partial class TucJob
 
     public virtual TucJobType NotifiedJobType { get; set; }
 
+    public virtual ICollection<TucNote> TucNotes { get; set; } = new List<TucNote>();
+
     public virtual TucClient UcjbClient { get; set; }
 
     public virtual TucSuburb UcjbFromNavigation { get; set; }

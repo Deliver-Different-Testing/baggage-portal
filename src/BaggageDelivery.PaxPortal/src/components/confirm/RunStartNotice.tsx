@@ -1,9 +1,7 @@
 import { memo } from 'react'
 import { Group, Text } from '@mantine/core'
 import { ClockIcon } from '../Icon'
-import { formatCountdown, useRunStartCountdown } from '../../hooks/useRunStartCountdown'
-
-const RUN_URGENT_MS = 10 * 60_000
+import { useRunStartCountdown } from '../../hooks/useRunStartCountdown'
 
 export const RunStartNotice = memo(function RunStartNotice({
   targetUtc,
@@ -12,8 +10,7 @@ export const RunStartNotice = memo(function RunStartNotice({
   targetUtc: string | undefined
   onExpire: () => void
 }) {
-  const remainingMs = useRunStartCountdown(targetUtc, onExpire)
-  const urgent = remainingMs <= RUN_URGENT_MS
+  const { label, urgent } = useRunStartCountdown(targetUtc, onExpire)
 
   return (
     <Group
@@ -51,7 +48,7 @@ export const RunStartNotice = memo(function RunStartNotice({
         c={urgent ? 'orange' : 'brand'}
         style={{ fontVariantNumeric: 'tabular-nums' }}
       >
-        {formatCountdown(remainingMs)}
+        {label}
       </Text>
     </Group>
   )

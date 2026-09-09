@@ -40,6 +40,10 @@ async function ensureXsrfToken(forceRefresh = false): Promise<string | null> {
   return readXsrfCookie()
 }
 
+export async function warmAntiforgeryToken(): Promise<void> {
+  await ensureXsrfToken()
+}
+
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const method = config.method?.toLowerCase()
   if (method && MUTATING_METHODS.has(method)) {
@@ -105,6 +109,7 @@ export type BookingSummary = {
   defaultAtlOptionId?: number | null
   trackingAvailable?: boolean
   trackingUrl?: string | null
+  bookingLeadTimeMinutes?: number | null
   confirmation?: BookingConfirmation | null
 }
 
@@ -115,6 +120,8 @@ export type BookingConfirmation = {
   windowLabel: string
   atlOptionId?: number | null
   accessNotes?: string | null
+  editableUntilUtc?: string | null
+  canEdit?: boolean
 }
 
 export type AtlOption = {
@@ -130,8 +137,33 @@ export type TimeSlot = {
   firstAvailable: boolean
 }
 
+export type AvailableService = {
+  jobTypeId: number
+  scheduleId: number | null
+  name: string
+  description: string | null
+  bookDateUtc: string | null
+  durationMinutes: number | null
+  isScheduled: boolean
+}
+
+export type AvailableServicesResponse = {
+  services: AvailableService[]
+  noServiceAvailable: boolean
+}
+
 export type ConfirmBookingRequest = {
   address: AddressDto
+  deliveryTimeUtc: string
+  serviceJobTypeId: number | null
+  atlOptionId: number | null
+  accessNotes?: string | null
+  passengerName: string
+  passengerPhone?: string | null
+  passengerEmail?: string | null
+}
+
+export type AmendBookingRequest = {
   deliveryTimeUtc: string
   atlOptionId: number | null
   accessNotes?: string | null
@@ -145,6 +177,5 @@ export type DevLinks = {
   token: string
   confirmUrl: string
 }
-
 
 export type { AxiosRequestConfig }

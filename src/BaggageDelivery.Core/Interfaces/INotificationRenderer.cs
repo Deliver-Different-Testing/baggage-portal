@@ -8,4 +8,7 @@ public interface INotificationRenderer
 
     Task<RenderedNotification> RenderBookingConfirmedAsync(
         BookingConfirmedNotificationContext context, CancellationToken ct);
+
+    Task<RenderedNotification> RenderAddressUnserviceableAsync(
+        AddressUnserviceableNotificationContext context, CancellationToken ct);
 }

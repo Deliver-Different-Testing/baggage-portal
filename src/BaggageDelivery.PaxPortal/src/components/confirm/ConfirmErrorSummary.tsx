@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { Anchor, Box, List, Text } from '@mantine/core'
 import { AlertIcon } from '../Icon'
 import { fieldTargetId, orderedErrors } from './confirmValidation'
 import { tokens } from '../../styles/mantineTheme'
 
-export function ConfirmErrorSummary({
+export const ConfirmErrorSummary = memo(function ConfirmErrorSummary({
   fieldErrors,
   submitCount,
 }: {
@@ -62,4 +62,4 @@ export function ConfirmErrorSummary({
       </List>
     </Box>
   )
-}
+})

@@ -30,6 +30,45 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
         };
     }
 
+    public Task<RenderedNotification> RenderAddressUnserviceableAsync(
+        AddressUnserviceableNotificationContext context, CancellationToken ct)
+    {
+        var lines = new List<string>
+        {
+            $"Job {context.JobNumber} ({context.AirlineName}) - the passenger has entered a delivery",
+            "address we cannot service. The delivery has NOT been booked.",
+            "",
+            $"Passenger: {context.PassengerName}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(context.PassengerPhone))
+        {
+            lines.Add($"Phone: {context.PassengerPhone}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(context.PassengerEmail))
+        {
+            lines.Add($"Email: {context.PassengerEmail}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(context.FileReference))
+        {
+            lines.Add($"File reference: {context.FileReference}");
+        }
+
+        lines.AddRange([
+            "",
+            $"Address on file: {context.CurrentAddress}",
+            $"Address requested: {context.RequestedAddress}",
+            "",
+            "The passenger has asked you to contact them to arrange delivery."
+        ]);
+
+        return Task.FromResult(new RenderedNotification(
+            Subject: $"Baggage delivery address needs checking - {context.JobNumber}",
+            Body: string.Join(Environment.NewLine, lines)));
+    }
+
     private static RenderedNotification RenderSms(BookingNotificationContext c)
     {
         var body =
@@ -93,9 +132,11 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
 
     private static RenderedNotification RenderConfirmedSms(BookingConfirmedNotificationContext c)
     {
-        var body =
-            $"Thanks {FirstNameOf(c.PassengerName)}, your {c.AirlineName} baggage delivery is booked for "
-            + $"{c.DayLabel}, {c.WindowLabel}.";
+        var body = c.IsUpdate
+            ? $"Thanks {FirstNameOf(c.PassengerName)}, your {c.AirlineName} baggage delivery has been "
+              + $"updated to {c.DayLabel}, {c.WindowLabel}."
+            : $"Thanks {FirstNameOf(c.PassengerName)}, your {c.AirlineName} baggage delivery is booked for "
+              + $"{c.DayLabel}, {c.WindowLabel}.";
 
         if (!string.IsNullOrWhiteSpace(c.TrackingUrl))
         {
@@ -129,10 +170,15 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                    </mj-button>
                """;
 
+        var heading = c.IsUpdate ? "Your delivery has been updated" : "Your delivery is booked";
+        var intro = c.IsUpdate
+            ? "Thanks - we have updated your booking. Your baggage is now booked in for delivery"
+            : "Thanks - we have everything we need. Your baggage is booked in for delivery";
+
         var mjmlTemplate = $"""
             <mjml>
               <mj-head>
-                <mj-title>Your baggage delivery is booked</mj-title>
+                <mj-title>{heading}</mj-title>
                 <mj-attributes>
                   <mj-all font-family="Plus Jakarta Sans, Arial, sans-serif" />
                 </mj-attributes>
@@ -140,7 +186,7 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
               <mj-body background-color="#f4f2f1">
                 <mj-section background-color="#001F3D" padding="32px">
                   <mj-column>
-                    <mj-text color="#ffffff" font-size="22px" font-weight="700">Your delivery is booked</mj-text>
+                    <mj-text color="#ffffff" font-size="22px" font-weight="700">{heading}</mj-text>
                     <mj-text color="#9eb2cf" font-size="13px">{headerLine}</mj-text>
                   </mj-column>
                 </mj-section>
@@ -148,7 +194,7 @@ internal sealed class NotificationRenderer(IMjmlRenderer mjml) : INotificationRe
                   <mj-column>
                     <mj-text font-size="16px">Hi {Escape(c.PassengerName)},</mj-text>
                     <mj-text font-size="15px" line-height="1.5">
-                      Thanks — we have everything we need. Your baggage is booked in for delivery
+                      {intro}
                       <strong>{Escape(c.DayLabel)}</strong>, between <strong>{Escape(c.WindowLabel)}</strong>.
                     </mj-text>
             {trackingNumberLine}

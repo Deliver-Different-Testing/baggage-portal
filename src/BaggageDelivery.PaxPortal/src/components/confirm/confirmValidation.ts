@@ -5,6 +5,16 @@ export type AddressLabels = ReturnType<typeof addressLabels>
 
 export const ADDRESS_FIELD_KEYS = ['line3', 'line4', 'line5', 'line6', 'line7', 'country'] as const
 
+export type ContactErrors = Partial<
+  Record<'passengerName' | 'passengerPhone' | 'passengerEmail', string>
+>
+
+export type AddressErrors = Partial<
+  Record<'addressConfirmed' | (typeof ADDRESS_FIELD_KEYS)[number], string>
+>
+
+export type AtlErrors = Partial<Record<'accessNotes', string>>
+
 const ERROR_ORDER = [
   'passengerName',
   'passengerPhone',
@@ -16,6 +26,7 @@ const ERROR_ORDER = [
   'line7',
   'country',
   'addressConfirmed',
+  'service',
   'slot',
   'accessNotes',
 ] as const
@@ -23,7 +34,9 @@ const ERROR_ORDER = [
 const MIN_PHONE_DIGITS = 7
 
 export function fieldTargetId(key: string): string {
-  return key === 'slot' ? 'pax-delivery-window' : `pax-field-${key}`
+  if (key === 'slot') return 'pax-delivery-window'
+  if (key === 'service') return 'pax-delivery-service'
+  return `pax-field-${key}`
 }
 
 export interface ConfirmFormValues {
@@ -35,6 +48,9 @@ export interface ConfirmFormValues {
   hasDeliveryTime: boolean
   atlOptionName: string | undefined
   accessNotes: string
+  addressChanged: boolean
+  hasService: boolean
+  noServiceAvailable: boolean
 }
 
 export function atlNotesAreRequired(atlOptionName: string | undefined): boolean {
@@ -54,6 +70,9 @@ export function computeFieldErrors(
     hasDeliveryTime,
     atlOptionName,
     accessNotes,
+    addressChanged,
+    hasService,
+    noServiceAvailable,
   } = values
 
   const errors: Record<string, string> = {}
@@ -87,7 +106,16 @@ export function computeFieldErrors(
     errors.addressConfirmed = 'Please confirm your delivery address is correct.'
   }
 
-  if (!hasDeliveryTime) errors.slot = 'Please pick a delivery window.'
+  if (addressChanged && noServiceAvailable) {
+    errors.service =
+      'We cannot deliver to that address. Ask the airline to contact you, or change the address.'
+  } else if (addressChanged && !hasService) {
+    errors.service = 'Please choose a delivery service for your new address.'
+  }
+
+  if (!hasDeliveryTime && !(addressChanged && noServiceAvailable)) {
+    errors.slot = 'Please pick a delivery window.'
+  }
 
   if (atlNotesAreRequired(atlOptionName) && !accessNotes.trim()) {
     errors.accessNotes = 'Please describe the safe place to leave your baggage.'

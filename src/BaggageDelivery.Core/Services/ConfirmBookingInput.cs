@@ -1,4 +1,4 @@
-﻿using BaggageDelivery.Core.Http.Models;
+using BaggageDelivery.Core.Http.Models;
 
 namespace BaggageDelivery.Core.Services;
 
@@ -10,4 +10,5 @@ public sealed record ConfirmBookingInput(
     string? AccessNotes,
     string PassengerName,
     string? PassengerPhone,
-    string? PassengerEmail);
+    string? PassengerEmail,
+    int? ServiceJobTypeId = null);

@@ -21,4 +21,6 @@ public sealed class DespatchOptions
     ];
 
     public LeaveNotHomeOption DefaultAtlOption { get; set; } = LeaveNotHomeOption.FrontDoor;
+
+    public int BookingLeadTimeMinutes { get; set; } = 30;
 }

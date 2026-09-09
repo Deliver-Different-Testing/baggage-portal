@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { Button, Group, Loader, Stack, Text } from '@mantine/core'
 import { FormSection } from './FormSection'
@@ -5,7 +6,7 @@ import { RunStartNotice } from './RunStartNotice'
 import { SlotList } from './SlotList'
 import type { TimeSlot } from '../../api/client'
 
-export function WindowSection({
+export const WindowSection = memo(function WindowSection({
   slots,
   available,
   selectedId,
@@ -65,4 +66,4 @@ export function WindowSection({
       )}
     </FormSection>
   )
-}
+})

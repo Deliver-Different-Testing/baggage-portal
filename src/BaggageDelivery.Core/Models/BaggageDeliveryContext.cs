@@ -19,6 +19,8 @@ public partial class BaggageDeliveryContext : DbContext
 
     public virtual DbSet<TblJobLeaveNotHome> TblJobLeaveNotHomes { get; set; }
 
+    public virtual DbSet<TblJobSizeName> TblJobSizeNames { get; set; }
+
     public virtual DbSet<TucClient> TucClients { get; set; }
 
     public virtual DbSet<TucJob> TucJobs { get; set; }
@@ -26,6 +28,10 @@ public partial class BaggageDeliveryContext : DbContext
     public virtual DbSet<TucJobType> TucJobTypes { get; set; }
 
     public virtual DbSet<TucManualMessage> TucManualMessages { get; set; }
+
+    public virtual DbSet<TucNote> TucNotes { get; set; }
+
+    public virtual DbSet<TucNoteType> TucNoteTypes { get; set; }
 
     public virtual DbSet<TucSuburb> TucSuburbs { get; set; }
 
@@ -126,6 +132,24 @@ public partial class BaggageDeliveryContext : DbContext
                 .IsRequired()
                 .HasMaxLength(100)
                 .HasColumnName("SMSName");
+        });
+
+        modelBuilder.Entity<TblJobSizeName>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("tblJobSizeName");
+
+            entity.Property(e => e.Name).HasMaxLength(50);
+            entity.Property(e => e.SizeId)
+                .IsRequired()
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasColumnName("SizeID");
+            entity.Property(e => e.SizeName)
+                .IsRequired()
+                .HasMaxLength(5)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<TucClient>(entity =>
@@ -309,7 +333,6 @@ public partial class BaggageDeliveryContext : DbContext
             entity.Property(e => e.OversizeRateCodeId).HasColumnName("OversizeRateCodeID");
             entity.Property(e => e.PpdgraceDays).HasColumnName("PPDGraceDays");
             entity.Property(e => e.Ppdrate)
-                .HasDefaultValue(0.05m, "DF_tucClient_PPDRate")
                 .HasColumnType("decimal(18, 4)")
                 .HasColumnName("PPDRate");
             entity.Property(e => e.PrivateAddressSurchargeRateCodeId).HasColumnName("PrivateAddressSurchargeRateCodeID");
@@ -1130,6 +1153,70 @@ public partial class BaggageDeliveryContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("ucmmWindowsUser");
+        });
+
+        modelBuilder.Entity<TucNote>(entity =>
+        {
+            entity.HasKey(e => e.NoteId).HasName("PK__tucNote__EACE357FAA284A1B");
+
+            entity.ToTable("tucNote", tb => tb.HasTrigger("tucNote_Insert_SendToDevices"));
+
+            entity.HasIndex(e => e.CreatedDate, "IX_Note_CreatedDate");
+
+            entity.HasIndex(e => e.JobBookingId, "IX_Note_JobBookingID").HasFilter("([JobBookingID] IS NOT NULL)");
+
+            entity.HasIndex(e => e.JobId, "IX_Note_JobID").HasFilter("([JobID] IS NOT NULL)");
+
+            entity.HasIndex(e => e.NoteTypeId, "IX_Note_NoteTypeID");
+
+            entity.HasIndex(e => e.NpAgentId, "IX_tucNote_NpAgentId");
+
+            entity.HasIndex(e => new { e.ProcessedNotificationDate, e.CreatedDate }, "IX_tucNote_ProcessedNotificationDate");
+
+            entity.Property(e => e.NoteId).HasColumnName("NoteID");
+            entity.Property(e => e.CreatedDate)
+                .HasDefaultValueSql("(getdate())", "DF_tucNote_CreatedDate")
+                .HasColumnType("datetime");
+            entity.Property(e => e.CreatedDateUtc)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_tucNote_CreatedDateUTC")
+                .HasColumnName("CreatedDateUTC");
+            entity.Property(e => e.JobBookingId).HasColumnName("JobBookingID");
+            entity.Property(e => e.JobId).HasColumnName("JobID");
+            entity.Property(e => e.NoteText).IsRequired();
+            entity.Property(e => e.NoteTypeId).HasColumnName("NoteTypeID");
+            entity.Property(e => e.ProcessedNotificationDate).HasColumnType("datetime");
+            entity.Property(e => e.ProcessedNotificationDateUtc).HasColumnName("ProcessedNotificationDateUTC");
+            entity.Property(e => e.UpdatedDate)
+                .HasDefaultValueSql("(getdate())", "DF_tucNote_UpdatedDate")
+                .HasColumnType("datetime");
+            entity.Property(e => e.UpdatedDateUtc)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_tucNote_UpdatedDateUTC")
+                .HasColumnName("UpdatedDateUTC");
+
+            entity.HasOne(d => d.Job).WithMany(p => p.TucNotes)
+                .HasForeignKey(d => d.JobId)
+                .HasConstraintName("FK_Note_Job");
+
+            entity.HasOne(d => d.NoteType).WithMany(p => p.TucNotes)
+                .HasForeignKey(d => d.NoteTypeId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Note_NoteType");
+        });
+
+        modelBuilder.Entity<TucNoteType>(entity =>
+        {
+            entity.HasKey(e => e.NoteTypeId).HasName("PK__tucNoteT__28ABD5CF9386AF41");
+
+            entity.ToTable("tucNoteType");
+
+            entity.HasIndex(e => e.NoteTypeName, "UC_NoteTypeName").IsUnique();
+
+            entity.Property(e => e.NoteTypeId).HasColumnName("NoteTypeID");
+            entity.Property(e => e.Description).HasMaxLength(255);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.NoteTypeName)
+                .IsRequired()
+                .HasMaxLength(50);
         });
 
         modelBuilder.Entity<TucSuburb>(entity =>

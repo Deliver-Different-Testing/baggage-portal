@@ -23,13 +23,15 @@ internal sealed class SuburbResolver(BaggageDeliveryContext db) : ISuburbResolve
             var unknownId = await UnknownSuburbIdAsync(ct) ?? FallbackUnknownSuburbId;
             var resolved = await LookupAsync(suburbName, parsedPostCode, ct);
 
-            if (IsUnresolved(resolved, unknownId))
+            if (!IsUnresolved(resolved, unknownId))
             {
-                var abbreviated = Abbreviate(suburbName);
-                if (!string.Equals(abbreviated, suburbName, StringComparison.Ordinal))
-                {
-                    resolved = await LookupAsync(abbreviated, parsedPostCode, ct);
-                }
+                return IsUnresolved(resolved, unknownId) ? null : resolved;
+            }
+
+            var abbreviated = Abbreviate(suburbName);
+            if (!string.Equals(abbreviated, suburbName, StringComparison.Ordinal))
+            {
+                resolved = await LookupAsync(abbreviated, parsedPostCode, ct);
             }
 
             return IsUnresolved(resolved, unknownId) ? null : resolved;

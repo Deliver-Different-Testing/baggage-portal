@@ -16,11 +16,11 @@ describe('useRunStartCountdown', () => {
     const onExpire = vi.fn()
     const { result } = renderHook(() => useRunStartCountdown(runIn(15 * 60_000), onExpire))
 
-    expect(result.current).toBe(15 * 60_000)
+    expect(result.current.label).toBe('15:00')
 
     act(() => void vi.advanceTimersByTime(60_000))
 
-    expect(result.current).toBe(14 * 60_000)
+    expect(result.current.label).toBe('14:00')
     expect(onExpire).not.toHaveBeenCalled()
   })
 
@@ -31,7 +31,7 @@ describe('useRunStartCountdown', () => {
     act(() => void vi.advanceTimersByTime(10_000))
 
     expect(onExpire).toHaveBeenCalledTimes(1)
-    expect(result.current).toBe(0)
+    expect(result.current.label).toBe('0:00')
 
     act(() => void vi.advanceTimersByTime(60_000))
 
@@ -56,7 +56,7 @@ describe('useRunStartCountdown', () => {
 
     act(() => void vi.advanceTimersByTime(1000))
 
-    expect(result.current).toBe(0)
+    expect(result.current.label).toBe('0:00')
     expect(onExpire).toHaveBeenCalledTimes(1)
   })
 
@@ -73,7 +73,7 @@ describe('useRunStartCountdown', () => {
     rerender({ target: runIn(10_000 + 60_000) })
     act(() => void vi.advanceTimersByTime(1000))
 
-    expect(result.current).toBe(59_000)
+    expect(result.current.label).toBe('0:59')
 
     act(() => void vi.advanceTimersByTime(60_000))
     expect(onExpire).toHaveBeenCalledTimes(2)
@@ -85,8 +85,36 @@ describe('useRunStartCountdown', () => {
 
     act(() => void vi.advanceTimersByTime(60 * 60_000))
 
-    expect(result.current).toBe(0)
+    expect(result.current.label).toBe('0:00')
     expect(onExpire).not.toHaveBeenCalled()
+  })
+
+  it('flags the last ten minutes as urgent', () => {
+    const onExpire = vi.fn()
+    const { result } = renderHook(() => useRunStartCountdown(runIn(11 * 60_000), onExpire))
+
+    expect(result.current.urgent).toBe(false)
+
+    act(() => void vi.advanceTimersByTime(90_000))
+
+    expect(result.current.urgent).toBe(true)
+  })
+
+  it('does not re-render while the visible label is unchanged', () => {
+    const onExpire = vi.fn()
+    let renders = 0
+    const { result } = renderHook(() => {
+      renders += 1
+      return useRunStartCountdown(runIn(50.5 * 60 * 60_000), onExpire)
+    })
+
+    expect(result.current.label).toBe('2d 02h')
+    const before = renders
+
+    act(() => void vi.advanceTimersByTime(5_000))
+
+    expect(renders).toBe(before)
+    expect(result.current.label).toBe('2d 02h')
   })
 
   it('does not keep ticking after unmount', () => {

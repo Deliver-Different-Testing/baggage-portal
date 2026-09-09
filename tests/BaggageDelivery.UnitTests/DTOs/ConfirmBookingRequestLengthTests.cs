@@ -11,7 +11,6 @@ public class ConfirmBookingRequestLengthTests
 {
     public static TheoryData<string, string> WrittenColumns() => new()
     {
-        { nameof(ConfirmBookingRequest.AccessNotes), nameof(TucJob.UcjbToSpecial) },
         { nameof(ConfirmBookingRequest.PassengerName), nameof(TucJob.DeliverToContact) },
         { nameof(ConfirmBookingRequest.PassengerPhone), nameof(TucJob.DeliverToPhone) },
         { nameof(ConfirmBookingRequest.PassengerEmail), nameof(TucJob.ProofOfDeliveryEmail) }
@@ -31,6 +30,10 @@ public class ConfirmBookingRequestLengthTests
             $"{requestProperty} allows {declared} characters but is written to "
             + $"tucJob.{jobProperty}, which holds {column}.");
     }
+
+    [Fact]
+    public void Access_notes_are_written_to_an_unbounded_note_column() =>
+        Assert.Null(NoteTextLength());
 
     public static TheoryData<string, string> WrittenAddressColumns() => new()
     {
@@ -60,6 +63,13 @@ public class ConfirmBookingRequestLengthTests
 
     [Fact]
     public void Country_is_normalised_before_it_reaches_a_column_so_it_stays_unconstrained() => Assert.True(MaxLengthOf(typeof(AddressDto), nameof(AddressDto.Country)) > 2);
+
+    private static int? NoteTextLength()
+    {
+        using var db = InMemoryDb.NewContext();
+        return db.Model.FindEntityType(typeof(TucNote))?
+            .FindProperty(nameof(TucNote.NoteText))?.GetMaxLength();
+    }
 
     private static int? MaxLengthOf(Type type, string propertyName) =>
         type.GetConstructors()

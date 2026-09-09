@@ -5,6 +5,7 @@ using BaggageDelivery.Core.Http;
 using BaggageDelivery.Core.Http.Models;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
+using BaggageDelivery.Core.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -15,10 +16,13 @@ namespace BaggageDelivery.Core.Services;
 internal sealed class PaxBookingService(
     BaggageDeliveryContext db,
     IOptions<DespatchOptions> despatchOptions,
+    IOptions<AllowedServiceOptions> allowedServiceOptions,
     IMemoryCache cache,
     TimeProvider time,
     IDespatchCalendar calendar,
-    ISuburbResolver suburbs) : IPaxBookingService
+    ISuburbResolver suburbs,
+    IServiceAvailabilityService availability,
+    INotificationService notifications) : IPaxBookingService
 {
     private const string AtlOptionsCacheKey = "pax:atl-options";
     private const string EcoRunsCacheKeyPrefix = "pax:eco-runs:";
@@ -33,6 +37,10 @@ internal sealed class PaxBookingService(
     private const string BookingCreatedComment =
         "Baggage delivery booking created by passenger via self-service link";
     private const string DeliveryAddressFieldName = "ucjbToAddr";
+    private const string DeliveryTimeFieldName = "DeliverByTime";
+
+    private const string BookingUpdatedComment =
+        "Baggage delivery booking updated by the passenger via self-service link";
     private const int MaxJourneyCommentLength = 500;
 
     public async Task<BookingSummary?> GetSummaryAsync(int jobId, CancellationToken ct)
@@ -64,8 +72,14 @@ internal sealed class PaxBookingService(
                 JobNumber = j.UcjbNumber,
                 CourierId = j.UcjbCourierId,
                 Status = j.UcjbStatus,
+                j.OutForDelivery,
                 AtlOptionId = j.DeliverToLeaveId,
-                AccessNotes = j.UcjbToSpecial,
+                AccessNotes = db.TucNotes
+                    .Where(n => n.JobId == j.UcjbId
+                        && n.NoteTypeId == (int)NoteType.DeliveryNotes)
+                    .OrderByDescending(n => n.NoteId)
+                    .Select(n => n.NoteText)
+                    .FirstOrDefault(),
                 WindowMinutes = db.TucJobTypes
                     .Where(t => t.UcjtId == j.UcjbSpeed)
                     .Select(t => t.Minutes)
@@ -110,7 +124,7 @@ internal sealed class PaxBookingService(
         var timeZone = ResolveTimeZone(despatchOptions.Value.TimeZone);
         var confirmation = await BuildConfirmationAsync(
             jobId, job.DeliverByTime, etaUtc, job.AtlOptionId, job.AccessNotes,
-            job.WindowMinutes, now, timeZone, ct);
+            job.WindowMinutes, now, timeZone, job.Status, job.OutForDelivery, ct);
 
         return new BookingSummary(
             JobId: jobId,
@@ -118,7 +132,7 @@ internal sealed class PaxBookingService(
             FileReference: (job.ClientRefa ?? string.Empty).Trim(),
             AirlineLabel: AirlineLabelOf(job.ClientName),
             AirlineSmsName: AirlineSmsNameOf(job.ClientSmsName, job.ClientName),
-            SupportPhone: (despatchOptions.Value.SupportPhone).Trim(),
+            SupportPhone: despatchOptions.Value.SupportPhone.Trim(),
             AirlineCode: string.IsNullOrWhiteSpace(airlineCode) ? null : airlineCode.Trim(),
             PassengerName: job.DeliverToContact ?? string.Empty,
             PassengerPhone: job.DeliverToPhone,
@@ -135,19 +149,23 @@ internal sealed class PaxBookingService(
             TrackingAvailable: job.CourierId > 0
                 && job.Status >= (int)JobStatus.Dispatched
                 && job.Status != (int)JobStatus.Void,
+            BookingLeadTimeMinutes: (int)LeadTime.TotalMinutes,
             Confirmation: confirmation);
     }
 
     private async Task<BookingConfirmation?> BuildConfirmationAsync(
         int jobId, DateTime? deliverByLocal, DateTime? deliverByUtc, int? atlOptionId,
         string? accessNotes, int? windowMinutes, DateTime nowUtc, TimeZoneInfo? timeZone,
-        CancellationToken ct)
+        int? status, DateTime? outForDelivery, CancellationToken ct)
     {
         var confirmedAt = await FindConfirmedAtAsync(jobId, ct);
         if (confirmedAt is not { } stamp)
         {
             return null;
         }
+
+        var editableUntilUtc = deliverByUtc?.Subtract(LeadTime);
+        var canEdit = editableUntilUtc > nowUtc && !IsPastChanging(status, outForDelivery);
 
         var window = TimeSpan.FromMinutes(
             windowMinutes is > 0 ? windowMinutes.Value : DefaultWindowMinutes);
@@ -162,7 +180,9 @@ internal sealed class PaxBookingService(
                 DayLabel: dayLabel,
                 WindowLabel: windowLabel,
                 AtlOptionId: atlOptionId,
-                AccessNotes: accessNotes);
+                AccessNotes: accessNotes,
+                EditableUntilUtc: editableUntilUtc,
+                CanEdit: canEdit);
         }
 
         dayLabel = FormatDayLabel(localStart.Date, TenantToday(nowUtc, timeZone));
@@ -174,8 +194,18 @@ internal sealed class PaxBookingService(
             DayLabel: dayLabel,
             WindowLabel: windowLabel,
             AtlOptionId: atlOptionId,
-            AccessNotes: accessNotes);
+            AccessNotes: accessNotes,
+            EditableUntilUtc: editableUntilUtc,
+            CanEdit: canEdit);
     }
+
+    private TimeSpan LeadTime =>
+        TimeSpan.FromMinutes(Math.Max(0, despatchOptions.Value.BookingLeadTimeMinutes));
+
+    private static bool IsPastChanging(int? status, DateTime? outForDelivery) =>
+        outForDelivery is not null
+        || status == (int)JobStatus.Completed
+        || status == (int)JobStatus.Void;
 
     private Task<DateTime?> FindConfirmedAtAsync(int jobId, CancellationToken ct) =>
         db.JobDeliveryJourneys
@@ -316,8 +346,10 @@ internal sealed class PaxBookingService(
         local is { } value ? LocalToUtc(value, ResolveTimeZone(timeZoneCode)) : null;
 
     public async Task<IReadOnlyList<BookingTimeSlot>> GetTimeslotsAsync(int jobId,
-        DateTime? localDate, CancellationToken ct)
+        DateTime? localDate, CancellationToken ct, int? jobTypeId = null, int? scheduleId = null)
     {
+        var speedId = jobTypeId is { } chosen && scheduleId is not null ? chosen % 1000 : jobTypeId;
+
         var job = await db.TucJobs
             .AsNoTracking()
             .Where(j => j.UcjbId == jobId && j.UcjbClient != null)
@@ -325,7 +357,7 @@ internal sealed class PaxBookingService(
             {
                 j.UcjbClient!.UcclId,
                 WindowMinutes = db.TucJobTypes
-                    .Where(t => t.UcjtId == j.UcjbSpeed)
+                    .Where(t => t.UcjtId == (speedId ?? j.UcjbSpeed))
                     .Select(t => t.Minutes)
                     .FirstOrDefault()
             })
@@ -351,9 +383,13 @@ internal sealed class PaxBookingService(
         var window = TimeSpan.FromMinutes(
             job.WindowMinutes is > 0 ? job.WindowMinutes.Value : DefaultWindowMinutes);
 
+        var earliestUtc = nowUtc.Add(LeadTime);
+
         return runs.Count == 0
-            ? await BuildFallbackSlotsAsync(job.UcclId, anchor, today, nowUtc, timeZone, window, ct)
-            : await BuildRunSlotsAsync(runs, job.UcclId, anchor, today, nowUtc, timeZone, window, ct);
+            ? await BuildFallbackSlotsAsync(
+                job.UcclId, anchor, today, nowUtc, earliestUtc, timeZone, window, ct)
+            : await BuildRunSlotsAsync(
+                runs, job.UcclId, anchor, today, earliestUtc, timeZone, window, ct);
     }
 
     private async Task<IReadOnlyList<TimeOnly>> LoadClientRunsAsync(int clientId,
@@ -403,7 +439,7 @@ internal sealed class PaxBookingService(
 
     private async Task<IReadOnlyList<BookingTimeSlot>> BuildRunSlotsAsync(
         IReadOnlyList<TimeOnly> runs, int clientId, DateTime anchor, DateTime today,
-        DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
+        DateTime earliestUtc, TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
     {
         await PrimeBusinessDayChainAsync(clientId, anchor,
             Math.Min(MaxDaysWalked, (TargetSlotCount + runs.Count - 1) / runs.Count + 1), ct);
@@ -426,7 +462,8 @@ internal sealed class PaxBookingService(
                     break;
                 }
 
-                AddSlot(slots, date, run, today, nowUtc, timeZone, window, honourCurrentTime);
+                AddSlot(slots, date, run, today, earliestUtc, timeZone, window,
+                    honourCurrentTime);
             }
 
             if (slots.Count >= TargetSlotCount)
@@ -443,8 +480,8 @@ internal sealed class PaxBookingService(
     }
 
     private async Task<IReadOnlyList<BookingTimeSlot>> BuildFallbackSlotsAsync(
-        int clientId, DateTime anchor, DateTime today, DateTime nowUtc, TimeZoneInfo? timeZone,
-        TimeSpan window, CancellationToken ct)
+        int clientId, DateTime anchor, DateTime today, DateTime nowUtc, DateTime earliestUtc,
+        TimeZoneInfo? timeZone, TimeSpan window, CancellationToken ct)
     {
         var setting = await cache.GetOrCreateAsync(BaggageFallbackCacheKey, async entry =>
         {
@@ -478,7 +515,8 @@ internal sealed class PaxBookingService(
         var slots = new List<BookingTimeSlot>(TargetSlotCount);
         for (var day = 0; day < MaxDaysWalked && slots.Count < TargetSlotCount; day++)
         {
-            AddSlot(slots, date, run, today, nowUtc, timeZone, window, honourCurrentTime: false);
+            AddSlot(slots, date, run, today, earliestUtc, timeZone, window,
+                honourCurrentTime: false);
 
             if (slots.Count < TargetSlotCount)
             {
@@ -493,7 +531,7 @@ internal sealed class PaxBookingService(
     private sealed record BaggageFallback(DateTime? CutOff, DateTime? Rebook);
 
     private static void AddSlot(List<BookingTimeSlot> slots, DateTime date, TimeOnly run,
-        DateTime today, DateTime nowUtc, TimeZoneInfo? timeZone, TimeSpan window,
+        DateTime today, DateTime earliestUtc, TimeZoneInfo? timeZone, TimeSpan window,
         bool honourCurrentTime)
     {
         var localStart = date.Add(run.ToTimeSpan());
@@ -502,7 +540,7 @@ internal sealed class PaxBookingService(
             return;
         }
 
-        if (honourCurrentTime && runUtc < nowUtc)
+        if (honourCurrentTime && runUtc <= earliestUtc)
         {
             return;
         }
@@ -611,6 +649,14 @@ internal sealed class PaxBookingService(
             .FirstOrDefaultAsync(ct);
 
         var newAddress = DespatchAddressComposer.Compose(input.Address, country);
+        var addressChanged = before is not null && HasAddressChanged(before, input.Address, country);
+        var chosen = addressChanged && allowedServiceOptions.Value.Enabled
+            ? await ResolveChosenServiceAsync(input, ct)
+            : null;
+        var applyService = chosen is not null;
+        var chosenSpeedId = chosen?.SpeedId;
+        var chosenScheduleId = chosen?.ScheduleId;
+        var chosenScheduleName = chosen?.IsScheduled == true ? chosen.Name : null;
 
         var rows = await db.TucJobs
             .Where(j => j.UcjbId == input.JobId)
@@ -619,7 +665,6 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.DeliverToPhone, input.PassengerPhone)
                     .SetProperty(j => j.ProofOfDeliveryEmail, input.PassengerEmail)
                     .SetProperty(j => j.DeliverToLeaveId, leaveId)
-                    .SetProperty(j => j.UcjbToSpecial, input.AccessNotes)
                     .SetProperty(j => j.DeliveryAddressLine1, input.Address.Line1)
                     .SetProperty(j => j.DeliveryAddressLine2, input.Address.Line2)
                     .SetProperty(j => j.DeliveryAddressLine3, input.Address.Line3)
@@ -635,6 +680,10 @@ internal sealed class PaxBookingService(
                     .SetProperty(j => j.DeliverByTime, startLocal)
                     .SetProperty(j => j.UcjbDate, j => startDateLocal ?? j.UcjbDate)
                     .SetProperty(j => j.UcjbTime, j => startLocal ?? j.UcjbTime)
+                    .SetProperty(j => j.UcjbSpeed, j => applyService ? chosenSpeedId : j.UcjbSpeed)
+                    .SetProperty(j => j.ScheduleId, j => applyService ? chosenScheduleId : j.ScheduleId)
+                    .SetProperty(j => j.ScheduleName,
+                        j => applyService ? chosenScheduleName : j.ScheduleName)
                     .SetProperty(j => j.UcjbStatus, (int)JobStatus.New),
                 ct);
 
@@ -643,6 +692,8 @@ internal sealed class PaxBookingService(
             throw new InvalidOperationException(
                 $"tucJob {input.JobId} not found — pax confirmation not persisted");
         }
+
+        await AddDeliveryNoteAsync(input.JobId, input.AccessNotes, ct);
         
         try
         {
@@ -657,7 +708,7 @@ internal sealed class PaxBookingService(
                 Comments = BookingCreatedComment
             };
 
-            if (before is not null && HasAddressChanged(before, input.Address, country))
+            if (addressChanged && before is not null)
             {
                 var oldAddress = DespatchAddressComposer.Compose(
                     before.Line1, before.Line2, before.Line3, before.Line4,
@@ -683,6 +734,222 @@ internal sealed class PaxBookingService(
         }
 
         Log.Information("Pax confirmation released: JobId={JobId}", input.JobId);
+    }
+
+    public async Task AmendAsync(AmendBookingInput input, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        if (await FindConfirmedAtAsync(input.JobId, ct) is null)
+        {
+            Log.Information("Pax change refused, booking not confirmed: JobId={JobId}", input.JobId);
+            throw new PaxNotConfirmedException(input.JobId);
+        }
+
+        var job = await db.TucJobs
+            .AsNoTracking()
+            .Where(j => j.UcjbId == input.JobId)
+            .Select(j => new AmendSnapshot(
+                j.DeliverByTime, j.UcjbStatus, j.OutForDelivery,
+                db.TucJobTypes.Where(t => t.UcjtId == j.UcjbSpeed).Select(t => t.Minutes)
+                    .FirstOrDefault()))
+            .FirstOrDefaultAsync(ct);
+
+        if (job is null)
+        {
+            throw new PaxNotConfirmedException(input.JobId);
+        }
+
+        var nowUtc = time.GetUtcNow().UtcDateTime;
+        var timeZoneCode = despatchOptions.Value.TimeZone;
+        var bookedUtc = TenantLocalToUtc(job.DeliverByTime, timeZoneCode);
+
+        if (IsPastChanging(job.Status, job.OutForDelivery)
+            || bookedUtc is null
+            || bookedUtc.Value.Subtract(LeadTime) <= nowUtc
+            || input.DeliveryTimeUtc.Subtract(LeadTime) <= nowUtc)
+        {
+            Log.Information("Pax change refused, outside the change window: JobId={JobId}",
+                input.JobId);
+            throw new PaxAmendWindowClosedException(input.JobId);
+        }
+
+        var startLocal = UtcToTenantLocal(input.DeliveryTimeUtc, timeZoneCode);
+        var startDateLocal = startLocal?.Date;
+
+        var rows = await db.TucJobs
+            .Where(j => j.UcjbId == input.JobId)
+            .ExecuteUpdateAsync(s => s
+                    .SetProperty(j => j.DeliverToContact, input.PassengerName)
+                    .SetProperty(j => j.DeliverToPhone, input.PassengerPhone)
+                    .SetProperty(j => j.ProofOfDeliveryEmail, input.PassengerEmail)
+                    .SetProperty(j => j.DeliverToLeaveId, input.AtlOptionId)
+                    .SetProperty(j => j.DeliverByTime, startLocal)
+                    .SetProperty(j => j.UcjbDate, j => startDateLocal ?? j.UcjbDate)
+                    .SetProperty(j => j.UcjbTime, j => startLocal ?? j.UcjbTime),
+                ct);
+
+        if (rows == 0)
+        {
+            throw new InvalidOperationException(
+                $"tucJob {input.JobId} not found - pax change not persisted");
+        }
+
+        await AddDeliveryNoteAsync(input.JobId, input.AccessNotes, ct);
+
+        try
+        {
+            var window = TimeSpan.FromMinutes(
+                job.WindowMinutes is > 0 ? job.WindowMinutes.Value : DefaultWindowMinutes);
+            var updatedAt = time.GetUtcNow().UtcDateTime;
+
+            await db.JobDeliveryJourneys.AddAsync(new JobDeliveryJourney
+            {
+                JobId = input.JobId,
+                ChangeType = nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking),
+                UpdatedAt = updatedAt,
+                UpdatedByType = nameof(DeliveryJourneyUpdatedByType.System),
+                FieldName = DeliveryTimeFieldName,
+                OldValue = FormatAuditWindow(job.DeliverByTime, window),
+                NewValue = FormatAuditWindow(startLocal, window),
+                Comments = Truncate(
+                    $"{BookingUpdatedComment} on {FormatAuditStamp(updatedAt)}.",
+                    MaxJourneyCommentLength)
+            }, ct);
+
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Warning(ex,
+                "Pax change JobId={JobId}: failed to record JobDeliveryJourney entry (audit-only, ignored)",
+                input.JobId);
+        }
+
+        Log.Information("Pax change applied: JobId={JobId}", input.JobId);
+    }
+
+    private async Task AddDeliveryNoteAsync(int jobId, string? accessNotes, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(accessNotes))
+        {
+            return;
+        }
+
+        var nowUtc = time.GetUtcNow().UtcDateTime;
+        var nowLocal = UtcToTenantLocal(nowUtc, despatchOptions.Value.TimeZone) ?? nowUtc;
+
+        await db.TucNotes.AddAsync(new TucNote
+        {
+            JobId = jobId,
+            NoteTypeId = (int)NoteType.DeliveryNotes,
+            NoteText = accessNotes.Trim(),
+            IsImportant = false,
+            CreatedDate = nowLocal,
+            CreatedDateUtc = nowUtc,
+            UpdatedDate = nowLocal,
+            UpdatedDateUtc = nowUtc
+        }, ct);
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private sealed record AmendSnapshot(
+        DateTime? DeliverByTime, int? Status, DateTime? OutForDelivery, int? WindowMinutes);
+
+    private static string? FormatAuditWindow(DateTime? localStart, TimeSpan window) =>
+        localStart is not { } start
+            ? null
+            : string.Create(CultureInfo.InvariantCulture,
+                $"{start:ddd d MMM yyyy}, {FormatWindowLabel(start, start.Add(window))}");
+
+    public Task<IReadOnlyList<CandidateService>> GetAvailableServicesAsync(
+        int jobId, AddressUpdateDto address, CancellationToken ct) =>
+        availability.GetAllowedServicesAsync(jobId, address, time.GetUtcNow().UtcDateTime, ct);
+
+    private async Task<CandidateService> ResolveChosenServiceAsync(
+        ConfirmBookingInput input, CancellationToken ct)
+    {
+        var allowed = await availability.GetAllowedServicesAsync(
+            input.JobId, input.Address, time.GetUtcNow().UtcDateTime, ct);
+
+        if (input.ServiceJobTypeId is not { } chosenId)
+        {
+            Log.Information(
+                "Pax confirmation refused, address changed with no service chosen: JobId={JobId}", input.JobId);
+            throw new PaxServiceNotAllowedException(
+                "Please choose a delivery service for your new address.");
+        }
+
+        if (allowed.FirstOrDefault(s => s.JobTypeId == chosenId) is { } chosen)
+        {
+            return chosen;
+        }
+
+        Log.Information(
+            "Pax confirmation refused, service {ServiceJobTypeId} not available to the new address: "
+            + "JobId={JobId}", chosenId, input.JobId);
+        throw new PaxServiceNotAllowedException(
+            "That delivery service is no longer available for your new address. "
+            + "Please choose again from the options shown.");
+
+    }
+
+    public async Task<bool> RequestAirlineContactAsync(
+        AddressContactRequestInput input, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var details = await db.TucJobs
+            .Where(j => j.UcjbId == input.JobId)
+            .Select(j => new
+            {
+                j.UcjbNumber,
+                ClientRefa = j.UcjbClientRefa,
+                AirlineName = j.UcjbClient!.UcclName,
+                Current = j.UcjbToAddr
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (details is null)
+        {
+            Log.Warning("Address contact request for unknown tucJob {JobId} — ignored", input.JobId);
+            return false;
+        }
+
+        var recipient = allowedServiceOptions.Value.UnserviceableAddressNotifyEmail;
+        if (string.IsNullOrWhiteSpace(recipient))
+        {
+            throw new InvalidOperationException(
+                "UnserviceableAddressNotifyEmail is not configured — a passenger asked the airline "
+                + $"to contact them about JobId={input.JobId} and the request could not be sent");
+        }
+
+        var country = CountryCodes.TryToIso2(input.RequestedAddress.Country, out var iso2)
+            ? iso2
+            : input.RequestedAddress.Country;
+        var requested = DespatchAddressComposer.Compose(input.RequestedAddress, country);
+
+        await notifications.SendAddressUnserviceableAsync(
+            input.JobId,
+            recipient,
+            new AddressUnserviceableNotificationContext(
+                Channel: NotificationChannel.Email,
+                AirlineName: details.AirlineName ?? string.Empty,
+                JobNumber: details.UcjbNumber ?? string.Empty,
+                FileReference: details.ClientRefa?.Trim(),
+                PassengerName: input.PassengerName,
+                PassengerPhone: input.PassengerPhone,
+                PassengerEmail: input.PassengerEmail,
+                CurrentAddress: details.Current ?? string.Empty,
+                RequestedAddress: requested),
+            ct);
+
+        Log.Information(
+            "Address contact request queued to the airline: JobId={JobId} JobNumber={JobNumber}",
+            input.JobId, details.UcjbNumber);
+
+        return true;
     }
 
     private sealed record DeliveryAddressSnapshot(

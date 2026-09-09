@@ -15,6 +15,9 @@ export function ConfirmReviewModal({
   slot,
   address,
   passengerPhone,
+  title = 'Check your delivery details',
+  subtitle = "We'll book this as soon as you confirm.",
+  confirmLabel,
 }: {
   opened: boolean
   onClose: () => void
@@ -24,20 +27,23 @@ export function ConfirmReviewModal({
   slot: TimeSlot | undefined
   address: AddressDto
   passengerPhone: string
+  title?: string
+  subtitle?: string
+  confirmLabel?: string
 }) {
   return (
     <DialogShell
       opened={opened}
       onClose={onClose}
-      label="Check your delivery details"
+      label={title}
       closeOnClickOutside={!submitting}
       closeOnEscape={!submitting}
       transitionProps={{ transition: 'pop', duration: tokens.duration.fast }}
     >
       <DialogHeader
         icon={<DocketIcon size={22} />}
-        title="Check your delivery details"
-        subtitle="We'll book this as soon as you confirm."
+        title={title}
+        subtitle={subtitle}
         onClose={onClose}
         closeDisabled={submitting}
       />
@@ -79,7 +85,7 @@ export function ConfirmReviewModal({
       <DialogFooter
         onCancel={onClose}
         onConfirm={onConfirm}
-        confirmLabel="Confirm delivery"
+        confirmLabel={confirmLabel ?? 'Confirm delivery'}
         cancelLabel="Edit details"
         confirmDisabled={!online}
         submitting={submitting}

@@ -35,6 +35,27 @@ public class PaxBookingServiceTests
             AllowLeave = true, Sequence = sequence, CreatedBy = "test", LastModifiedBy = "test"
         };
 
+    private static IOptions<AllowedServiceOptions> AllowedOpts() =>
+        Options.Create(new AllowedServiceOptions
+        {
+            Enabled = true,
+            UnserviceableAddressNotifyEmail = "ops@airline.test"
+        });
+
+    private static readonly CandidateService DefaultAllowedService = new(
+        BaggageSpeed, null, "Economy Run", "ER", null, AvailabilityVerdict.Available, null, 180);
+
+    private static IServiceAvailabilityService NewAvailability(params CandidateService[] allowed)
+    {
+        var availability = Substitute.For<IServiceAvailabilityService>();
+        availability.GetAllowedServicesAsync(
+                Arg.Any<int>(), Arg.Any<AddressUpdateDto>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(allowed.Length > 0 ? allowed : [DefaultAllowedService]);
+        return availability;
+    }
+
+    private static INotificationService NewNotifications() => Substitute.For<INotificationService>();
+
     private static MemoryCache NewCache() => new(new MemoryCacheOptions());
 
     private static TucSuburb NewSuburb(int id, string name) => new()
@@ -172,7 +193,7 @@ public class PaxBookingServiceTests
         await db.SaveChangesAsync(ct);
 
         var calendar = NewCalendar();
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, calendar, NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, calendar, NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -195,7 +216,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -223,7 +244,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -246,7 +267,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77, speed);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -265,7 +286,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -274,6 +295,31 @@ public class PaxBookingServiceTests
             "Today, Wed 10 Jun", "Tomorrow, Thu 11 Jun", "Fri 12 Jun", "Mon 15 Jun",
             "Tue 16 Jun", "Wed 17 Jun", "Thu 18 Jun", "Fri 19 Jun"
         ], slots.Select(s => s.DayLabel));
+    }
+
+    [Theory]
+    [InlineData(20, 15, "9:00 AM – 12:00 PM")]
+    [InlineData(20, 29, "9:00 AM – 12:00 PM")]
+    [InlineData(20, 30, "12:30 PM – 3:30 PM")]
+    [InlineData(20, 45, "12:30 PM – 3:30 PM")]
+    public async Task GetTimeslots_omits_runs_starting_inside_the_booking_lead_time(
+        int hourUtc, int minuteUtc, string expectedFirstLabel)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var ct = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 9, hourUtc, minuteUtc, 0, DateTimeKind.Utc));
+
+        db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
+        AddJob(db, 4242, 77);
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        var slots = await svc.GetTimeslotsAsync(4242, localDate: null, ct);
+
+        Assert.Equal("Today, Wed 10 Jun", slots[0].DayLabel);
+        Assert.Equal(expectedFirstLabel, slots[0].Label);
     }
 
     [Fact]
@@ -290,7 +336,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4243, 88);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var first = await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct);
         var second = await svc.GetTimeslotsAsync(4243, new DateTime(2026, 6, 10), ct);
@@ -313,7 +359,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -338,7 +384,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -360,7 +406,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 13), ct);
 
@@ -386,7 +432,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -416,7 +462,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -442,7 +488,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, localDate: new DateTime(2026, 6, 10), ct);
 
@@ -457,7 +503,7 @@ public class PaxBookingServiceTests
         var ct = TestContext.Current.CancellationToken;
         var time = new FakeTimeProvider(new DateTime(2026, 6, 9, 12, 0, 0, DateTimeKind.Utc));
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         Assert.Empty(await svc.GetTimeslotsAsync(9999, new DateTime(2026, 6, 10), ct));
     }
@@ -473,7 +519,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         Assert.Empty(await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct));
     }
@@ -490,7 +536,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var slots = await svc.GetTimeslotsAsync(4242, new DateTime(2026, 6, 10), ct);
 
@@ -503,6 +549,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_updates_tucJob_and_writes_baggage_delivery_booking_journey_row()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -523,7 +570,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -543,7 +590,8 @@ public class PaxBookingServiceTests
             AccessNotes: "Buzzer 3",
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("Jane Pax", job.DeliverToContact);
@@ -574,6 +622,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_writes_the_resolved_suburb_id()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -591,7 +640,7 @@ public class PaxBookingServiceTests
         var suburbs = Substitute.For<ISuburbResolver>();
         suburbs.ResolveAsync("Ponsonby", "1011", Arg.Any<CancellationToken>()).Returns(881);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), suburbs);
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), suburbs, NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4260), ct);
 
@@ -603,6 +652,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_keeps_the_existing_suburb_id_when_nothing_matches()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -616,8 +666,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(),
-            NewSuburbs(resolved: null));
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(resolved: null), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4261), ct);
 
@@ -630,6 +679,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_does_not_resolve_a_suburb_for_a_us_address()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -645,7 +695,7 @@ public class PaxBookingServiceTests
         await db.SaveChangesAsync(ct);
 
         var suburbs = NewSuburbs(resolved: 881);
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), suburbs);
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), suburbs, NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4262, country: "US"), ct);
 
@@ -663,6 +713,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_persists_null_leave_id_when_atl_option_is_off()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -680,7 +731,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4243,
@@ -690,7 +741,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4243, ct);
         Assert.Null(job.DeliverToLeaveId);
@@ -700,6 +752,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_clears_extra_delivery_information_the_passenger_emptied()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -712,7 +765,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4244,
@@ -726,7 +779,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4244, ct);
         Assert.Null(job.DeliveryAddressLine2);
@@ -736,6 +790,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_books_the_job_onto_the_start_of_the_selected_window()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -749,7 +804,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         // 2026-06-10T21:00Z is 09:00 on 11 June in Pacific/Auckland (NZST).
         await svc.ConfirmAsync(new ConfirmBookingInput(
@@ -760,7 +815,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: null,
-            PassengerEmail: null), ct);
+            PassengerEmail: null,
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4250, ct);
         Assert.Equal(new DateTime(2026, 6, 11, 0, 0, 0), job.UcjbDate);
@@ -772,6 +828,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_leaves_the_booked_date_untouched_when_the_tenant_timezone_is_unresolved()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -785,7 +842,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(timeZone: ""), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(timeZone: ""), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4251,
@@ -795,7 +852,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: null,
-            PassengerEmail: null), ct);
+            PassengerEmail: null,
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4251, ct);
         Assert.Equal(new DateTime(2026, 6, 1, 0, 0, 0), job.UcjbDate);
@@ -808,7 +866,7 @@ public class PaxBookingServiceTests
     {
         await using var db = InMemoryDb.NewContext();
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
         var ct = TestContext.Current.CancellationToken;
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmAsync(new ConfirmBookingInput(
@@ -819,7 +877,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "X",
             PassengerPhone: null,
-            PassengerEmail: null), ct));
+            PassengerEmail: null,
+                ServiceJobTypeId: BaggageSpeed), ct));
 
         Assert.False(await db.JobDeliveryJourneys.AnyAsync(ct));
     }
@@ -840,7 +899,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientId = 3 });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -864,7 +923,7 @@ public class PaxBookingServiceTests
             new TblJobLeaveNotHome { LeaveNotHomeId = 4, Name = "Garage", Smsname = "garage", Category = "All,", AllowLeave = true, Sequence = 5, CreatedBy = "test", LastModifiedBy = "test" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -887,7 +946,7 @@ public class PaxBookingServiceTests
             NewAtlOption(LeaveNotHomeOption.DropBox, "Drop box", 3));
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -913,7 +972,7 @@ public class PaxBookingServiceTests
 
         var opts = DespatchOpts(
             excludedAtlOptions: [LeaveNotHomeOption.LetterBox, LeaveNotHomeOption.MailRoom]);
-        var svc = new PaxBookingService(db, opts, NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, opts, AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -934,8 +993,7 @@ public class PaxBookingServiceTests
             NewAtlOption(LeaveNotHomeOption.FrontDoor, "Front door", 4));
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(excludedAtlOptions: []), NewCache(), time,
-            NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(excludedAtlOptions: []), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -958,7 +1016,7 @@ public class PaxBookingServiceTests
             NewAtlOption(LeaveNotHomeOption.FrontDoor, "Front door", 4));
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -979,7 +1037,7 @@ public class PaxBookingServiceTests
             NewAtlOption(LeaveNotHomeOption.Dock, "Dock", 4));
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -997,7 +1055,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1024,7 +1082,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1054,7 +1112,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1083,7 +1141,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(179252, ct);
 
@@ -1105,7 +1163,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientRefa = clientRefa });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1132,7 +1190,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var details = await svc.GetNotificationDetailsAsync(7, ct);
 
@@ -1161,7 +1219,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientId = 3 });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var details = await svc.GetNotificationDetailsAsync(7, ct);
 
@@ -1183,7 +1241,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7", UcjbClientRefa = clientRefa });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var details = await svc.GetNotificationDetailsAsync(7, ct);
 
@@ -1201,7 +1259,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var details = await svc.GetNotificationDetailsAsync(7, ct);
 
@@ -1217,7 +1275,7 @@ public class PaxBookingServiceTests
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         Assert.Null(await svc.GetNotificationDetailsAsync(404, ct));
     }
@@ -1232,7 +1290,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientRefa = "AKLNZ12345" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1253,7 +1311,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1274,7 +1332,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1295,8 +1353,7 @@ public class PaxBookingServiceTests
         AddJob(db, 7, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts("0800 111 222"), NewCache(), time,
-            NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts("0800 111 222"), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1321,8 +1378,7 @@ public class PaxBookingServiceTests
         AddJob(db, 7, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts("0800 111 222"), NewCache(), time,
-            NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts("0800 111 222"), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1340,7 +1396,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1358,7 +1414,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientCode = "QF" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1382,7 +1438,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7", UcjbClientId = 3 });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1400,7 +1456,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "JOB-7" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1435,7 +1491,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1456,7 +1512,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1481,7 +1537,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1496,13 +1552,14 @@ public class PaxBookingServiceTests
     public async Task Confirm_persists_normalised_iso2_country()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -1520,7 +1577,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("NZ", job.DeliveryAddressLine8);
@@ -1530,6 +1588,7 @@ public class PaxBookingServiceTests
     public async Task GetSummary_then_Confirm_round_trips_legacy_country()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
@@ -1545,7 +1604,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(4242, ct);
         Assert.NotNull(summary);
@@ -1558,7 +1617,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("NZ", job.DeliveryAddressLine8);
@@ -1580,7 +1640,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(179252, ct);
 
@@ -1599,7 +1659,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1611,16 +1671,16 @@ public class PaxBookingServiceTests
     public async Task GetSummary_reads_the_booked_window_back_after_a_confirmation()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
         db.TucClients.Add(NewClient(77, economyRuns: true, StandardRuns));
-        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         db.TblJobLeaveNotHomes.Add(NewAtlOption(LeaveNotHomeOption.FrontDoor, "Front door", 10));
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4242,
             deliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc),
@@ -1655,7 +1715,7 @@ public class PaxBookingServiceTests
         AddJob(db, 4242, 77);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4242,
             deliveryTimeUtc: new DateTime(2026, 6, 10, 21, 0, 0, DateTimeKind.Utc)), ct);
@@ -1670,13 +1730,14 @@ public class PaxBookingServiceTests
     public async Task Confirm_refuses_a_second_confirmation_of_the_same_booking()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4242, passengerName: "Jane Pax"), ct);
 
@@ -1707,7 +1768,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1719,13 +1780,14 @@ public class PaxBookingServiceTests
     public async Task Confirm_writes_every_address_line_straight_through()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -1745,7 +1807,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("Sofitel Auckland", job.DeliveryAddressLine1);
@@ -1780,7 +1843,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         var summary = await svc.GetSummaryAsync(7, ct);
 
@@ -1800,13 +1863,14 @@ public class PaxBookingServiceTests
     public async Task Confirm_gives_a_us_address_no_special_column_layout()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
         var ct = TestContext.Current.CancellationToken;
 
         db.TucJobs.Add(new TucJob { UcjbId = 4242, UcjbNumber = "TEST-4242" });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(new ConfirmBookingInput(
             JobId: 4242,
@@ -1824,7 +1888,8 @@ public class PaxBookingServiceTests
             AccessNotes: null,
             PassengerName: "Jane Pax",
             PassengerPhone: "+1 555 0100",
-            PassengerEmail: "jane@example.com"), ct);
+            PassengerEmail: "jane@example.com",
+                ServiceJobTypeId: BaggageSpeed), ct);
 
         var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4242, ct);
         Assert.Equal("350", job.DeliveryAddressLine3);
@@ -1839,6 +1904,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_records_the_old_and_new_address_when_the_passenger_changes_it()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -1857,7 +1923,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4300, street: "Sailyards Road"), ct);
 
@@ -1882,7 +1948,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4301));
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4301), ct);
 
@@ -1906,7 +1972,7 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(job);
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4302), ct);
 
@@ -1925,21 +1991,133 @@ public class PaxBookingServiceTests
         db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4303));
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4303, accessNotes: "Leave with concierge"), ct);
-
-        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4303, ct);
-        Assert.Equal("Leave with concierge", job.UcjbToSpecial);
 
         var journey = await db.JobDeliveryJourneys.AsNoTracking().SingleAsync(j => j.JobId == 4303, ct);
         Assert.Null(journey.FieldName);
     }
 
     [Fact]
+    public async Task Confirm_saves_the_additional_details_as_a_delivery_note()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4310));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        await svc.ConfirmAsync(NewConfirmInput(4310, accessNotes: "  Leave with concierge  "), ct);
+
+        var note = await db.TucNotes.AsNoTracking().SingleAsync(n => n.JobId == 4310, ct);
+        Assert.Equal((int)NoteType.DeliveryNotes, note.NoteTypeId);
+        Assert.Equal("Leave with concierge", note.NoteText);
+        Assert.False(note.IsImportant);
+        Assert.Null(note.CreatedBy);
+        Assert.Null(note.UpdatedBy);
+        Assert.Null(note.JobBookingId);
+        Assert.Equal(new DateTime(2026, 6, 10, 3, 0, 0), note.CreatedDateUtc);
+        Assert.Equal(new DateTime(2026, 6, 10, 3, 0, 0), note.UpdatedDateUtc);
+        Assert.Equal(new DateTime(2026, 6, 10, 15, 0, 0), note.CreatedDate);
+        Assert.Equal(new DateTime(2026, 6, 10, 15, 0, 0), note.UpdatedDate);
+    }
+
+    [Fact]
+    public async Task Confirm_leaves_the_job_special_instruction_untouched()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        var job = NewJobAtDefaultConfirmAddress(4311);
+        job.UcjbToSpecial = "Operator instruction";
+        db.TucJobs.Add(job);
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        await svc.ConfirmAsync(NewConfirmInput(4311, accessNotes: "Leave with concierge"), ct);
+
+        var saved = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4311, ct);
+        Assert.Equal("Operator instruction", saved.UcjbToSpecial);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Confirm_creates_no_delivery_note_without_additional_details(string? accessNotes)
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+
+        var ct = TestContext.Current.CancellationToken;
+        db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4312));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        await svc.ConfirmAsync(NewConfirmInput(4312, accessNotes: accessNotes), ct);
+
+        Assert.False(await db.TucNotes.AsNoTracking().AnyAsync(ct));
+    }
+
+    [Fact]
+    public async Task GetSummary_reads_the_additional_details_from_the_newest_delivery_note()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 4313, UcjbNumber = "URG-4313" });
+        db.JobDeliveryJourneys.Add(ConfirmedMarker(4313));
+        db.TucNotes.AddRange(
+            NewNote(4313, NoteType.DeliveryNotes, "First attempt"),
+            NewNote(4313, NoteType.DeliveryNotes, "Gate code 1234"),
+            NewNote(4313, NoteType.InternalNote, "Ops only"));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        var summary = await svc.GetSummaryAsync(4313, ct);
+
+        Assert.NotNull(summary);
+        Assert.NotNull(summary.Confirmation);
+        Assert.Equal("Gate code 1234", summary.Confirmation.AccessNotes);
+    }
+
+    [Fact]
+    public async Task GetSummary_ignores_a_delivery_note_left_on_another_job()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.AddRange(
+            new TucJob { UcjbId = 4314, UcjbNumber = "URG-4314" },
+            new TucJob { UcjbId = 4315, UcjbNumber = "URG-4315" });
+        db.JobDeliveryJourneys.Add(ConfirmedMarker(4314));
+        db.TucNotes.Add(NewNote(4315, NoteType.DeliveryNotes, "Someone else"));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        var summary = await svc.GetSummaryAsync(4314, ct);
+
+        Assert.NotNull(summary);
+        Assert.NotNull(summary.Confirmation);
+        Assert.Null(summary.Confirmation.AccessNotes);
+    }
+
+    [Fact]
     public async Task Confirm_keeps_the_journey_comment_within_the_column_limit()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -1954,7 +2132,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4304, street: new string('C', 250)), ct);
 
@@ -1967,6 +2145,7 @@ public class PaxBookingServiceTests
     public async Task Confirm_falls_back_to_the_flat_address_when_the_job_has_no_address_lines()
     {
         await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(BaggageSpeed, minutes: 180));
         var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
 
         var ct = TestContext.Current.CancellationToken;
@@ -1979,7 +2158,7 @@ public class PaxBookingServiceTests
         });
         await db.SaveChangesAsync(ct);
 
-        var svc = new PaxBookingService(db, DespatchOpts(), NewCache(), time, NewCalendar(), NewSuburbs());
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
 
         await svc.ConfirmAsync(NewConfirmInput(4305), ct);
 
@@ -2002,6 +2181,22 @@ public class PaxBookingServiceTests
         UcjbStatus = (int)JobStatus.Dispatched
     };
 
+    private static JobDeliveryJourney ConfirmedMarker(int jobId) => new()
+    {
+        JobId = jobId,
+        ChangeType = nameof(DeliveryJourneyChangeType.BaggageDeliveryBooking),
+        UpdatedAt = new DateTime(2026, 6, 9, 20, 0, 0, DateTimeKind.Utc),
+        UpdatedByType = nameof(DeliveryJourneyUpdatedByType.System)
+    };
+
+    private static TucNote NewNote(int jobId, NoteType type, string text) => new()
+    {
+        JobId = jobId,
+        NoteTypeId = (int)type,
+        NoteText = text,
+        CreatedDate = new DateTime(2026, 6, 9, 12, 0, 0)
+    };
+
     private static ConfirmBookingInput NewConfirmInput(
         int jobId,
         DateTime? deliveryTimeUtc = null,
@@ -2011,7 +2206,8 @@ public class PaxBookingServiceTests
         string? streetNumber = "1",
         string street = "Test Street",
         string city = "Auckland",
-        string country = "NZ") =>
+        string country = "NZ",
+        int? serviceJobTypeId = BaggageSpeed) =>
         new(
             JobId: jobId,
             Address: new AddressUpdateDto
@@ -2028,5 +2224,6 @@ public class PaxBookingServiceTests
             AccessNotes: accessNotes,
             PassengerName: passengerName,
             PassengerPhone: "+64 21 000",
-            PassengerEmail: "jane@example.com");
+            PassengerEmail: "jane@example.com",
+            ServiceJobTypeId: serviceJobTypeId);
 }

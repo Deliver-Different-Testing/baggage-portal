@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography;
+using BaggageDelivery.Core.Enums;
 using BaggageDelivery.Core.Interfaces;
 using BaggageDelivery.Core.Models;
 using Microsoft.AspNetCore.DataProtection;
@@ -9,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
@@ -40,10 +42,22 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
         _connection.Open();
         _connection.CreateFunction("getdate", () => DateTime.UtcNow);
         _connection.CreateFunction("getutcdate", () => DateTime.UtcNow);
+        _connection.CreateFunction("sysutcdatetime", () => DateTime.UtcNow);
     }
+
+    public bool AddressGuardRailsEnabled { get; init; }
+
+    public IAvailableServicesQuery? AvailableServices { get; init; }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["AddressGuardRailsEnabled"] = AddressGuardRailsEnabled ? "true" : "false",
+                ["UnserviceableAddressNotifyEmail"] = "ops@airline.test"
+            }));
+
         builder.ConfigureTestServices(services =>
         {
             RemoveDbContextRegistrations(services);
@@ -57,6 +71,12 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<IDespatchCalendar>();
             services.AddSingleton<IDespatchCalendar, WeekdayCalendar>();
+
+            if (AvailableServices is not null)
+            {
+                services.RemoveAll<IAvailableServicesQuery>();
+                services.AddSingleton(AvailableServices);
+            }
         });
     }
 
@@ -103,7 +123,25 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<BaggageDeliveryContext>();
         await db.Database.EnsureCreatedAsync();
+        await SeedNoteTypesAsync(db);
         await seed(db);
+    }
+
+    private static async Task SeedNoteTypesAsync(BaggageDeliveryContext db)
+    {
+        if (await db.TucNoteTypes.AnyAsync())
+        {
+            return;
+        }
+
+        db.TucNoteTypes.AddRange(Enum.GetValues<NoteType>().Select(t => new TucNoteType
+        {
+            NoteTypeId = (int)t,
+            NoteTypeName = t.ToString(),
+            IsActive = true
+        }));
+
+        await db.SaveChangesAsync();
     }
 
     protected override void Dispose(bool disposing)
@@ -144,6 +182,13 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
                     entityType.RemoveIndex(index.Properties);
                 }
             }
+
+            // views are not created by EnsureCreated, so back them with a real table
+            modelBuilder.Entity<TblJobSizeName>(entity =>
+            {
+                entity.HasKey(e => e.SizeId);
+                entity.ToTable("tblJobSizeName");
+            });
         }
     }
 }

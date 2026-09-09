@@ -16,7 +16,7 @@ function renderSection() {
         onToggle={vi.fn()}
         onSelect={vi.fn()}
         onNotesChange={vi.fn()}
-        showFieldError={() => undefined}
+        errors={{}}
       />
     </MantineTestProvider>,
   )

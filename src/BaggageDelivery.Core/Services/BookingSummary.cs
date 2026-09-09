@@ -19,6 +19,7 @@ public sealed record BookingSummary(
     IReadOnlyList<AtlOptionDto> AtlOptions,
     int? DefaultAtlOptionId,
     bool TrackingAvailable,
+    int BookingLeadTimeMinutes,
     BookingConfirmation? Confirmation);
 
 public sealed record BookingConfirmation(
@@ -27,4 +28,6 @@ public sealed record BookingConfirmation(
     string DayLabel,
     string WindowLabel,
     int? AtlOptionId,
-    string? AccessNotes);
+    string? AccessNotes,
+    DateTime? EditableUntilUtc,
+    bool CanEdit);

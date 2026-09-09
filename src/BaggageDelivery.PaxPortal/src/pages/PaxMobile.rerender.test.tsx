@@ -29,6 +29,40 @@ vi.mock('../components/Icon', async (importOriginal) => ({
   },
 }))
 
+const addressSection = vi.hoisted(() => ({ renders: 0 }))
+vi.mock('../components/confirm/AddressSection', async () => {
+  const { memo } = await import('react')
+  return {
+    AddressSection: memo(() => {
+      addressSection.renders += 1
+      return null
+    }),
+  }
+})
+
+const atlSection = vi.hoisted(() => ({ renders: 0 }))
+vi.mock('../components/confirm/AtlSection', async () => {
+  const { memo } = await import('react')
+  return {
+    AtlSection: memo(() => {
+      atlSection.renders += 1
+      return null
+    }),
+  }
+})
+
+const windowSection = vi.hoisted(() => ({ renders: 0 }))
+vi.mock('../components/confirm/WindowSection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/confirm/WindowSection')>()
+  const { createElement, memo } = await import('react')
+  return {
+    WindowSection: memo((props: Parameters<typeof actual.WindowSection>[0]) => {
+      windowSection.renders += 1
+      return createElement(actual.WindowSection, props)
+    }),
+  }
+})
+
 const summary: BookingSummary = {
   bookingId: 1,
   jobId: 42,
@@ -70,6 +104,9 @@ afterEach(() => {
   server.resetHandlers()
   footer.renders = 0
   hero.renders = 0
+  addressSection.renders = 0
+  atlSection.renders = 0
+  windowSection.renders = 0
 })
 afterAll(() => server.close())
 
@@ -88,22 +125,22 @@ function renderForm() {
   )
 }
 
-const TEN_MINUTES_OUT = new Date('2026-06-10T01:50:00Z')
+const FORTY_MINUTES_OUT = new Date('2026-06-10T01:20:00Z')
 
 describe('PaxMobile — run start countdown', () => {
   it('ticks the time left before the run down every second', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      vi.setSystemTime(TEN_MINUTES_OUT)
+      vi.setSystemTime(FORTY_MINUTES_OUT)
       renderForm()
 
-      expect(await screen.findByText('10:00')).toBeInTheDocument()
+      expect(await screen.findByText('40:00')).toBeInTheDocument()
 
       await act(async () => {
         vi.advanceTimersByTime(5_000)
       })
 
-      expect(screen.getByText('9:55')).toBeInTheDocument()
+      expect(screen.getByText('39:55')).toBeInTheDocument()
     } finally {
       vi.useRealTimers()
     }
@@ -112,17 +149,17 @@ describe('PaxMobile — run start countdown', () => {
   it('keeps the tick off the rest of the form', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
-      vi.setSystemTime(TEN_MINUTES_OUT)
+      vi.setSystemTime(FORTY_MINUTES_OUT)
       renderForm()
 
-      await screen.findByText('10:00')
+      await screen.findByText('40:00')
       const before = footer.renders
 
       await act(async () => {
         vi.advanceTimersByTime(5_000)
       })
 
-      expect(screen.getByText('9:55')).toBeInTheDocument()
+      expect(screen.getByText('39:55')).toBeInTheDocument()
       expect(footer.renders).toBe(before)
     } finally {
       vi.useRealTimers()
@@ -144,5 +181,22 @@ describe('PaxMobile — typing in the form', () => {
     expect(name).toHaveValue('Test Passenger Jr')
     expect(hero.renders).toBe(heroBefore)
     expect(footer.renders).toBe(footerBefore)
+  })
+
+  it('leaves the other form sections alone', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    const name = await screen.findByLabelText(/full name/i)
+    const addressBefore = addressSection.renders
+    const atlBefore = atlSection.renders
+    const windowBefore = windowSection.renders
+
+    await user.type(name, ' Jr')
+
+    expect(name).toHaveValue('Test Passenger Jr')
+    expect(addressSection.renders).toBe(addressBefore)
+    expect(atlSection.renders).toBe(atlBefore)
+    expect(windowSection.renders).toBe(windowBefore)
   })
 })
