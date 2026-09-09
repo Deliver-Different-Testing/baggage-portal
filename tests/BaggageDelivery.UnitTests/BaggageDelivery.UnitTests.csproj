@@ -19,4 +19,8 @@
     <ProjectReference Include="..\..\src\BaggageDelivery.Core\BaggageDelivery.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\src\BaggageDelivery.Api\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
