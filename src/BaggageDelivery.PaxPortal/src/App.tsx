@@ -2,10 +2,8 @@ import { lazy, Suspense } from 'react'
 import { Route, Routes, Navigate } from 'react-router-dom'
 import { Center, Loader } from '@mantine/core'
 import { TokenExpired } from './pages/TokenExpired'
+import { PaxMobile } from './pages/PaxMobile'
 
-const PaxMobile = lazy(() =>
-  import('./pages/PaxMobile').then((m) => ({ default: m.PaxMobile })),
-)
 const ProcessMap = lazy(() =>
   import('./pages/ProcessMap').then((m) => ({ default: m.ProcessMap })),
 )

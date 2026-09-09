@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import { Box, Collapse, List, Switch, Text, Textarea } from '@mantine/core'
 import { AtlOptionList } from './AtlOptionList'
 import { FormSection } from './FormSection'
-import { fieldTargetId } from './confirmValidation'
+import { fieldTargetId, type AtlErrors } from './confirmValidation'
 import type { AtlOption } from '../../api/client'
 
 const ACCESS_NOTES_MAX = 120
@@ -19,7 +20,7 @@ const CONDITIONS = [
 const DELIVERY_PROOF =
   "As soon as we've delivered your bag to this location, you will receive a message confirming where we've left it and a photograph of the bag at that location."
 
-export function AtlSection({
+export const AtlSection = memo(function AtlSection({
   options,
   selectedId,
   accessNotes,
@@ -27,7 +28,7 @@ export function AtlSection({
   onToggle,
   onSelect,
   onNotesChange,
-  showFieldError,
+  errors,
 }: {
   options: AtlOption[]
   selectedId: number | null
@@ -36,7 +37,7 @@ export function AtlSection({
   onToggle: (enabled: boolean) => void
   onSelect: (id: number) => void
   onNotesChange: (value: string) => void
-  showFieldError: (key: string) => string | undefined
+  errors: AtlErrors
 }) {
   const enabled = selectedId !== null
 
@@ -94,7 +95,7 @@ export function AtlSection({
             required={notesRequired}
             value={accessNotes}
             onChange={(e) => onNotesChange(e.currentTarget.value)}
-            error={showFieldError('accessNotes')}
+            error={errors.accessNotes}
             maxLength={ACCESS_NOTES_MAX}
             description={`${accessNotes.length}/${ACCESS_NOTES_MAX}`}
             autosize
@@ -105,4 +106,4 @@ export function AtlSection({
       </Collapse>
     </FormSection>
   )
-}
+})

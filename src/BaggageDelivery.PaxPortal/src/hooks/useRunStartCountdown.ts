@@ -7,8 +7,23 @@ function remainingUntil(targetUtc: string | undefined): number {
   return Math.max(0, target - Date.now())
 }
 
-export function useRunStartCountdown(targetUtc: string | undefined, onExpire: () => void) {
-  const [remainingMs, setRemainingMs] = useState(() => remainingUntil(targetUtc))
+const URGENT_MS = 10 * 60_000
+
+export interface RunCountdown {
+  label: string
+  urgent: boolean
+}
+
+function countdownAt(targetUtc: string | undefined): RunCountdown {
+  const remaining = remainingUntil(targetUtc)
+  return { label: formatCountdown(remaining), urgent: remaining <= URGENT_MS }
+}
+
+export function useRunStartCountdown(
+  targetUtc: string | undefined,
+  onExpire: () => void,
+): RunCountdown {
+  const [countdown, setCountdown] = useState(() => countdownAt(targetUtc))
   const [armedFor, setArmedFor] = useState(targetUtc)
   const expire = useRef(onExpire)
 
@@ -18,7 +33,7 @@ export function useRunStartCountdown(targetUtc: string | undefined, onExpire: ()
 
   if (armedFor !== targetUtc) {
     setArmedFor(targetUtc)
-    setRemainingMs(remainingUntil(targetUtc))
+    setCountdown(countdownAt(targetUtc))
   }
 
   useEffect(() => {
@@ -28,7 +43,10 @@ export function useRunStartCountdown(targetUtc: string | undefined, onExpire: ()
 
     const id = setInterval(() => {
       const left = remainingUntil(targetUtc)
-      setRemainingMs(left)
+      const next = { label: formatCountdown(left), urgent: left <= URGENT_MS }
+      setCountdown((prev) =>
+        prev.label === next.label && prev.urgent === next.urgent ? prev : next,
+      )
       if (left > 0 || fired) return
 
       fired = true
@@ -38,7 +56,7 @@ export function useRunStartCountdown(targetUtc: string | undefined, onExpire: ()
     return () => clearInterval(id)
   }, [targetUtc])
 
-  return remainingMs
+  return countdown
 }
 
 export function formatCountdown(remainingMs: number): string {

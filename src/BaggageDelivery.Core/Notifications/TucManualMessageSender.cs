@@ -24,6 +24,13 @@ internal sealed class TucManualMessageSender(
         await EnqueueAsync(jobId, recipient, context.Channel, rendered, ct);
     }
 
+    public async Task SendAddressUnserviceableAsync(
+        int jobId, string recipient, AddressUnserviceableNotificationContext context, CancellationToken ct)
+    {
+        var rendered = await renderer.RenderAddressUnserviceableAsync(context, ct);
+        await EnqueueAsync(jobId, recipient, context.Channel, rendered, ct);
+    }
+
     private async Task EnqueueAsync(
         int jobId, string recipient, string channel, RenderedNotification rendered, CancellationToken ct)
     {

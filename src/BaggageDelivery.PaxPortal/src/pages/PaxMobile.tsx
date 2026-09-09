@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertIcon } from '../components/Icon'
@@ -16,6 +17,7 @@ const ERROR_COLOR = 'var(--mantine-color-red-6)'
 export function PaxMobile() {
   const { id } = useParams<{ id: string }>()
   const online = useOnlineStatus()
+  const [editing, setEditing] = useState(false)
 
   const booking = useQuery({
     queryKey: ['pax', 'booking', id],
@@ -29,8 +31,11 @@ export function PaxMobile() {
   const slots = useQuery({
     queryKey: ['pax', 'timeslots', id],
     queryFn: () => getTimeslots(id ?? ''),
-    enabled: !!id && !confirmation,
+    enabled: !!id && (!confirmation || editing),
   })
+
+  const startEditing = useCallback(() => setEditing(true), [])
+  const stopEditing = useCallback(() => setEditing(false), [])
 
   useRedirectOnNotFound(booking.error)
 
@@ -53,10 +58,12 @@ export function PaxMobile() {
     )
   }
 
-  if (confirmation) {
+  if (confirmation && !editing) {
     return (
       <ConfirmedScreen
         summary={booking.data}
+        onEdit={confirmation.canEdit ? startEditing : undefined}
+        editableUntilUtc={confirmation.editableUntilUtc}
         slot={{ dayLabel: confirmation.dayLabel, label: confirmation.windowLabel }}
         address={booking.data.deliveryAddress}
         passengerName={booking.data.passengerName ?? ''}
@@ -68,5 +75,14 @@ export function PaxMobile() {
     )
   }
 
-  return <ConfirmForm bookingId={id} summary={booking.data} online={online} slots={slots} />
+  return (
+    <ConfirmForm
+      bookingId={id}
+      summary={booking.data}
+      online={online}
+      slots={slots}
+      editing={editing ? confirmation : null}
+      onCancelEdit={stopEditing}
+    />
+  )
 }

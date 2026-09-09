@@ -47,8 +47,24 @@
          "ObjectType": 0
       },
       {
+         "Name": "[dbo].[tucNote]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucNoteType]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[tucSuburb]",
          "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblJobSizeName]",
+         "ObjectType": 3
+      },
+      {
+         "Name": "[dbo].[BagDel_stpAvailableServices]",
+         "ObjectType": 1
       },
       {
          "Name": "[dbo].[UTL_AddBusinessDays]",

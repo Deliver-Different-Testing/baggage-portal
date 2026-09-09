@@ -19,6 +19,12 @@ function renderAt(path: string) {
 }
 
 describe('App routing', () => {
+  it('paints the confirm route on the first frame, with no chunk-loading fallback', () => {
+    renderAt('/c/token-xyz')
+
+    expect(screen.getByLabelText('Loading your booking')).toBeInTheDocument()
+  })
+
   it('sends an old in-app tracking link to the expired screen', async () => {
     renderAt('/t/token-abc-123')
 

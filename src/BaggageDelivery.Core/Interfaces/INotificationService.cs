@@ -8,4 +8,7 @@ public interface INotificationService
 
     Task SendBookingConfirmedAsync(
         int jobId, string recipient, BookingConfirmedNotificationContext context, CancellationToken ct);
+
+    Task SendAddressUnserviceableAsync(
+        int jobId, string recipient, AddressUnserviceableNotificationContext context, CancellationToken ct);
 }

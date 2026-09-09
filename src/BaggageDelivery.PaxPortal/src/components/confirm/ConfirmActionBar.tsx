@@ -6,10 +6,16 @@ export function ConfirmActionBar({
   summary,
   disabled,
   onReview,
+  label = 'Review delivery',
+  onCancel,
+  cancelLabel,
 }: {
   summary: string | null
   disabled: boolean
   onReview: () => void
+  label?: string
+  onCancel?: () => void
+  cancelLabel?: string
 }) {
   return (
     <Box className="pax-action-bar">
@@ -27,8 +33,13 @@ export function ConfirmActionBar({
           rightSection={<ArrowRightIcon size={18} />}
           style={tokens.button.primary}
         >
-          Review delivery
+          {label}
         </Button>
+        {onCancel && cancelLabel && (
+          <Button variant="subtle" size="sm" fullWidth mt={6} onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+        )}
       </Container>
     </Box>
   )

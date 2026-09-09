@@ -8,4 +8,5 @@ public sealed record BookingConfirmedNotificationContext(
     string JobNumber,
     string DayLabel,
     string WindowLabel,
-    string? TrackingUrl);
+    string? TrackingUrl,
+    bool IsUpdate = false);

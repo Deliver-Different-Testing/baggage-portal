@@ -1,4 +1,4 @@
-import type { BookingSummary, TimeSlot } from '../api/client'
+import type { AvailableService, BookingSummary, TimeSlot } from '../api/client'
 
 export const summary: BookingSummary = {
   bookingId: 1,
@@ -23,6 +23,7 @@ export const summary: BookingSummary = {
   atlOptions: [],
   trackingAvailable: true,
   trackingUrl: 'https://tracking.example.com/#/ENCRYPTED',
+  bookingLeadTimeMinutes: 30,
 }
 
 export const slot: TimeSlot = {
@@ -39,4 +40,14 @@ export const tomorrowSlot: TimeSlot = {
   dayLabel: 'Tomorrow, Thu 11 Jun',
   label: '9:00 AM – 12:00 PM',
   firstAvailable: false,
+}
+
+export const economyRun: AvailableService = {
+  jobTypeId: 37,
+  scheduleId: null,
+  name: 'Economy Run',
+  description: 'Delivered on our next scheduled run',
+  bookDateUtc: null,
+  durationMinutes: 180,
+  isScheduled: false,
 }

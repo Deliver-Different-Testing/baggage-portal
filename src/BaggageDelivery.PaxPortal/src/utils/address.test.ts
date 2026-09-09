@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addressLabels, addressLines, isUnitedStates } from './address'
+import { addressLabels, addressLines, isUnitedStates, sameDeliveryAddress } from './address'
 import type { AddressDto } from '../api/client'
 
 const nz: AddressDto = {
@@ -66,5 +66,47 @@ describe('addressLines', () => {
 
   it('never renders line 2, which the docket shows on its own', () => {
     expect(addressLines(nz).join('|')).not.toContain('Room 402')
+  })
+})
+
+describe('sameDeliveryAddress', () => {
+  const base: AddressDto = {
+    line1: null,
+    line2: null,
+    line3: '1',
+    line4: 'Test Street',
+    line5: 'Ponsonby',
+    line6: 'Auckland',
+    line7: '1011',
+    country: 'NZ',
+    latitude: -36.85,
+    longitude: 174.76,
+  }
+
+  it('treats an identical address as unchanged', () => {
+    expect(sameDeliveryAddress(base, { ...base })).toBe(true)
+  })
+
+  it('ignores coordinates, which a manual edit clears', () => {
+    expect(sameDeliveryAddress(base, { ...base, latitude: null, longitude: null })).toBe(true)
+  })
+
+  it('ignores surrounding whitespace and blank-versus-null lines', () => {
+    expect(sameDeliveryAddress(base, { ...base, line1: '  ', line4: ' Test Street ' })).toBe(true)
+  })
+
+  it.each(['line1', 'line2', 'line3', 'line4', 'line5', 'line6', 'line7'] as const)(
+    'notices a change to %s',
+    (key) => {
+      expect(sameDeliveryAddress(base, { ...base, [key]: 'Different' })).toBe(false)
+    },
+  )
+
+  it('notices a change of country', () => {
+    expect(sameDeliveryAddress(base, { ...base, country: 'AU' })).toBe(false)
+  })
+
+  it('is case insensitive, matching the server comparison', () => {
+    expect(sameDeliveryAddress(base, { ...base, line5: 'PONSONBY' })).toBe(true)
   })
 })

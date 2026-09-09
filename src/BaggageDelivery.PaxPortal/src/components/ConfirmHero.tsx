@@ -54,9 +54,13 @@ function HeroShell({ topRule, children }: { topRule?: string; children: ReactNod
 export const ConfirmHero = memo(function ConfirmHero({
   summary,
   accent,
+  title,
+  body,
 }: {
   summary: BookingSummary
   accent: AirlineAccent
+  title?: string
+  body?: string
 }) {
   return (
     <HeroShell topRule={accent.accent}>
@@ -78,7 +82,7 @@ export const ConfirmHero = memo(function ConfirmHero({
       </Group>
 
       <Title order={1} style={HERO_TITLE_STYLE}>
-        {HERO_TITLE}
+        {title ?? HERO_TITLE}
       </Title>
       {summary.fileReference && (
         <Box mt="md">
@@ -92,7 +96,7 @@ export const ConfirmHero = memo(function ConfirmHero({
       )}
 
       <Text mt="md" style={HERO_BODY_STYLE}>
-        {heroBody(summary.airlineLabel)}
+        {body ?? heroBody(summary.airlineLabel)}
       </Text>
     </HeroShell>
   )

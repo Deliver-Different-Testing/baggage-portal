@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
-import { apiClient } from './client'
+import { apiClient, warmAntiforgeryToken } from './client'
 
 describe('apiClient antiforgery handling', () => {
   let tokenRequests = 0
@@ -85,6 +85,33 @@ describe('apiClient antiforgery handling', () => {
     expect(response.status).toBe(200)
     expect(tokenRequests).toBe(1)
     expect(sentTokenHeaders).toEqual(['stale-token', 'request-token-abc'])
+  })
+
+  it('warms the token ahead of any mutation', async () => {
+    await warmAntiforgeryToken()
+
+    expect(tokenRequests).toBe(1)
+
+    await apiClient.post('/pax/abc/booking/confirm', {})
+
+    expect(tokenRequests).toBe(1)
+    expect(sentTokenHeaders).toEqual(['request-token-abc'])
+  })
+
+  it('does not re-mint a token that is already warm', async () => {
+    document.cookie = 'XSRF-TOKEN=already-here'
+
+    await warmAntiforgeryToken()
+
+    expect(tokenRequests).toBe(0)
+  })
+
+  it('never rejects when warming fails', async () => {
+    server.use(
+      http.get('*/antiforgery/token', () => new HttpResponse(null, { status: 500 })),
+    )
+
+    await expect(warmAntiforgeryToken()).resolves.toBeUndefined()
   })
 
   it('surfaces a validation 400 without retrying', async () => {

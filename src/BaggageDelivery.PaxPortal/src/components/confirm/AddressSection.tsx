@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Collapse, Group, Stack, TextInput } from '@mantine/core'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import { AddressGate } from './AddressGate'
 import { FormSection } from './FormSection'
-import { fieldTargetId, type AddressLabels } from './confirmValidation'
+import { fieldTargetId, type AddressErrors, type AddressLabels } from './confirmValidation'
 import type { AddressDto } from '../../api/client'
 import type { AddressDetail } from '../../types/address'
 
@@ -10,7 +11,7 @@ const ADDRESS_LINE2_MAX = 200
 
 const optional = (label: string) => `${label} (optional)`
 
-export function AddressSection({
+export const AddressSection = memo(function AddressSection({
   bookingId,
   address,
   labels,
@@ -23,7 +24,7 @@ export function AddressSection({
   onPatch,
   onLocationPatch,
   onCountryChange,
-  showFieldError,
+  errors,
 }: {
   bookingId: string
   address: AddressDto
@@ -37,7 +38,7 @@ export function AddressSection({
   onPatch: (patch: Partial<AddressDto>) => void
   onLocationPatch: (patch: Partial<AddressDto>) => void
   onCountryChange: (country: string) => void
-  showFieldError: (key: string) => string | undefined
+  errors: AddressErrors
 }) {
   return (
     <FormSection title="Deliver to" subtitle="Check this is where you want your bag sent">
@@ -48,7 +49,7 @@ export function AddressSection({
           editing={editing}
           onChange={onConfirmedChange}
           onToggleEdit={onToggleEdit}
-          error={showFieldError('addressConfirmed')}
+          error={errors.addressConfirmed}
         />
         <Collapse expanded={editing}>
           <Stack gap="sm" pt="xs">
@@ -67,7 +68,7 @@ export function AddressSection({
                 onChange={(e) => onLocationPatch({ line3: e.currentTarget.value })}
                 required
                 style={{ flex: '0 1 42%' }}
-                error={showFieldError('line3')}
+                error={errors.line3}
               />
               <TextInput
                 id={fieldTargetId('line4')}
@@ -77,7 +78,7 @@ export function AddressSection({
                 autoComplete="address-line1"
                 required
                 style={{ flex: 1 }}
-                error={showFieldError('line4')}
+                error={errors.line4}
               />
             </Group>
             <TextInput
@@ -95,7 +96,7 @@ export function AddressSection({
               onChange={(e) => onLocationPatch({ line5: e.currentTarget.value })}
               autoComplete="address-level3"
               required
-              error={showFieldError('line5')}
+              error={errors.line5}
             />
             <Group gap="sm" align="flex-end" grow wrap="nowrap">
               <TextInput
@@ -105,7 +106,7 @@ export function AddressSection({
                 onChange={(e) => onLocationPatch({ line6: e.currentTarget.value })}
                 autoComplete="address-level2"
                 required
-                error={showFieldError('line6')}
+                error={errors.line6}
               />
               <TextInput
                 id={fieldTargetId('line7')}
@@ -115,7 +116,7 @@ export function AddressSection({
                 autoComplete="postal-code"
                 autoCapitalize="characters"
                 required
-                error={showFieldError('line7')}
+                error={errors.line7}
               />
             </Group>
             <TextInput
@@ -125,11 +126,11 @@ export function AddressSection({
               onChange={(e) => onCountryChange(e.currentTarget.value)}
               autoComplete="country-name"
               required
-              error={serverCountryError ?? showFieldError('country')}
+              error={serverCountryError ?? errors.country}
             />
           </Stack>
         </Collapse>
       </Stack>
     </FormSection>
   )
-}
+})

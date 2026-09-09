@@ -19,6 +19,7 @@ public sealed record BookingSummaryDto(
     int? DefaultAtlOptionId,
     bool TrackingAvailable,
     string? TrackingUrl,
+    int BookingLeadTimeMinutes,
     BookingConfirmationDto? Confirmation);
 
 public sealed record BookingConfirmationDto(
@@ -27,7 +28,9 @@ public sealed record BookingConfirmationDto(
     string DayLabel,
     string WindowLabel,
     int? AtlOptionId,
-    string? AccessNotes);
+    string? AccessNotes,
+    DateTime? EditableUntilUtc,
+    bool CanEdit);
 
 public sealed record AtlOptionDto(int Id, string Name);
 
@@ -46,8 +49,41 @@ public sealed record AddressDto(
 public sealed record TimeSlotDto(
     Guid Id, DateTime RunUtc, string DayLabel, string Label, bool FirstAvailable);
 
+public sealed record AvailableServiceDto(
+    int JobTypeId,
+    int? ScheduleId,
+    string Name,
+    string? Description,
+    DateTime? BookDateUtc,
+    int? DurationMinutes,
+    bool IsScheduled);
+
+public sealed record AvailableServicesResponse(
+    AvailableServiceDto[] Services,
+    bool NoServiceAvailable);
+
+public sealed record AddressServicesRequest(
+    [Required] AddressDto Address);
+
+public sealed record AddressHelpRequest(
+    [Required] AddressDto Address,
+    [Required, MaxLength(100)] string PassengerName,
+    [MaxLength(40)] string? PassengerPhone,
+    [MaxLength(100), EmailAddress] string? PassengerEmail);
+
+public sealed record AddressHelpResponse(bool Requested);
+
 public sealed record ConfirmBookingRequest(
     [Required] AddressDto Address,
+    [Required] DateTime? DeliveryTimeUtc,
+    int? ServiceJobTypeId,
+    int? AtlOptionId,
+    [MaxLength(120)] string? AccessNotes,
+    [Required, MaxLength(100)] string PassengerName,
+    [MaxLength(40)] string? PassengerPhone,
+    [MaxLength(100), EmailAddress] string? PassengerEmail);
+
+public sealed record AmendBookingRequest(
     [Required] DateTime? DeliveryTimeUtc,
     int? AtlOptionId,
     [MaxLength(120)] string? AccessNotes,

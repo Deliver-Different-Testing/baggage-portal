@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { ConfirmedScreen } from './ConfirmedScreen'
 import { MantineTestProvider } from '../../test/render'
@@ -7,12 +8,17 @@ import { slot, summary } from '../../test/paxFixtures'
 import type { BookingSummary } from '../../api/client'
 
 
-function renderConfirmed(overrides: Partial<BookingSummary> = {}) {
+function renderConfirmed(
+  overrides: Partial<BookingSummary> = {},
+  edit?: { onEdit?: () => void; editableUntilUtc?: string | null },
+) {
   return render(
     <MemoryRouter>
       <MantineTestProvider>
         <ConfirmedScreen
           summary={{ ...summary, ...overrides }}
+          onEdit={edit?.onEdit}
+          editableUntilUtc={edit?.editableUntilUtc}
           slot={slot}
           address={summary.deliveryAddress}
           passengerName="Test Passenger"
@@ -210,5 +216,25 @@ describe('ConfirmedScreen', () => {
     expect(footer.queryByText('Test Air')).not.toBeInTheDocument()
     expect(footer.queryByRole('link', { name: /call/i })).not.toBeInTheDocument()
     expect(footer.getByRole('img', { name: /deliver dfrnt/i })).toBeInTheDocument()
+  })
+
+  it('offers a change while the booking is still editable, and says how long for', async () => {
+    const onEdit = vi.fn()
+    renderConfirmed({}, { onEdit, editableUntilUtc: '2026-06-10T20:30:00Z' })
+
+    const button = screen.getByRole('button', { name: /change delivery details/i })
+    expect(screen.getByText(/you can change your delivery until/i)).toBeInTheDocument()
+
+    await userEvent.click(button)
+    expect(onEdit).toHaveBeenCalledOnce()
+  })
+
+  it('shows no change button once the booking is past changing', () => {
+    renderConfirmed()
+
+    expect(
+      screen.queryByRole('button', { name: /change delivery details/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText(/need to change something/i)).toBeInTheDocument()
   })
 })

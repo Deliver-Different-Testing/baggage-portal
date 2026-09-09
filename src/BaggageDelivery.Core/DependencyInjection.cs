@@ -30,6 +30,8 @@ public static class DependencyInjection
             services.AddScoped<INotificationService, TucManualMessageSender>();
             services.AddScoped<IJobTrackingLinkService, JobTrackingLinkService>();
             services.AddScoped<ISuburbResolver, SuburbResolver>();
+            services.AddScoped<IAvailableServicesQuery, AvailableServicesQuery>();
+            services.AddScoped<IServiceAvailabilityService, ServiceAvailabilityService>();
         }
 
         public void AddInfrastructure(IConfiguration configuration, bool isDevelopment = false)
@@ -39,6 +41,7 @@ public static class DependencyInjection
             services.AddEncryption(configuration);
             services.AddBookingLinks(configuration);
             services.AddDespatchOptions(configuration);
+            services.AddAllowedServiceOptions(configuration);
             services.AddTrackingPageUrls(configuration);
             services.AddAddressLookup(configuration);
         }
@@ -110,6 +113,31 @@ public static class DependencyInjection
             });
         }
 
+        private void AddAllowedServiceOptions(IConfiguration configuration)
+        {
+            services.Configure<AllowedServiceOptions>(
+                configuration.GetSection(AllowedServiceOptions.SectionName));
+            services.PostConfigure<AllowedServiceOptions>(opts =>
+            {
+                var enabled = Environment.GetEnvironmentVariable("AddressGuardRailsEnabled")
+                              ?? configuration["AddressGuardRailsEnabled"];
+                if (bool.TryParse(enabled, out var flag))
+                {
+                    opts.Enabled = flag;
+                }
+
+                var notify = Environment.GetEnvironmentVariable("UnserviceableAddressNotifyEmail")
+                             ?? configuration["UnserviceableAddressNotifyEmail"];
+                if (!string.IsNullOrEmpty(notify))
+                {
+                    opts.UnserviceableAddressNotifyEmail = notify;
+                }
+            });
+            services.AddSingleton<IValidateOptions<AllowedServiceOptions>,
+                AllowedServiceOptionsValidator>();
+            services.AddOptions<AllowedServiceOptions>().ValidateOnStart();
+        }
+
         private void AddTrackingPageUrls(IConfiguration configuration)
         {
             services.Configure<TrackingPageUrlsOptions>(configuration.GetSection(TrackingPageUrlsOptions.SectionName));
@@ -122,10 +150,7 @@ public static class DependencyInjection
                     opts.BaseUrl = new Uri(trackingUrl.TrimEnd('/') + "/");
                 }
             });
-
         }
-
-
 
         private void AddAddressLookup(IConfiguration configuration)
         {
