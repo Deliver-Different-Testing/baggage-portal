@@ -78,3 +78,18 @@ lifecycle:
   preStop:
     exec:
       command: ["/bin/sh", "-c", "sleep 10"]
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: tenant
+              operator: In
+              values:
+                - staging
+tolerations:
+  - key: tenant
+    operator: Equal
+    value: staging
+    effect: NoSchedule
