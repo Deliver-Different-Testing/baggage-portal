@@ -139,7 +139,7 @@ public class PaxBookingServiceAmendTests
         await NewService(db).AmendAsync(Input(), ct);
 
         var note = await db.TucNotes.AsNoTracking().SingleAsync(n => n.JobId == JobId, ct);
-        Assert.Equal((int)NoteType.DeliveryNotes, note.NoteTypeId);
+        Assert.Equal(InMemoryDb.NoteTypeId(NoteType.DeliveryNotes), note.NoteTypeId);
         Assert.Equal("Leave with the concierge", note.NoteText);
         Assert.False(note.IsImportant);
         Assert.Null(note.CreatedBy);

@@ -2014,7 +2014,7 @@ public class PaxBookingServiceTests
         await svc.ConfirmAsync(NewConfirmInput(4310, accessNotes: "  Leave with concierge  "), ct);
 
         var note = await db.TucNotes.AsNoTracking().SingleAsync(n => n.JobId == 4310, ct);
-        Assert.Equal((int)NoteType.DeliveryNotes, note.NoteTypeId);
+        Assert.Equal(InMemoryDb.NoteTypeId(NoteType.DeliveryNotes), note.NoteTypeId);
         Assert.Equal("Leave with concierge", note.NoteText);
         Assert.False(note.IsImportant);
         Assert.Null(note.CreatedBy);
@@ -2233,10 +2233,81 @@ public class PaxBookingServiceTests
         Assert.Empty(summary.DeliveryNotes);
     }
 
+    [Fact]
+    public async Task GetSummary_returns_no_delivery_notes_when_the_tenant_has_no_delivery_note_type()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucNoteTypes.RemoveRange(
+            await db.TucNoteTypes.AsTracking()
+                .Where(t => t.NoteTypeName == NoteTypeNames.DeliveryNotes)
+                .ToListAsync(ct));
+        db.TucJobs.Add(new TucJob { UcjbId = 4322, UcjbNumber = "URG-4322" });
+        db.JobDeliveryJourneys.Add(ConfirmedMarker(4322));
+        db.TucNotes.Add(NewNote(4322, NoteType.InternalNote, "Ops only"));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        var summary = await svc.GetSummaryAsync(4322, ct);
+
+        Assert.NotNull(summary);
+        Assert.Empty(summary.DeliveryNotes);
+        Assert.NotNull(summary.Confirmation);
+        Assert.Null(summary.Confirmation.AccessNotes);
+    }
+
+    [Fact]
+    public async Task Confirm_resolves_the_delivery_note_type_by_name_not_by_enum_value()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4320));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        await svc.ConfirmAsync(NewConfirmInput(4320, accessNotes: "Gate code 4320"), ct);
+
+        var note = await db.TucNotes.AsNoTracking().SingleAsync(n => n.JobId == 4320, ct);
+        var deliveryNoteType = await db.TucNoteTypes.AsNoTracking()
+            .SingleAsync(t => t.NoteTypeName == NoteTypeNames.DeliveryNotes, ct);
+
+        Assert.Equal(deliveryNoteType.NoteTypeId, note.NoteTypeId);
+        Assert.NotEqual((int)NoteType.DeliveryNotes, note.NoteTypeId);
+    }
+
+    [Fact]
+    public async Task Confirm_skips_the_delivery_note_when_the_tenant_has_no_delivery_note_type()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucNoteTypes.RemoveRange(
+            await db.TucNoteTypes.AsTracking()
+                .Where(t => t.NoteTypeName == NoteTypeNames.DeliveryNotes)
+                .ToListAsync(ct));
+        db.TucJobs.Add(NewJobAtDefaultConfirmAddress(4321));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        await svc.ConfirmAsync(NewConfirmInput(4321, accessNotes: "Gate code 4321"), ct);
+
+        Assert.False(await db.TucNotes.AsNoTracking().AnyAsync(n => n.JobId == 4321, ct));
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(j => j.UcjbId == 4321, ct);
+        Assert.Equal((int)JobStatus.New, job.UcjbStatus);
+    }
+
     private static TucNote NewNote(int jobId, NoteType type, string text) => new()
     {
         JobId = jobId,
-        NoteTypeId = (int)type,
+        NoteTypeId = InMemoryDb.NoteTypeId(type),
         NoteText = text,
         CreatedDate = new DateTime(2026, 6, 9, 12, 0, 0)
     };

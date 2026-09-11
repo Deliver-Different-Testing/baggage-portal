@@ -7,6 +7,8 @@ namespace BaggageDelivery.UnitTests.Helpers;
 
 internal static class InMemoryDb
 {
+    private const int IdentityOffset = 100;
+
     public static BaggageDeliveryContext NewContext()
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -26,12 +28,15 @@ internal static class InMemoryDb
         return ctx;
     }
 
+    public static int NoteTypeId(NoteType type) => (int)type + IdentityOffset;
+
     private static void SeedNoteTypes(BaggageDeliveryContext ctx)
     {
         ctx.TucNoteTypes.AddRange(Enum.GetValues<NoteType>().Select(t => new TucNoteType
         {
-            NoteTypeId = (int)t,
-            NoteTypeName = t.ToString(),
+            NoteTypeId = NoteTypeId(t),
+            NoteTypeName = NoteTypeNames.For(t),
+            IsPublic = t is NoteType.PickupNotes or NoteType.DeliveryNotes,
             IsActive = true
         }));
 
