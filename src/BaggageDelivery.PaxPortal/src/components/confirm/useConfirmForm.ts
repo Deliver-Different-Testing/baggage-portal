@@ -25,6 +25,7 @@ import type {
   AvailableService,
   BookingConfirmation,
   BookingSummary,
+  ServiceAddressDto,
   TimeSlot,
 } from '../../api/client'
 import type { AddressDetail } from '../../types/address'
@@ -93,9 +94,24 @@ export function useConfirmForm(
   const debouncedAddressChanged = !sameDeliveryAddress(originalAddress, debouncedAddress)
   const addressSettled = sameDeliveryAddress(debouncedAddress, address)
 
+  const serviceAddress: ServiceAddressDto = useMemo(
+    () => ({
+      line5: debouncedAddress.line5,
+      line7: debouncedAddress.line7,
+      latitude: debouncedAddress.latitude,
+      longitude: debouncedAddress.longitude,
+    }),
+    [
+      debouncedAddress.line5,
+      debouncedAddress.line7,
+      debouncedAddress.latitude,
+      debouncedAddress.longitude,
+    ],
+  )
+
   const services = useQuery({
-    queryKey: ['pax', 'services', bookingId, debouncedAddress],
-    queryFn: () => getServices(bookingId, debouncedAddress),
+    queryKey: ['pax', 'services', bookingId, serviceAddress],
+    queryFn: () => getServices(bookingId, serviceAddress),
     enabled: debouncedAddressChanged,
     staleTime: 30_000,
   })
@@ -104,9 +120,13 @@ export function useConfirmForm(
   const noServiceAvailable =
     addressChanged && addressSettled && services.isSuccess && availableServices.length === 0
   const servicesLoading = addressChanged && (!addressSettled || services.isLoading)
+  const showServicePicker =
+    addressChanged && (servicesLoading || services.isError || availableServices.length > 1)
 
   const selectedService: AvailableService | undefined = useMemo(
-    () => availableServices.find((s) => s.jobTypeId === selectedServiceId),
+    () =>
+      availableServices.find((s) => s.jobTypeId === selectedServiceId) ??
+      (availableServices.length === 1 ? availableServices[0] : undefined),
     [availableServices, selectedServiceId],
   )
 
@@ -223,7 +243,7 @@ export function useConfirmForm(
         ...a,
         line3: detail.streetNumber || null,
         line4: detail.street,
-        line5: us ? detail.city : detail.suburb,
+        line5: us ? detail.city : detail.suburb || detail.city,
         line6: us ? detail.stateCode || detail.state : detail.city,
         line7: detail.postalCode || null,
         country: detail.countryCode || a.country,
@@ -478,6 +498,7 @@ export function useConfirmForm(
     selectedService,
     servicesLoading,
     servicesError: services.isError,
+    showServicePicker,
     noServiceAvailable,
     helpRequested,
     requestingHelp: addressHelp.isPending,

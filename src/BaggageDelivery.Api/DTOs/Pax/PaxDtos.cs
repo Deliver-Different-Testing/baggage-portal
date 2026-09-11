@@ -13,6 +13,7 @@ public sealed record BookingSummaryDto(
     string? PassengerPhone,
     string? PassengerEmail,
     AddressDto DeliveryAddress,
+    string[] DeliveryNotes,
     DateTime EarliestSlotUtc,
     DateTime LatestSlotUtc,
     AtlOptionDto[] AtlOptions,
@@ -62,8 +63,14 @@ public sealed record AvailableServicesResponse(
     AvailableServiceDto[] Services,
     bool NoServiceAvailable);
 
+public sealed record ServiceAddressDto(
+    [MaxLength(255)] string? Line5,
+    [MaxLength(255)] string? Line7,
+    decimal? Latitude,
+    decimal? Longitude);
+
 public sealed record AddressServicesRequest(
-    [Required] AddressDto Address);
+    [Required] ServiceAddressDto Address);
 
 public sealed record AddressHelpRequest(
     [Required] AddressDto Address,

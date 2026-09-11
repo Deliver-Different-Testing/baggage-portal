@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Collapse, Group, Stack, TextInput } from '@mantine/core'
 import { AddressAutocomplete } from '../AddressAutocomplete'
 import { AddressGate } from './AddressGate'
+import { DeliveryNotesPanel } from './DeliveryNotesPanel'
 import { FormSection } from './FormSection'
 import { fieldTargetId, type AddressErrors, type AddressLabels } from './confirmValidation'
 import type { AddressDto } from '../../api/client'
@@ -14,6 +15,7 @@ const optional = (label: string) => `${label} (optional)`
 export const AddressSection = memo(function AddressSection({
   bookingId,
   address,
+  deliveryNotes,
   labels,
   confirmed,
   editing,
@@ -28,6 +30,7 @@ export const AddressSection = memo(function AddressSection({
 }: {
   bookingId: string
   address: AddressDto
+  deliveryNotes: string[]
   labels: AddressLabels
   confirmed: boolean
   editing: boolean
@@ -130,6 +133,7 @@ export const AddressSection = memo(function AddressSection({
             />
           </Stack>
         </Collapse>
+        <DeliveryNotesPanel notes={deliveryNotes} />
       </Stack>
     </FormSection>
   )

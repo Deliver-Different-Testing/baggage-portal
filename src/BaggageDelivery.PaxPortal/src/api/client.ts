@@ -91,6 +91,13 @@ export type AddressDto = {
   longitude?: number | null
 }
 
+export type ServiceAddressDto = {
+  line5?: string | null
+  line7?: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+
 export type BookingSummary = {
   bookingId: number
   jobId: number
@@ -103,6 +110,7 @@ export type BookingSummary = {
   passengerPhone?: string | null
   passengerEmail?: string | null
   deliveryAddress: AddressDto
+  deliveryNotes?: string[]
   earliestSlotUtc: string
   latestSlotUtc: string
   atlOptions: AtlOption[]

@@ -51,3 +51,13 @@ export const economyRun: AvailableService = {
   durationMinutes: 180,
   isScheduled: false,
 }
+
+export const standardService: AvailableService = {
+  jobTypeId: 56,
+  scheduleId: null,
+  name: 'Standard',
+  description: 'Delivered within the working day',
+  bookDateUtc: null,
+  durationMinutes: 240,
+  isScheduled: false,
+}

@@ -93,6 +93,16 @@ internal sealed class PaxBookingService(
             return null;
         }
         
+        var deliveryNotes = await db.TucNotes
+            .AsNoTracking()
+            .Where(n => n.JobId == jobId
+                && n.NoteTypeId == (int)NoteType.DeliveryNotes
+                && n.NoteText != null
+                && n.NoteText != "")
+            .OrderBy(n => n.NoteId)
+            .Select(n => n.NoteText)
+            .ToListAsync(ct);
+
         var airlineCode = ExtractAirlineFromWorldTracerRef(job.ClientRefa)
             ?? (string.IsNullOrWhiteSpace(job.JobClientCode) ? job.ClientCode : job.JobClientCode);
         
@@ -119,7 +129,7 @@ internal sealed class PaxBookingService(
         var now = time.GetUtcNow().UtcDateTime;
         var etaUtc = TenantLocalToUtc(job.DeliverByTime, despatchOptions.Value.TimeZone);
 
-        var defaultCountry = despatchOptions.Value.Countries is { Length: > 0 } cs ? cs[0] : "NZ";
+        var defaultCountry = DefaultCountry();
 
         var timeZone = ResolveTimeZone(despatchOptions.Value.TimeZone);
         var confirmation = await BuildConfirmationAsync(
@@ -142,6 +152,7 @@ internal sealed class PaxBookingService(
                 job.DeliveryAddressLine5, job.DeliveryAddressLine6, job.DeliveryAddressLine7,
                 job.DeliveryAddressLine8, job.DeliveryLatitude, job.DeliveryLongitude,
                 defaultCountry),
+            DeliveryNotes: deliveryNotes,
             EarliestSlotUtc: etaUtc ?? now,
             LatestSlotUtc: etaUtc ?? now.AddDays(2),
             AtlOptions: atlOptions,
@@ -262,6 +273,9 @@ internal sealed class PaxBookingService(
             Longitude = longitude
         };
     }
+
+    private string DefaultCountry() =>
+        despatchOptions.Value.Countries is { Length: > 0 } cs ? cs[0] : "NZ";
 
     private static string ResolveStoredCountry(int jobId, string? line8, string defaultCountry)
     {
@@ -649,7 +663,12 @@ internal sealed class PaxBookingService(
             .FirstOrDefaultAsync(ct);
 
         var newAddress = DespatchAddressComposer.Compose(input.Address, country);
-        var addressChanged = before is not null && HasAddressChanged(before, input.Address, country);
+        var addressChanged = before is not null
+            && HasAddressChanged(
+                before,
+                input.Address,
+                ResolveStoredCountry(input.JobId, before.Line8, DefaultCountry()),
+                country);
         var chosen = addressChanged && allowedServiceOptions.Value.Enabled
             ? await ResolveChosenServiceAsync(input, ct)
             : null;
@@ -875,6 +894,15 @@ internal sealed class PaxBookingService(
 
         if (input.ServiceJobTypeId is not { } chosenId)
         {
+            if (DefaultService(allowed) is { } fallback)
+            {
+                Log.Information(
+                    "Pax confirmation auto-selected a service, none chosen: JobId={JobId} "
+                    + "ServiceJobTypeId={ServiceJobTypeId} Name={Name}",
+                    input.JobId, fallback.JobTypeId, fallback.Name);
+                return fallback;
+            }
+
             Log.Information(
                 "Pax confirmation refused, address changed with no service chosen: JobId={JobId}", input.JobId);
             throw new PaxServiceNotAllowedException(
@@ -894,6 +922,12 @@ internal sealed class PaxBookingService(
             + "Please choose again from the options shown.");
 
     }
+
+    private CandidateService? DefaultService(IReadOnlyList<CandidateService> allowed) =>
+        allowed.Count == 1
+            ? allowed[0]
+            : allowed.FirstOrDefault(s => allowedServiceOptions.Value.AllowedNames
+                .Contains(s.Name, StringComparer.OrdinalIgnoreCase));
 
     public async Task<bool> RequestAirlineContactAsync(
         AddressContactRequestInput input, CancellationToken ct)
@@ -957,7 +991,7 @@ internal sealed class PaxBookingService(
         string? Line5, string? Line6, string? Line7, string? Line8, string? Flat);
 
     private static bool HasAddressChanged(
-        DeliveryAddressSnapshot before, AddressUpdateDto after, string country) =>
+        DeliveryAddressSnapshot before, AddressUpdateDto after, string beforeCountry, string country) =>
         !SameAddressLine(before.Line1, after.Line1)
         || !SameAddressLine(before.Line2, after.Line2)
         || !SameAddressLine(before.Line3, after.Line3)
@@ -965,7 +999,7 @@ internal sealed class PaxBookingService(
         || !SameAddressLine(before.Line5, after.Line5)
         || !SameAddressLine(before.Line6, after.Line6)
         || !SameAddressLine(before.Line7, after.Line7)
-        || !SameAddressLine(before.Line8, country);
+        || !SameAddressLine(beforeCountry, country);
 
     private static bool SameAddressLine(string? left, string? right) =>
         string.Equals(

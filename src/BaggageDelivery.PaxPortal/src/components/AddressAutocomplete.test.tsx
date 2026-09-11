@@ -106,3 +106,54 @@ describe('AddressAutocomplete', () => {
     expect(input).toHaveValue('123 Queen Street, Onehunga, Auckland, AUK, 1061')
   })
 })
+
+describe('AddressAutocomplete with repeated venue names', () => {
+  const terminals: AddressSearchResult[] = [
+    {
+      id: 'here-wlg',
+      title: 'Bluebridge Cook Strait Ferries',
+      street: 'Waterloo Quay',
+      suburb: 'Pipitea',
+      city: 'Wellington',
+      state: 'Wellington',
+      postalCode: '6011',
+      countryCode: 'NZ',
+    },
+    {
+      id: 'here-pct',
+      title: 'Bluebridge Cook Strait Ferries',
+      street: 'Auckland Street',
+      suburb: '',
+      city: 'Picton',
+      state: 'Marlborough',
+      postalCode: '7220',
+      countryCode: 'NZ',
+    },
+  ]
+
+  it('lists every terminal and looks up the one that was picked', async () => {
+    const user = userEvent.setup()
+    const lookedUp: string[] = []
+    server.use(
+      http.get('*/pax/:id/address/autocomplete', () => HttpResponse.json(terminals)),
+      http.get('*/pax/:id/address/lookup/:addressId', ({ params }) => {
+        lookedUp.push(String(params.addressId))
+        return HttpResponse.json(detail)
+      }),
+    )
+
+    renderAutocomplete()
+    await user.type(screen.getByPlaceholderText(/start typing an address/i), 'Bluebridge')
+
+    const options = await screen.findAllByRole('option')
+    expect(options).toHaveLength(2)
+    expect(options.map((o) => o.textContent)).toEqual([
+      'Bluebridge Cook Strait Ferries, Pipitea, Wellington',
+      'Bluebridge Cook Strait Ferries, Picton',
+    ])
+
+    await user.click(options[1])
+
+    await waitFor(() => expect(lookedUp).toEqual(['here-pct']))
+  })
+})

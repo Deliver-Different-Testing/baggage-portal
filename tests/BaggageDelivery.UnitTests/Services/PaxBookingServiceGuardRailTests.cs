@@ -36,7 +36,7 @@ public class PaxBookingServiceGuardRailTests
         CreatedBy = "test", LastModifiedBy = "test", Notes = "", ExtraName = "", Alias = ""
     };
 
-    private static TucJob NewJob() => new()
+    private static TucJob NewJob(string? storedCountry = "NZ") => new()
     {
         UcjbId = JobId,
         UcjbNumber = "TEST-5150",
@@ -45,7 +45,7 @@ public class PaxBookingServiceGuardRailTests
         DeliveryAddressLine5 = "Ponsonby",
         DeliveryAddressLine6 = "Auckland",
         DeliveryAddressLine7 = "1011",
-        DeliveryAddressLine8 = "NZ",
+        DeliveryAddressLine8 = storedCountry,
         UcjbToAddr = "1, Test Street, Ponsonby, Auckland, 1011, NZ",
         UcjbStatus = (int)JobStatus.Dispatched
     };
@@ -115,6 +115,84 @@ public class PaxBookingServiceGuardRailTests
         Assert.Equal((int)JobStatus.New, job.UcjbStatus);
     }
 
+    [Theory]
+    [InlineData("New Zealand")]
+    [InlineData("NZL")]
+    [InlineData(null)]
+    public async Task An_unchanged_address_whose_stored_country_is_not_iso2_still_needs_no_service(
+        string? storedCountry)
+    {
+        await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(37));
+        db.TucJobs.Add(NewJob(storedCountry));
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var (svc, availability, _) = NewService(db, EconomyRun());
+
+        await svc.ConfirmAsync(Input(Address(), serviceJobTypeId: null), TestContext.Current.CancellationToken);
+
+        await availability.DidNotReceiveWithAnyArgs().GetAllowedServicesAsync(
+            0, null!, default, TestContext.Current.CancellationToken);
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal((int)JobStatus.New, job.UcjbStatus);
+        Assert.Null(job.UcjbSpeed);
+    }
+
+    [Fact]
+    public async Task A_changed_address_with_a_single_allowed_service_selects_it_without_asking()
+    {
+        await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(37));
+        db.TucJobs.Add(NewJob());
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var (svc, _, _) = NewService(db, EconomyRun(jobTypeId: 37));
+
+        await svc.ConfirmAsync(
+            Input(Address(suburb: "Haast", postCode: "7886"), serviceJobTypeId: null),
+            TestContext.Current.CancellationToken);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(37, job.UcjbSpeed);
+        Assert.Equal("Haast", job.DeliveryAddressLine5);
+        Assert.Equal((int)JobStatus.New, job.UcjbStatus);
+    }
+
+    [Fact]
+    public async Task A_changed_address_with_several_services_falls_back_to_the_allowed_name()
+    {
+        await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(37));
+        db.TucJobTypes.Add(NewJobType(56));
+        db.TucJobs.Add(NewJob());
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var standard = new CandidateService(
+            56, null, "Standard", "ST", null, AvailabilityVerdict.Available, null, 240);
+        var (svc, _, _) = NewService(db, EconomyRun(jobTypeId: 37), standard);
+
+        await svc.ConfirmAsync(
+            Input(Address(suburb: "Haast", postCode: "7886"), serviceJobTypeId: null),
+            TestContext.Current.CancellationToken);
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(56, job.UcjbSpeed);
+    }
+
+    [Fact]
+    public async Task A_changed_address_with_no_services_at_all_is_refused()
+    {
+        await using var db = InMemoryDb.NewContext();
+        db.TucJobTypes.Add(NewJobType(37));
+        db.TucJobs.Add(NewJob());
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var (svc, _, _) = NewService(db);
+
+        await Assert.ThrowsAsync<PaxServiceNotAllowedException>(() => svc.ConfirmAsync(
+            Input(Address(suburb: "Haast", postCode: "7886"), serviceJobTypeId: null),
+            TestContext.Current.CancellationToken));
+
+        var job = await db.TucJobs.AsNoTracking().SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal((int)JobStatus.Dispatched, job.UcjbStatus);
+    }
+
     [Fact]
     public async Task A_changed_address_without_a_chosen_service_is_refused()
     {
@@ -122,7 +200,7 @@ public class PaxBookingServiceGuardRailTests
         db.TucJobTypes.Add(NewJobType(37));
         db.TucJobs.Add(NewJob());
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var (svc, _, _) = NewService(db, EconomyRun());
+        var (svc, _, _) = NewService(db, EconomyRun(), EconomyRun(jobTypeId: 56));
 
         await Assert.ThrowsAsync<PaxServiceNotAllowedException>(() => svc.ConfirmAsync(
             Input(Address(suburb: "Haast", postCode: "7886"), serviceJobTypeId: null),

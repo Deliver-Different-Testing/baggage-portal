@@ -2189,6 +2189,50 @@ public class PaxBookingServiceTests
         UpdatedByType = nameof(DeliveryJourneyUpdatedByType.System)
     };
 
+    [Fact]
+    public async Task GetSummary_lists_every_delivery_note_on_the_job_oldest_first()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.AddRange(
+            new TucJob { UcjbId = 7, UcjbNumber = "URG-7" },
+            new TucJob { UcjbId = 8, UcjbNumber = "URG-8" });
+        db.TucNotes.AddRange(
+            NewNote(7, NoteType.DeliveryNotes, "Gate code 1234"),
+            NewNote(7, NoteType.DeliveryNotes, "Dog in the yard"),
+            NewNote(7, NoteType.InternalNote, "Ops only"),
+            NewNote(8, NoteType.DeliveryNotes, "Someone else's job"));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Equal(["Gate code 1234", "Dog in the yard"], summary.DeliveryNotes);
+    }
+
+    [Fact]
+    public async Task GetSummary_returns_no_delivery_notes_when_the_job_carries_none()
+    {
+        await using var db = InMemoryDb.NewContext();
+        var time = new FakeTimeProvider(new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc));
+        var ct = TestContext.Current.CancellationToken;
+
+        db.TucJobs.Add(new TucJob { UcjbId = 7, UcjbNumber = "URG-7" });
+        db.TucNotes.Add(NewNote(7, NoteType.InternalNote, "Ops only"));
+        await db.SaveChangesAsync(ct);
+
+        var svc = new PaxBookingService(db, DespatchOpts(), AllowedOpts(), NewCache(), time, NewCalendar(), NewSuburbs(), NewAvailability(), NewNotifications());
+
+        var summary = await svc.GetSummaryAsync(7, ct);
+
+        Assert.NotNull(summary);
+        Assert.Empty(summary.DeliveryNotes);
+    }
+
     private static TucNote NewNote(int jobId, NoteType type, string text) => new()
     {
         JobId = jobId,

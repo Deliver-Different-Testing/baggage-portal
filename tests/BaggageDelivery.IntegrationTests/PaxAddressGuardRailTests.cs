@@ -118,6 +118,7 @@ public class PaxAddressGuardRailTests : IAsyncLifetime
             .SingleAsync(j => j.UcjbId == JobId, TestContext.Current.CancellationToken);
 
         Assert.Equal((int)JobStatus.New, job.UcjbStatus);
+        Assert.Equal(EconomyRunSpeed, job.UcjbSpeed);
     }
 
     private async Task AssertJobUntouchedAsync()
@@ -212,7 +213,7 @@ public class PaxAddressGuardRailTests : IAsyncLifetime
             DeliveryAddressLine5 = "Ponsonby",
             DeliveryAddressLine6 = "Auckland",
             DeliveryAddressLine7 = "1011",
-            DeliveryAddressLine8 = "NZ",
+            DeliveryAddressLine8 = "New Zealand",
             UcjbToAddr = "1, Test Street, Ponsonby, Auckland, 1011, NZ",
             UcjbStatus = (int)JobStatus.Dispatched
         });
