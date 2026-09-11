@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { Alert, Anchor, Box, Card, Container, Divider, Stack, Text } from '@mantine/core'
 import { ConfirmHero } from '../ConfirmHero'
@@ -34,6 +35,7 @@ export function ConfirmForm({
   onCancelEdit?: () => void
 }) {
   const form = useConfirmForm(bookingId, summary, slots, editing, onCancelEdit)
+  const deliveryNotes = useMemo(() => summary.deliveryNotes ?? [], [summary.deliveryNotes])
   const { address, isEditing } = form
 
   if (form.confirmed) {
@@ -106,12 +108,14 @@ export function ConfirmForm({
               {isEditing ? (
                 <ReadOnlyAddressSection
                   address={address}
+                  deliveryNotes={deliveryNotes}
                   supportPhone={summary.supportPhone}
                 />
               ) : (
                 <AddressSection
                   bookingId={bookingId}
                   address={address}
+                  deliveryNotes={deliveryNotes}
                   labels={form.labels}
                   confirmed={form.addressConfirmed}
                   editing={form.editingAddress}
@@ -126,7 +130,7 @@ export function ConfirmForm({
                 />
               )}
 
-              {form.addressChanged && (
+              {(form.noServiceAvailable || form.showServicePicker) && (
                 <>
                   <Divider />
 

@@ -70,7 +70,7 @@ public sealed class PaxBookingController(
         }
 
         var services = await paxBooking.GetAvailableServicesAsync(
-            jobId.Value, MapAddress(body.Address), ct);
+            jobId.Value, MapServiceAddress(body.Address), ct);
 
         return Ok(new AvailableServicesResponse(
             [.. services.Select(s => new AvailableServiceDto(
@@ -200,6 +200,17 @@ public sealed class PaxBookingController(
         return Ok(new ConfirmBookingResponse("Updated", DateTime.UtcNow, trackingUrl));
     }
 
+    private static AddressUpdateDto MapServiceAddress(ServiceAddressDto address) => new()
+    {
+        Line4 = string.Empty,
+        Line5 = address.Line5 ?? string.Empty,
+        Line6 = string.Empty,
+        Line7 = address.Line7,
+        Country = string.Empty,
+        Latitude = address.Latitude,
+        Longitude = address.Longitude
+    };
+
     private static AddressUpdateDto MapAddress(AddressDto address) => new()
     {
         Line1 = address.Line1,
@@ -280,6 +291,7 @@ public sealed class PaxBookingController(
             s.DeliveryAddress.Country,
             s.DeliveryAddress.Latitude,
             s.DeliveryAddress.Longitude),
+        DeliveryNotes: [.. s.DeliveryNotes],
         EarliestSlotUtc: s.EarliestSlotUtc,
         LatestSlotUtc: s.LatestSlotUtc,
         AtlOptions: [.. s.AtlOptions.Select(o => new DTOs.Pax.AtlOptionDto(o.Id, o.Name))],

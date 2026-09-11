@@ -7,7 +7,7 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { PaxMobile } from './PaxMobile'
 import { MantineTestProvider } from '../test/render'
-import { economyRun, slot, summary, tomorrowSlot } from '../test/paxFixtures'
+import { economyRun, slot, standardService, summary, tomorrowSlot } from '../test/paxFixtures'
 import type { BookingSummary, ConfirmBookingRequest } from '../api/client'
 
 
@@ -35,7 +35,7 @@ describe('PaxMobile — Authority to Leave submit', () => {
     http.get('*/pax/:id/booking', () => HttpResponse.json(booking())),
     http.get('*/pax/:id/booking/timeslots', () => HttpResponse.json([slot])),
     http.post('*/pax/:id/booking/services', () =>
-      HttpResponse.json({ services: [economyRun], noServiceAvailable: false }),
+      HttpResponse.json({ services: [economyRun, standardService], noServiceAvailable: false }),
     ),
     http.post('*/pax/:id/booking/confirm', async ({ request }) => {
       lastConfirmBody = (await request.json()) as ConfirmBookingRequest
@@ -718,6 +718,88 @@ describe('PaxMobile — Authority to Leave submit', () => {
     expect(lastConfirmBody!.serviceJobTypeId).toBeNull()
   })
 
+  it('checks availability for a venue with no street number, falling back to the city', async () => {
+    const serviceBodies: unknown[] = []
+    server.use(
+      http.get('*/pax/:id/address/autocomplete', () =>
+        HttpResponse.json([
+          {
+            id: 'here-pct',
+            title: 'Bluebridge Cook Strait Ferries',
+            street: 'Auckland Street',
+            suburb: '',
+            city: 'Picton',
+            state: 'Marlborough',
+            postalCode: '7220',
+            countryCode: 'NZ',
+          },
+        ]),
+      ),
+      http.get('*/pax/:id/address/lookup/:addressId', () =>
+        HttpResponse.json({
+          streetNumber: '',
+          street: 'Auckland Street',
+          suburb: '',
+          city: 'Picton',
+          state: 'Marlborough',
+          stateCode: 'MBH',
+          postalCode: '7220',
+          countryCode: 'NZ',
+          latitude: -41.29,
+          longitude: 174.01,
+        }),
+      ),
+      http.post('*/pax/:id/booking/services', async ({ request }) => {
+        serviceBodies.push(await request.json())
+        return HttpResponse.json({ services: [economyRun], noServiceAvailable: false })
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+    await user.type(screen.getByPlaceholderText(/start typing an address/i), 'Bluebridge')
+    await user.click(await screen.findByRole('option', { name: /bluebridge/i }))
+
+    await waitFor(() => expect(serviceBodies).toHaveLength(1), { timeout: 5000 })
+    expect(serviceBodies[0]).toEqual({
+      address: { line5: 'Picton', line7: '7220', latitude: -41.29, longitude: 174.01 },
+    })
+  })
+
+  it('auto-selects the only service on offer and hides the picker', async () => {
+    let slotsForService = 0
+    server.use(
+      http.post('*/pax/:id/booking/services', () =>
+        HttpResponse.json({ services: [economyRun], noServiceAvailable: false }),
+      ),
+      http.get('*/pax/:id/booking/timeslots', ({ request }) => {
+        if (new URL(request.url).searchParams.get('jobTypeId') === '37') slotsForService += 1
+        return HttpResponse.json([slot])
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    await editAddress(user)
+    await user.clear(screen.getByRole('textbox', { name: /street name/i }))
+    await user.type(screen.getByRole('textbox', { name: /street name/i }), 'Other St')
+
+    await waitFor(() => expect(slotsForService).toBe(1), { timeout: 5000 })
+    expect(
+      screen.queryByRole('radiogroup', { name: /delivery service/i }),
+    ).not.toBeInTheDocument()
+
+    await reviewAndConfirm(user)
+
+    await waitFor(() => expect(lastConfirmBody).not.toBeNull())
+    expect(lastConfirmBody!.serviceJobTypeId).toBe(37)
+  })
+
   it('sends the chosen service with the confirmation', async () => {
     const user = userEvent.setup()
     renderForm()
@@ -781,6 +863,32 @@ describe('PaxMobile — Authority to Leave submit', () => {
     await screen.findByText(/confirm your baggage delivery/i)
     await editAddress(user)
     expect(screen.getByRole('textbox', { name: /apartment, unit or suite/i })).toHaveValue('')
+  })
+
+  it('shows the delivery notes already on the job, as text the passenger cannot edit', async () => {
+    server.use(
+      http.get('*/pax/:id/booking', () =>
+        HttpResponse.json(
+          booking({ deliveryNotes: ['Gate code 1234', 'Dog in the yard'] }),
+        ),
+      ),
+    )
+
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    expect(await screen.findByText('Gate code 1234')).toBeInTheDocument()
+    expect(screen.getByText('Dog in the yard')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /delivery notes/i })).not.toBeInTheDocument()
+  })
+
+  it('points the passenger at Additional details to add a delivery note', async () => {
+    renderForm()
+
+    await screen.findByText(/confirm your baggage delivery/i)
+    expect(
+      screen.getByText(/to add a delivery note, use Additional details under Authority to leave/i),
+    ).toBeInTheDocument()
   })
 
   it('arrives with Authority to Leave off', async () => {

@@ -1,13 +1,16 @@
 import { Stack, Text } from '@mantine/core'
+import { DeliveryNotesPanel } from './DeliveryNotesPanel'
 import { FormSection } from './FormSection'
 import { addressLines } from '../../utils/address'
 import type { AddressDto } from '../../api/client'
 
 export function ReadOnlyAddressSection({
   address,
+  deliveryNotes,
   supportPhone,
 }: {
   address: AddressDto
+  deliveryNotes: string[]
   supportPhone: string
 }) {
   return (
@@ -23,6 +26,7 @@ export function ReadOnlyAddressSection({
             To send your bag somewhere else, call {supportPhone}.
           </Text>
         )}
+        <DeliveryNotesPanel notes={deliveryNotes} />
       </Stack>
     </FormSection>
   )

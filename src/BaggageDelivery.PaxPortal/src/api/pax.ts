@@ -6,6 +6,7 @@ import type {
   BookingSummary,
   ConfirmBookingRequest,
   DevLinks,
+  ServiceAddressDto,
   TimeSlot,
 } from './client'
 
@@ -16,7 +17,7 @@ export async function getBooking(id: string): Promise<BookingSummary> {
 
 export async function getServices(
   id: string,
-  address: AddressDto,
+  address: ServiceAddressDto,
 ): Promise<AvailableServicesResponse> {
   const { data } = await apiClient.post<AvailableServicesResponse>(`/pax/${id}/booking/services`, {
     address,

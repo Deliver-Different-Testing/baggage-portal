@@ -2,7 +2,15 @@ import { memo, useMemo, useState } from 'react'
 import { Autocomplete, Loader } from '@mantine/core'
 import { MapPinIcon } from './Icon'
 import { useAddressSearch } from '../hooks/useAddressSearch'
+import type { AddressSearchResult } from '../types/address'
 import type { AddressAutocompleteProps } from './AddressAutocompleteProps'
+
+function optionLabel(suggestion: AddressSearchResult): string {
+  const extras = [suggestion.suburb, suggestion.city].filter(
+    (part) => part && !suggestion.title.includes(part),
+  )
+  return [suggestion.title, ...extras].join(', ')
+}
 
 export const AddressAutocomplete = memo(function AddressAutocomplete({
   bookingId,
@@ -18,10 +26,13 @@ export const AddressAutocomplete = memo(function AddressAutocomplete({
 
   const loading = isLoading || isLookingUp
 
-  const options = useMemo(() => suggestions.map((s) => s.title), [suggestions])
+  const options = useMemo(() => {
+    const byId = new Map(suggestions.map((s) => [s.id, s] as const))
+    return [...byId.values()].map((s) => ({ value: s.id, label: optionLabel(s) }))
+  }, [suggestions])
 
-  const handleOptionSubmit = async (title: string) => {
-    const match = suggestions.find((s) => s.title === title)
+  const handleOptionSubmit = async (addressId: string) => {
+    const match = suggestions.find((s) => s.id === addressId)
     if (!match) return
 
     setIsLookingUp(true)
