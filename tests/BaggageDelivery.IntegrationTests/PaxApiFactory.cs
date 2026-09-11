@@ -19,6 +19,7 @@ namespace BaggageDelivery.IntegrationTests;
 public sealed class PaxApiFactory : WebApplicationFactory<Program>
 {
     private const string SupportPhone = "09 3073555";
+    private const int NoteTypeIdentityOffset = 100;
 
     private readonly SqliteConnection _connection;
 
@@ -127,6 +128,8 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
         await seed(db);
     }
 
+    public static int NoteTypeId(NoteType type) => (int)type + NoteTypeIdentityOffset;
+
     private static async Task SeedNoteTypesAsync(BaggageDeliveryContext db)
     {
         if (await db.TucNoteTypes.AnyAsync())
@@ -136,8 +139,9 @@ public sealed class PaxApiFactory : WebApplicationFactory<Program>
 
         db.TucNoteTypes.AddRange(Enum.GetValues<NoteType>().Select(t => new TucNoteType
         {
-            NoteTypeId = (int)t,
-            NoteTypeName = t.ToString(),
+            NoteTypeId = NoteTypeId(t),
+            NoteTypeName = NoteTypeNames.For(t),
+            IsPublic = t is NoteType.PickupNotes or NoteType.DeliveryNotes,
             IsActive = true
         }));
 
