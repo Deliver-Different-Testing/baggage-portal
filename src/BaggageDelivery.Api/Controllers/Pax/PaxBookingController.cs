@@ -274,7 +274,7 @@ public sealed class PaxBookingController(
         JobId: s.JobId,
         JobNumber: s.JobNumber,
         FileReference: s.FileReference,
-        AirlineLabel: s.AirlineLabel,
+        AirlineLabel: s.AirlineSmsName,
         AirlineCode: s.AirlineCode,
         SupportPhone: s.SupportPhone,
         PassengerName: s.PassengerName,
