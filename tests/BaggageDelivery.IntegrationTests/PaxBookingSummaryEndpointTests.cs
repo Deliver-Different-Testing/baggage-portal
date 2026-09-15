@@ -44,6 +44,70 @@ public class PaxBookingSummaryEndpointTests(PaxApiFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task Booking_serves_the_sms_name_as_the_airline_label_so_it_matches_notifications()
+    {
+        const int jobId = 4405;
+        const int clientId = 4405;
+        await factory.SeedAsync(async db =>
+        {
+            db.TucClients.Add(new TucClient
+            {
+                UcclId = clientId, UcclName = "Air New Zealand", UcclLegalName = "Air New Zealand Ltd",
+                UcclCode = "ANZ4405", Smsname = "Air NZ", SiteId = 1,
+                CreatedBy = "test", LastModifiedBy = "test"
+            });
+            db.TucJobs.Add(new TucJob
+            {
+                UcjbId = jobId,
+                UcjbNumber = "URG-4405",
+                UcjbClientId = clientId,
+                UcjbStatus = (int)JobStatus.Dispatched
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+
+        var client = factory.CreateClient();
+
+        var payload = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("Air NZ", payload.GetProperty("airlineLabel").GetString());
+    }
+
+    [Fact]
+    public async Task Booking_falls_back_to_the_client_name_as_the_airline_label_when_no_sms_name_is_set()
+    {
+        const int jobId = 4406;
+        const int clientId = 4406;
+        await factory.SeedAsync(async db =>
+        {
+            db.TucClients.Add(new TucClient
+            {
+                UcclId = clientId, UcclName = "Qantas", UcclLegalName = "Qantas Airways Ltd",
+                UcclCode = "ANZ4406", Smsname = "", SiteId = 1,
+                CreatedBy = "test", LastModifiedBy = "test"
+            });
+            db.TucJobs.Add(new TucJob
+            {
+                UcjbId = jobId,
+                UcjbNumber = "URG-4406",
+                UcjbClientId = clientId,
+                UcjbStatus = (int)JobStatus.Dispatched
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+
+        var client = factory.CreateClient();
+
+        var payload = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/pax/{EncryptedId(jobId)}/booking",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("Qantas", payload.GetProperty("airlineLabel").GetString());
+    }
+
+    [Fact]
     public async Task The_in_app_tracking_endpoint_is_gone()
     {
         const int jobId = 4404;
