@@ -956,11 +956,11 @@ internal sealed class PaxBookingService(
             + "Please choose again from the options shown.");
     }
 
-    private CandidateService? DefaultService(IReadOnlyList<CandidateService> allowed) =>
+    private static CandidateService? DefaultService(IReadOnlyList<CandidateService> allowed) =>
         allowed.Count == 1
             ? allowed[0]
-            : allowed.FirstOrDefault(s => allowedServiceOptions.Value.AllowedNames
-                .Contains(s.Name, StringComparer.OrdinalIgnoreCase));
+            : allowed.FirstOrDefault(s => string.Equals(
+                s.Name, AllowedServicePolicy.StandardName, StringComparison.OrdinalIgnoreCase));
 
     public async Task<bool> RequestAirlineContactAsync(
         AddressContactRequestInput input, CancellationToken ct)

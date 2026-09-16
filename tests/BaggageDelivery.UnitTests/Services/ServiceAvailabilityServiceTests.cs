@@ -14,7 +14,7 @@ public class ServiceAvailabilityServiceTests
 {
     private const int JobId = 4242;
     private const int ClientId = 77;
-    private const int EconomyRunSpeed = 37;
+    private const int StandardSpeed = 37;
     private const int PickupSuburbId = 1;
     private const int CarSizeId = 2;
 
@@ -22,9 +22,9 @@ public class ServiceAvailabilityServiceTests
     private static readonly DateTime NowUtc = new(2026, 9, 9, 20, 0, 0, DateTimeKind.Utc);
 
     private static BagDel_stpAvailableServicesResult Row(
-        int? jobTypeId = EconomyRunSpeed,
-        string? name = "Economy Run",
-        string? speed = "ER",
+        int? jobTypeId = StandardSpeed,
+        string? name = "Standard",
+        string? speed = "STD",
         string? description = "Delivered on our next run",
         string? availability = AvailabilityVerdict.Available,
         string? colour = "#00FF00",
@@ -92,12 +92,7 @@ public class ServiceAvailabilityServiceTests
         var svc = new ServiceAvailabilityService(
             db,
             query,
-            Options.Create(new AllowedServiceOptions
-            {
-                AllowedSystemNames = ["EC", "ER"],
-                AllowedJobTypeIds = [56],
-                AllowedNames = ["Standard"]
-            }),
+            Options.Create(new AllowedServiceOptions()),
             Options.Create(new DespatchOptions { TimeZone = "Pacific/Auckland" }));
 
         return (svc, query);
@@ -116,9 +111,9 @@ public class ServiceAvailabilityServiceTests
 
         var service = Assert.Single(await Get(svc));
 
-        Assert.Equal(EconomyRunSpeed, service.JobTypeId);
-        Assert.Equal("Economy Run", service.Name);
-        Assert.Equal("ER", service.SystemName);
+        Assert.Equal(StandardSpeed, service.JobTypeId);
+        Assert.Equal("Standard", service.Name);
+        Assert.Equal("STD", service.SystemName);
         Assert.Equal("Delivered on our next run", service.Description);
         Assert.Equal(180, service.DurationMinutes);
         Assert.False(service.IsScheduled);
@@ -138,7 +133,7 @@ public class ServiceAvailabilityServiceTests
     {
         await using var db = await SeededAsync();
         var (svc, _) = NewService(db,
-            Row(jobTypeId: 56, name: "Agent Standard", speed: "AS", colour: null, duration: 4320));
+            Row(jobTypeId: 56, name: "Standard", speed: null, colour: null, duration: 4320));
 
         Assert.Equal(56, Assert.Single(await Get(svc)).JobTypeId);
     }
@@ -156,30 +151,30 @@ public class ServiceAvailabilityServiceTests
     public async Task A_composite_id_is_split_into_schedule_and_speed()
     {
         await using var db = await SeededAsync();
-        var (svc, _) = NewService(db, Row(jobTypeId: 4037, name: "Chch PM run"));
+        var (svc, _) = NewService(db, Row(jobTypeId: 4037, name: "Standard"));
 
         var service = Assert.Single(await Get(svc));
 
         Assert.True(service.IsScheduled);
         Assert.Equal(4, service.ScheduleId);
-        Assert.Equal(EconomyRunSpeed, service.SpeedId);
+        Assert.Equal(StandardSpeed, service.SpeedId);
         Assert.Equal(4037, service.JobTypeId);
     }
 
     [Fact]
-    public async Task A_scheduled_row_ignores_the_economy_client_flags()
+    public async Task A_scheduled_standard_row_ignores_the_economy_client_flags()
     {
         await using var db = await SeededAsync(economyRuns: false);
-        var (svc, _) = NewService(db, Row(jobTypeId: 4037, name: "Chch PM run"));
+        var (svc, _) = NewService(db, Row(jobTypeId: 4037, name: "Standard"));
 
         Assert.Single(await Get(svc));
     }
 
     [Fact]
-    public async Task Economy_run_is_suppressed_when_the_client_does_not_use_runs()
+    public async Task A_non_standard_speed_is_denied_even_when_the_client_runs_economy()
     {
         await using var db = await SeededAsync(economyRuns: false);
-        var (svc, _) = NewService(db, Row());
+        var (svc, _) = NewService(db, Row(jobTypeId: 37, name: "Economy Run", speed: "ER"));
 
         Assert.Empty(await Get(svc));
     }

@@ -8,12 +8,6 @@ public sealed class AllowedServiceOptions
 
     public bool Enabled { get; set; }
 
-    public string[] AllowedSystemNames { get; set; } = ["EC", "ER"];
-
-    public int[] AllowedJobTypeIds { get; set; } = [56, 94, 95, 96, 110, 120, 121];
-
-    public string[] AllowedNames { get; set; } = ["Standard"];
-
     public int[] DeniedJobTypeIds { get; set; } = [10];
 
     public string[] DeniedSystemNames { get; set; } = ["UT", "MR"];
@@ -38,16 +32,6 @@ internal sealed class AllowedServiceOptionsValidator : IValidateOptions<AllowedS
                 "UnserviceableAddressNotifyEmail must be set when AddressGuardRailsEnabled is true "
                 + "— without it a passenger whose address cannot be serviced has no way to reach "
                 + "the airline.");
-        }
-
-        if (options.AllowedSystemNames.Length == 0
-            && options.AllowedJobTypeIds.Length == 0
-            && options.AllowedNames.Length == 0
-            && !options.AllowScheduledServices)
-        {
-            return ValidateOptionsResult.Fail(
-                "Despatch:AllowedServices allows nothing — every passenger who changes their "
-                + "address would be told to contact the airline.");
         }
 
         return ValidateOptionsResult.Success;
