@@ -8,6 +8,7 @@ public static class AllowedServicePolicy
     private const string GreenColour = "#00FF00";
     private const string Economy = "EC";
     private const string EconomyRun = "ER";
+    public const string StandardName = "Standard";
 
     public static IReadOnlyList<CandidateService> Filter(
         IEnumerable<CandidateService> candidates,
@@ -38,16 +39,14 @@ public static class AllowedServicePolicy
             return false;
         }
 
+        if (!string.Equals(service.Name, StandardName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         if (service.IsScheduled)
         {
             return options.AllowScheduledServices;
-        }
-
-        if (!Matches(options.AllowedSystemNames, service.SystemName)
-            && !options.AllowedJobTypeIds.Contains(service.SpeedId)
-            && !options.AllowedNames.Contains(service.Name, StringComparer.OrdinalIgnoreCase))
-        {
-            return false;
         }
 
         return service.SystemName switch

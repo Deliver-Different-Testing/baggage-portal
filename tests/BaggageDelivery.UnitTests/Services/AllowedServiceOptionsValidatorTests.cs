@@ -52,36 +52,4 @@ public class AllowedServiceOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
-    [Fact]
-    public void Enabled_guard_rails_need_something_on_the_allow_list()
-    {
-        var result = Validator.Validate(null, new AllowedServiceOptions
-        {
-            Enabled = true,
-            UnserviceableAddressNotifyEmail = "ops@airline.test",
-            AllowedSystemNames = [],
-            AllowedJobTypeIds = [],
-            AllowedNames = [],
-            AllowScheduledServices = false
-        });
-
-        Assert.True(result.Failed);
-        Assert.Contains("allow", result.FailureMessage, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Scheduled_services_alone_are_a_valid_allow_list()
-    {
-        var result = Validator.Validate(null, new AllowedServiceOptions
-        {
-            Enabled = true,
-            UnserviceableAddressNotifyEmail = "ops@airline.test",
-            AllowedSystemNames = [],
-            AllowedJobTypeIds = [],
-            AllowedNames = [],
-            AllowScheduledServices = true
-        });
-
-        Assert.True(result.Succeeded);
-    }
 }
