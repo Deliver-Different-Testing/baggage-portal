@@ -1,0 +1,109 @@
+﻿{
+   "CodeGenerationMode": 6,
+   "ContextClassName": "BaggageDeliveryContext",
+   "ContextNamespace": null,
+   "FilterSchemas": false,
+   "IncludeConnectionString": false,
+   "IrregularWords": null,
+   "MinimumProductVersion": "2.6.1248",
+   "ModelNamespace": null,
+   "OutputContextPath": null,
+   "OutputPath": "Models",
+   "PluralRules": null,
+   "PreserveCasingWithRegex": true,
+   "ProjectRootNamespace": "BaggageDelivery.Core",
+   "Schemas": null,
+   "SelectedHandlebarsLanguage": 2,
+   "SelectedToBeGenerated": 0,
+   "SingularRules": null,
+   "T4TemplatePath": null,
+   "Tables": [
+      {
+         "Name": "[dbo].[JobDeliveryJourney]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblEcoSetting]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblJobLeaveNotHome]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucClient]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJob]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucJobType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucManualMessage]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucNote]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucNoteType]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tucSuburb]",
+         "ObjectType": 0
+      },
+      {
+         "Name": "[dbo].[tblJobSizeName]",
+         "ObjectType": 3
+      },
+      {
+         "Name": "[dbo].[BagDel_stpAvailableServices]",
+         "ObjectType": 1
+      },
+      {
+         "Name": "[dbo].[UTL_AddBusinessDays]",
+         "ObjectType": 2
+      },
+      {
+         "Name": "[dbo].[UTL_fncSuburb_FromNameWithPostCode]",
+         "ObjectType": 2
+      },
+      {
+         "Name": "[dbo].[UTL_IsBusinessDay]",
+         "ObjectType": 2
+      }
+   ],
+   "UiHint": null,
+   "UncountableWords": null,
+   "UseAsyncStoredProcedureCalls": true,
+   "UseBoolPropertiesWithoutDefaultSql": false,
+   "UseDatabaseNames": false,
+   "UseDatabaseNamesForRoutines": true,
+   "UseDateOnlyTimeOnly": true,
+   "UseDbContextSplitting": false,
+   "UseDecimalDataAnnotationForSprocResult": true,
+   "UseFluentApiOnly": true,
+   "UseHandleBars": false,
+   "UseHierarchyId": false,
+   "UseInflector": true,
+   "UseInternalAccessModifiersForSprocsAndFunctions": false,
+   "UseLegacyPluralizer": false,
+   "UseManyToManyEntity": false,
+   "UseNoDefaultConstructor": false,
+   "UseNoNavigations": false,
+   "UseNoObjectFilter": false,
+   "UseNodaTime": false,
+   "UseNullableReferences": false,
+   "UsePrefixNavigationNaming": false,
+   "UseSchemaFolders": false,
+   "UseSchemaNamespaces": false,
+   "UseSpatial": false,
+   "UseT4": false,
+   "UseT4Split": false
+}

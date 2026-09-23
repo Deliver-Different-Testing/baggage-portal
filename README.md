@@ -1,14 +1,132 @@
-# DFRNT Baggage Portal
+# BaggageDelivery
 
-Passenger-facing interfaces for lost baggage delivery management.
+Passenger-facing PWA + ASP.NET Core service for lost-baggage delivery
+confirmation and tracking. SITA WorldTracer pushes a Baggage Delivery
+Order (BDO) into IntegrationManager, which creates an ON HOLD courier job
+in Despatch and then POSTs to this service's admin API to mint a passenger
+link. The passenger opens the PWA, confirms the delivery address, picks a
+time slot, sets Authority-to-Leave, and the courier job flips out of ON
+HOLD (ready for dispatch) in the same `PATCH api/Jobs/{id}/delivery`
+that records the address. They then follow the live tracking page.
 
-## Pages
-- **pax-mobile.html** — Mobile passenger confirmation (address, delivery slot, ATL)
-- **tracking.html** — Desktop delivery tracking with live timeline
-- **process-map.html** — Lost baggage process flow diagram
+This service does **not** talk to SITA or own a copy of the booking —
+`tucJob` in the Despatch DB is the canonical record. The URL encrypts the
+`JobId`; reads and writes hit Despatch directly via EF Core
+(`BaggageDeliveryContext`). One BaggageDelivery deployment per tenant,
+matching inboundagent.
 
 ## Stack
-Static HTML/CSS/JS — deployed to GitHub Pages.
 
-## Design
-DFRNT Design System — dark navy, amber accents, Inter font.
+- ASP.NET Core 10 (.NET SDK pinned to `10.0.102`, C# 14)
+- EF Core 10 against existing SQL Server (Despatch DB, read-mostly)
+- React 19 + Vite 8 + MUI v7 + `vite-plugin-pwa`
+- Serilog, AWS Secrets Manager, Polly on the trackingpage HTTP client,
+  Data Protection keys in AWS SSM (prod) / local file (dev)
+- xUnit.v3 + NSubstitute + `MockQueryable.NSubstitute`; integration tests
+  via `WebApplicationFactory` + SQLite in-memory
+- Single-deployable Docker image: API serves the built PWA from `wwwroot`
+
+## Solution layout
+
+```
+src/
+  BaggageDelivery.Api/        ASP.NET Core host (controllers, auth, security headers)
+    Controllers/Admin/        SC-JWT-authed link mint endpoint
+    Controllers/Pax/          Anonymous booking / tracking / address-lookup endpoints
+  BaggageDelivery.Core/       Domain, EF, HTTP clients, encryption, notifications
+    Http/                     TrackingPageClient (Polly-wrapped)
+    Security/                 AES-256-CBC EncryptionService, JWT helpers, options
+    Services/                 PaxBookingService, PaxTrackingService
+    Notifications/            MJML/SMS renderer + TucManualMessage sender
+    AddressLookup/            HERE Maps autocomplete client
+  BaggageDelivery.PaxPortal/  Vite + React + MUI PWA (lazy-loaded routes)
+tests/
+  BaggageDelivery.UnitTests/
+  BaggageDelivery.IntegrationTests/
+```
+
+## Routes
+
+| Path                       | Auth        | Notes                                          |
+| -------------------------- | ----------- | ---------------------------------------------- |
+| `/c/:id`                   | URL-encrypted | Passenger confirmation flow                  |
+| `/t/:id`                   | URL-encrypted | Live tracking page                           |
+| `/internal/process-map`    | SC-JWT      | Internal ops view                              |
+| `/expired`                 | none        | Fallback when token can't be decrypted         |
+| `POST /api/v1/admin/booking-links` | SC-JWT bearer | Mint passenger link + send notifications |
+| `GET  /api/v1/pax/{id}/booking`    | anonymous | Read booking summary by encrypted token |
+| `GET  /api/v1/pax/{id}/booking/timeslots` | anonymous | Available time slots             |
+| `POST /api/v1/pax/{id}/booking/confirm`   | anonymous | Confirm delivery details         |
+| `GET  /api/v1/pax/{id}/tracking`   | anonymous | Tracking data                           |
+| `GET  /api/v1/pax/{id}/address/*`  | anonymous | HERE Maps autocomplete proxy            |
+| `GET  /healthz`            | anonymous   | Liveness probe                                 |
+
+The `:id` segment is AES-256-CBC of the integer `JobId`, base64-url-safe.
+Anyone holding the URL can act on the booking — no expiry, no revoke, no
+single-use. This mirrors the inboundagent model.
+
+## Local dev
+
+```
+dotnet run --project src/BaggageDelivery.Api
+cd src/BaggageDelivery.PaxPortal && npm install && npm run dev
+```
+
+PWA dev server runs on `http://baggagedelivery.local.deliverdifferent.com:5173`
+(also `http://localhost:5173`). The API CORS policy whitelists both.
+
+Required env vars (in addition to `appsettings.Development.json`):
+
+- `ConnectionStrings__DefaultConnection` — Despatch DB (the
+  BaggageDelivery SQL user; requires SELECT on `tucJob`, `tucClient`,
+  `JobDeliveryJourney`, `tblJobLeaveNotHome`, `tblEcoSetting`; UPDATE on
+  `tucJob`; SELECT + INSERT on `tucManualMessage`)
+- `BaggageDeliveryEncryptionKey` / `BaggageDeliveryEncryptionIV` — base64,
+  32-byte key + 16-byte IV (startup validates)
+- `JWTSecretKey`, `Issuer`, `Audience` — SC-JWT inbound validation
+  (IM → admin booking-link mint)
+- `TimeZone` — IANA timezone for the deployment's tenant
+  (`Pacific/Auckland`, `Australia/Sydney`, …)
+- `TrackingPageUrl` — trackingpage base URL
+- `BaggageDeliveryPublicBaseUrl` — the URL prefix burned into minted links
+- `Domain` — cookie domain shared with the deliverdifferent family
+- `AppUrl` — origin allowed by CORS (PWA host)
+- HERE Maps API key (see `HereMapsOptions`)
+
+In development, Data Protection keys persist to
+`%LocalAppData%\DeliverDifferent\DataProtection-Keys`. In prod, they live
+in AWS SSM at `/Hub/DataProtection` under the `DeliverDifferent`
+application name (shared with hub / IM / inboundagent).
+
+## Migrations
+
+Schema lives in [`dbmigrationsv2`](../dbmigrationsv2), not in this repo.
+This service currently owns no `BagDel*` tables — `tucJob` is the
+canonical record. Any future schema additions must follow the legacy DB
+policy in `~/.claude/CLAUDE.md` (no qualifying objects on legacy
+`tuc*`/`tbl*`/`UTL_*`/`MARS_*` tables; every new proc/trigger starts with
+`SET QUOTED_IDENTIFIER ON; SET ANSI_NULLS ON;`).
+
+## Tests
+
+```
+dotnet test
+cd src/BaggageDelivery.PaxPortal && npm test
+```
+
+EF tracking pitfall: `BaggageDeliveryContext` runs with
+`QueryTrackingBehavior.NoTracking`. Any read-then-mutate flow must use
+`.AsTracking()`, `FindAsync()`, or `ExecuteUpdateAsync` — see the rules
+in `CLAUDE.md`. Test fixtures must mirror that NoTracking setting;
+`tests/BaggageDelivery.UnitTests/Helpers/InMemoryDb.cs` is the template.
+
+## Existing GitHub docs and demo assets
+
+The previous GitHub repo content has been preserved alongside the merged
+GitLab application source:
+
+- `pax-mobile.html` — static mobile passenger confirmation demo
+- `tracking.html` — static delivery tracking demo
+- `process-map.html` — static lost baggage process-flow diagram
+- `contract/WorldTracer_Contract.pdf` — contract reference material
+- `JACOB-BAGGAGE-PAX-PORTAL-*.md` — Jacob handover/spec notes

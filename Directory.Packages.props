@@ -1,0 +1,50 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SerilogVersion>4.4.0</SerilogVersion>
+  </PropertyGroup>
+  <ItemGroup Label="AWS">
+    <PackageVersion Include="Amazon.AspNetCore.DataProtection.SSM" Version="4.0.3" />
+  </ItemGroup>
+  <ItemGroup Label="Microsoft / EF Core / ASP.NET">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.SpaProxy" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.IdentityModel.Tokens" Version="8.22.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup Label="App Dependencies">
+    <PackageVersion Include="Mjml.Net" Version="4.14.0" />
+    <PackageVersion Include="Polly" Version="8.7.0" />
+    <PackageVersion Include="Serilog" Version="$(SerilogVersion)" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+  <ItemGroup Label="Test Dependencies">
+    <!-- Transitive pin: bump the native SQLite binary (pulled in by the test-only
+         EF Core Sqlite provider) off 2.1.11, which carries GHSA-2m69-gcr7-jv3q.
+         lib.e_sqlite3 is versioned independently of the managed stack, so the
+         native binary can advance without disturbing Microsoft.Data.Sqlite / EF.
+         Test-only — never shipped (the API uses the SqlServer provider). -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageVersion Include="MockQueryable.NSubstitute" Version="10.0.8" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
+  </ItemGroup>
+</Project>
